@@ -1,7 +1,7 @@
 # AI Website Translator
 
 **Chrome Web Store:**
-[https://chromewebstore.google.com/detail/ai-website-translator/dchjlinbddpaiddipiflefedphldelki](https://chromewebstore.google.com/detail/ai-website-translator/dchjlinbddpaiddipiflefedphldelki)
+[https://chromewebstore.google.com/detail/llm-website-translator/dchjlinbddpaiddipiflefedphldelki](https://chromewebstore.google.com/detail/llm-website-translator/dchjlinbddpaiddipiflefedphldelki)
 
 **言語 / Language / 语言 / 언어 / Язык:**
 [日本語](#日本語) | [English](#english) | [中文](#中文) | [한국어](#한국어) | [Русский](#русский)
@@ -28,7 +28,7 @@ Google Gemini・OpenAI・Anthropic などの AI API を使ってウェブペー�
 ### インストール
 
 **Chrome Web Store から（推奨）:**
-[Chrome Web Store のページ](https://chromewebstore.google.com/detail/ai-website-translator/dchjlinbddpaiddipiflefedphldelki) から「Chrome に追加」をクリックするだけでインストールできます。
+[Chrome Web Store のページ](https://chromewebstore.google.com/detail/llm-website-translator/dchjlinbddpaiddipiflefedphldelki) から「Chrome に追加」をクリックするだけでインストールできます。
 
 **GitHub Releases からダウンロードして手動インストール:**
 1. [Releases ページ](https://github.com/mame1839/translate-extension/releases/latest) から最新の `translate-extension.zip` をダウンロードして解凍する
@@ -89,7 +89,7 @@ A Chrome extension that translates web pages in place using AI APIs — Google G
 ### Installation
 
 **From the Chrome Web Store (recommended):**
-Click **Add to Chrome** on the [Chrome Web Store page](https://chromewebstore.google.com/detail/ai-website-translator/dchjlinbddpaiddipiflefedphldelki).
+Click **Add to Chrome** on the [Chrome Web Store page](https://chromewebstore.google.com/detail/llm-website-translator/dchjlinbddpaiddipiflefedphldelki).
 
 **Manual installation from GitHub Releases:**
 1. Download the latest `translate-extension.zip` from the [Releases page](https://github.com/mame1839/translate-extension/releases/latest) and extract it
@@ -150,7 +150,7 @@ English / Japanese / Chinese (Simplified & Traditional) / Korean / Spanish / Fre
 ### 安装方法
 
 **从 Chrome 网上应用店安装（推荐）：**
-在 [Chrome 网上应用店页面](https://chromewebstore.google.com/detail/ai-website-translator/dchjlinbddpaiddipiflefedphldelki) 点击**添加至 Chrome** 即可完成安装。
+在 [Chrome 网上应用店页面](https://chromewebstore.google.com/detail/llm-website-translator/dchjlinbddpaiddipiflefedphldelki) 点击**添加至 Chrome** 即可完成安装。
 
 **从 GitHub Releases 下载手动安装：**
 1. 从 [Releases 页面](https://github.com/mame1839/translate-extension/releases/latest) 下载最新的 `translate-extension.zip` 并解压
@@ -211,7 +211,7 @@ Google Gemini, OpenAI, Anthropic 또는 OpenAI 호환 엔드포인트 등의 AI 
 ### 설치 방법
 
 **Chrome 웹 스토어에서 설치（권장）:**
-[Chrome 웹 스토어 페이지](https://chromewebstore.google.com/detail/ai-website-translator/dchjlinbddpaiddipiflefedphldelki)에서 **Chrome에 추가**를 클릭하면 바로 설치됩니다.
+[Chrome 웹 스토어 페이지](https://chromewebstore.google.com/detail/llm-website-translator/dchjlinbddpaiddipiflefedphldelki)에서 **Chrome에 추가**를 클릭하면 바로 설치됩니다.
 
 **GitHub Releases에서 다운로드하여 직접 설치:**
 1. [Releases 페이지](https://github.com/mame1839/translate-extension/releases/latest)에서 최신 `translate-extension.zip`을 다운로드하여 압축 해제합니다
@@ -272,7 +272,7 @@ Google Gemini, OpenAI, Anthropic 또는 OpenAI 호환 엔드포인트 등의 AI 
 ### Установка
 
 **Из Chrome Web Store（рекомендуется）:**
-Нажмите **Установить** на [странице Chrome Web Store](https://chromewebstore.google.com/detail/ai-website-translator/dchjlinbddpaiddipiflefedphldelki).
+Нажмите **Установить** на [странице Chrome Web Store](https://chromewebstore.google.com/detail/llm-website-translator/dchjlinbddpaiddipiflefedphldelki).
 
 **Ручная установка из GitHub Releases:**
 1. Скачайте последний `translate-extension.zip` со [страницы Releases](https://github.com/mame1839/translate-extension/releases/latest) и распакуйте его
