@@ -470,6 +470,7 @@
 
                 const translationStarter = () => {
                     if (isTranslating) return;
+                    if (!translationStarted) return;
                     startTranslation();
                 };
 
@@ -1143,7 +1144,7 @@
             }
 
             if (!('originalHtml' in tu.block.dataset)) {
-                tu.block.dataset.originalHtml = tu.block.innerHTML;
+                tu.block.dataset.originalHtml = tu.originalInnerHTML;
             }
 
             while (tu.block.firstChild) tu.block.removeChild(tu.block.firstChild);
@@ -1260,13 +1261,13 @@
                 '[data-translation-status="translated"], [data-translation-status="original"]'
             ));
             if (blocks.length === 0) return;
-            const showingTranslated = blocks[0].dataset.translationStatus === 'translated';
+            const shouldRevert = blocks.some(block => block.dataset.translationStatus === 'translated');
             blocks.forEach(block => {
-                if (showingTranslated && 'originalHtml' in block.dataset) {
+                if (shouldRevert && 'originalHtml' in block.dataset) {
                     block.innerHTML = block.dataset.originalHtml;
                     block.dataset.translationStatus = 'original';
                     block.classList.remove('translated-text');
-                } else if (!showingTranslated && 'translatedHtml' in block.dataset) {
+                } else if (!shouldRevert && 'translatedHtml' in block.dataset) {
                     block.innerHTML = block.dataset.translatedHtml;
                     block.dataset.translationStatus = 'translated';
                     try {
@@ -1277,8 +1278,10 @@
                     } catch (e) {}
                 }
             });
+            translationStarted = !shouldRevert;
         } finally {
             watchForNewContent();
+            clearTimeout(observerDebounceTimer);
         }
     }
 

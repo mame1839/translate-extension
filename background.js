@@ -601,7 +601,6 @@ async function translateWithOpenAI(text, retryLimit, signal, targetLanguage = 'E
     const actualMaxToken = maxToken || DEFAULTS.maxToken;
     const actualTimeout = timeout || DEFAULTS.timeout;
     const prompt = createTranslationPrompt(text, targetLanguage);
-    // o1/o3/o4 reasoning models reject temperature and use max_completion_tokens
     const isReasoningModel = /^o\d/i.test(actualModel);
     const requestBody = {
         model: actualModel,
