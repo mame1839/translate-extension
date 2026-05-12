@@ -1,6 +1,6 @@
 const DEFAULTS = Object.freeze({
     apiProvider: 'gemini',
-    geminiModel: 'gemini-3.1-flash-lite-preview',
+    geminiModel: 'gemini-3.1-flash-lite',
     openaiModel: 'gpt-5.4-nano-2026-03-17',
     anthropicModel: 'claude-haiku-4-5-20251001',
     compatibleModel: '',
@@ -14,7 +14,7 @@ const DEFAULTS = Object.freeze({
 });
 
 const MODEL_PLACEHOLDERS = {
-    gemini: 'gemini-3.1-flash-lite-preview',
+    gemini: 'gemini-3.1-flash-lite',
     openai: 'gpt-5.4-nano-2026-03-17',
     anthropic: 'claude-haiku-4-5-20251001',
     'openai-compatible': ''
