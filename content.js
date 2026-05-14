@@ -431,6 +431,10 @@
         }
     `;
 
+    const IS_TOP_FRAME = (function () {
+        try { return window.top === window; } catch (e) { return false; }
+    })();
+
     let isTranslating = false;
     let translationStarted = false;
     let translationCancelled = false;
@@ -484,6 +488,7 @@
                     setTimeout(translationStarter, 100);
                     setTimeout(translationStarter, 1500);
                 } else {
+                    if (!IS_TOP_FRAME) return;
                     if (!pageLangPrimary || pageLangPrimary !== chosenLangPrimary) {
                         if (items.hidePromptAllSites !== true) {
                             createTranslationPrompt();
@@ -560,6 +565,7 @@
             removePrompt();
             translationStarted = true;
             startTranslation();
+            try { chrome.runtime.sendMessage({ action: 'startTranslationAllFrames' }).catch(() => { }); } catch (e) { }
         });
         noButton.addEventListener('click', function () { removePrompt(); });
         neverButton.addEventListener('click', function () {
@@ -726,7 +732,7 @@
                 }
             }
 
-            if (config.showProgressPopup !== false) {
+            if (config.showProgressPopup !== false && IS_TOP_FRAME) {
                 createOrShowProgressPopup(lang);
                 if (progressInterval) clearInterval(progressInterval);
                 progressInterval = setInterval(() => updateProgress(), 300);
@@ -937,8 +943,10 @@
     function isFullyExcluded(element) {
         if (!element || !(element instanceof Element) || !element.isConnected) return true;
         if (INLINE_SKIP_TAGS.has(element.nodeName)) return true;
-        if (element.getAttribute('translate') === 'no') return true;
-        if (element.classList && element.classList.contains('notranslate')) return true;
+        if (!BLOCK_TAGS.has(element.nodeName)) {
+            if (element.getAttribute('translate') === 'no') return true;
+            if (element.classList && element.classList.contains('notranslate')) return true;
+        }
         if (element.dataset?.geminiIgnore === 'true') return true;
         if (element.dataset?.translationWrapper === 'true') return true;
         try {

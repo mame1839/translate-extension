@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "__MSG_appName__",
-  "version": "5.0.3",
+  "version": "5.0.4",
   "description": "__MSG_appDescription__",
   "minimum_chrome_version": "102",
   "permissions": [
@@ -20,6 +20,7 @@
       "matches": [
         "<all_urls>"
       ],
+      "all_frames": true,
       "js": [
         "translations.js",
         "content.js"

@@ -120,6 +120,11 @@ chrome.runtime.onMessage.addListener(function (request, sender, sendResponse) {
         return true;
     }
 
+    if (request.action === "startTranslationAllFrames") {
+        chrome.tabs.sendMessage(tabId, { action: "startTranslationFromPopup" }).catch(() => { });
+        return false;
+    }
+
     if (request.action === "cancelTranslation") {
         const state = getTabState(tabId);
         state.translationCancelled = true;
