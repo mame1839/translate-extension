@@ -1,5 +1,6 @@
 .DS_Store
 Thumbs.db
 *.zip
-CLAUDE.md
+*.md
+.claude/
 extbuild.bat
