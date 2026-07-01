@@ -1,3 +1,8 @@
+try {
+    chrome.alarms.create('translator-keepalive', { periodInMinutes: 0.5 });
+    chrome.alarms.onAlarm.addListener(() => { });
+} catch (e) { }
+
 const errorMessages = {
     apiKeyNotSet: 'API key is not set. Please configure it in the options page.',
     endpointNotSet: 'Endpoint URL is not set. Please configure it in the options page.',
@@ -345,14 +350,15 @@ async function processQueue() {
     isProcessing = true;
     try {
         while (globalRequestQueue.size > 0) {
-            const tabId = globalRequestQueue.keys().next().value;
-            const tabData = globalRequestQueue.get(tabId);
-            globalRequestQueue.delete(tabId);
-            try {
-                await processTab(tabId, tabData);
-            } catch (error) {
-                console.error(`Error processing tab ${tabId}:`, error);
-            }
+            const tabIds = Array.from(globalRequestQueue.keys());
+            const tasks = tabIds.map(tabId => {
+                const tabData = globalRequestQueue.get(tabId);
+                globalRequestQueue.delete(tabId);
+                return processTab(tabId, tabData).catch(error => {
+                    console.error(`Error processing tab ${tabId}:`, error);
+                });
+            });
+            await Promise.all(tasks);
         }
     } finally {
         isProcessing = false;

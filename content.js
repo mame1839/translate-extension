@@ -474,6 +474,8 @@
     let observerDebounceTimer = null;
     let userInteractionTimer = null;
     let userInteractionListenersAttached = false;
+    let scrollListenersAttached = false;
+    let scrollDebounceTimer = null;
     let progressInterval = null;
     let statusContainer = null;
     let statusShadowRoot = null;
@@ -510,6 +512,7 @@
                     try { watchForNewContent(); } catch (e) { }
                     try { watchUserInteractions(); } catch (e) { }
                     try { watchSpaUrlChanges(); } catch (e) { }
+                    try { watchScrollForNewContent(); } catch (e) { }
 
                     const pageLang = getPageLanguage();
                     const chosenLang = items.targetLanguage || 'en';
@@ -645,7 +648,7 @@
                     if (node.dataset?.translationWrapper === 'true') return NodeFilter.FILTER_REJECT;
                     if (node.dataset?.geminiIgnore === 'true') return NodeFilter.FILTER_REJECT;
                     if (isFullyExcluded(node)) return NodeFilter.FILTER_REJECT;
-                    if (BLOCK_TAGS.has(node.nodeName)) {
+                    if (BLOCK_TAGS.has(node.nodeName) || isShadowHostingCustomElement(node) || isBlockLikeAnchorInShadowHost(node)) {
                         if (blockContainsReactCustomElement(node)) return NodeFilter.FILTER_SKIP;
                         return NodeFilter.FILTER_ACCEPT;
                     }
@@ -887,6 +890,32 @@
         }, { once: true });
     }
 
+    function watchScrollForNewContent() {
+        if (scrollListenersAttached) return;
+        scrollListenersAttached = true;
+        const handler = () => {
+            clearTimeout(scrollDebounceTimer);
+            scrollDebounceTimer = setTimeout(() => {
+                if (!translationStarted) return;
+                if (isTranslating || isApplyingUpdates || translationCancelled || translationHasError) return;
+                if (Date.now() < postNavigationCooldownUntil) return;
+                try {
+                    if (hasUntranslatedTextInDocument()) {
+                        startTranslation();
+                    }
+                } catch (e) { }
+            }, 800);
+        };
+        const keyHandler = (e) => {
+            if (e.key === 'PageDown' || e.key === 'PageUp' || e.key === 'End' || e.key === 'Home' || e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === ' ') handler();
+        };
+        window.addEventListener('scroll', handler, { passive: true, capture: true });
+        window.addEventListener('resize', handler, { passive: true });
+        document.addEventListener('wheel', handler, { passive: true, capture: true });
+        document.addEventListener('touchmove', handler, { passive: true, capture: true });
+        document.addEventListener('keydown', keyHandler, { passive: true, capture: true });
+    }
+
     async function handleSpaNavigation() {
         cacheRestoreMap = null;
         cacheRestoreActive = false;
@@ -1092,7 +1121,7 @@
     function hasUntranslatedDescendant(root) {
         if (!root || root.nodeType !== Node.ELEMENT_NODE) return false;
         const status = root.dataset?.translationStatus;
-        if (status === 'translated' || status === 'processing' || status === 'original') return false;
+        if (status === 'translated' || status === 'processing' || status === 'original' || status === 'failed') return false;
         for (const child of root.childNodes) {
             if (child.nodeType === Node.TEXT_NODE && isTranslatableText(child.textContent)) {
                 return true;
@@ -1103,10 +1132,10 @@
                 acceptNode: (node) => {
                     if (!(node instanceof Element)) return NodeFilter.FILTER_REJECT;
                     const s = node.dataset?.translationStatus;
-                    if (s === 'translated' || s === 'processing' || s === 'original') return NodeFilter.FILTER_REJECT;
+                    if (s === 'translated' || s === 'processing' || s === 'original' || s === 'failed') return NodeFilter.FILTER_REJECT;
                     if (node.dataset?.translationWrapper === 'true') return NodeFilter.FILTER_REJECT;
                     if (isFullyExcluded(node)) return NodeFilter.FILTER_REJECT;
-                    if (BLOCK_TAGS.has(node.nodeName)) {
+                    if (BLOCK_TAGS.has(node.nodeName) || isShadowHostingCustomElement(node) || isBlockLikeAnchorInShadowHost(node)) {
                         if (blockContainsReactCustomElement(node)) return NodeFilter.FILTER_SKIP;
                         return NodeFilter.FILTER_ACCEPT;
                     }
@@ -1614,6 +1643,33 @@
         } catch (e) { return false; }
     }
 
+    function isShadowHostingCustomElement(node) {
+        return !!(node && node.nodeName && node.nodeName.includes('-') && node.shadowRoot);
+    }
+
+    function isBlockLikeAnchorInShadowHost(node) {
+        if (!node || node.nodeName !== 'A') return false;
+        if (node.children.length > 0) return false;
+        if (!node.textContent?.trim()) return false;
+        let anc = node.parentElement;
+        let depth = 0;
+        while (anc && depth < 6) {
+            if (isShadowHostingCustomElement(anc)) return true;
+            anc = anc.parentElement;
+            depth++;
+        }
+        return false;
+    }
+
+    function isInsideShadowHostingCustomElement(node) {
+        let anc = node?.parentElement;
+        while (anc && anc !== document.documentElement) {
+            if (isShadowHostingCustomElement(anc)) return true;
+            anc = anc.parentElement;
+        }
+        return false;
+    }
+
     function isTranslatableText(text) {
         if (!text) return false;
         const trimmed = text.trim();
@@ -1656,10 +1712,11 @@
                         if (!node || !(node instanceof Element)) return NodeFilter.FILTER_REJECT;
                         if (node.dataset?.translationStatus === 'translated') return NodeFilter.FILTER_REJECT;
                         if (node.dataset?.translationStatus === 'original') return NodeFilter.FILTER_REJECT;
+                        if (node.dataset?.translationStatus === 'failed') return NodeFilter.FILTER_REJECT;
                         if (node.dataset?.translationWrapper === 'true') return NodeFilter.FILTER_REJECT;
                         if (isFullyExcluded(node)) return NodeFilter.FILTER_REJECT;
                         if (node.shadowRoot) queue.push(node.shadowRoot);
-                        if (BLOCK_TAGS.has(node.nodeName)) {
+                        if (BLOCK_TAGS.has(node.nodeName) || isShadowHostingCustomElement(node) || isBlockLikeAnchorInShadowHost(node)) {
                             if (blockContainsReactCustomElement(node)) return NodeFilter.FILTER_SKIP;
                             return NodeFilter.FILTER_ACCEPT;
                         }
@@ -1675,6 +1732,7 @@
                 if (block.dataset?.translationStatus === 'translated') continue;
                 if (block.dataset?.translationStatus === 'processing') continue;
                 if (block.dataset?.translationStatus === 'original') continue;
+                if (block.dataset?.translationStatus === 'failed') continue;
                 const tu = buildTU(block);
                 if (tu && tu.hasTranslatableText) {
                     tu.id = `tu_${tuIdCounter++}`;
@@ -1717,7 +1775,7 @@
                 return;
             }
 
-            if (BLOCK_TAGS.has(node.nodeName)) {
+            if (BLOCK_TAGS.has(node.nodeName) || isShadowHostingCustomElement(node) || isBlockLikeAnchorInShadowHost(node)) {
                 const idx = placeholders.length;
                 placeholders.push({ type: 'block', ph: `b${idx}`, node });
                 template += `<b${idx}></b${idx}>`;
@@ -1864,6 +1922,7 @@
 
     function shouldUseTextOnlyApply(node) {
         if (isInsideReactCustomElement(node)) return true;
+        if (isShadowHostingCustomElement(node) || isInsideShadowHostingCustomElement(node)) return true;
         try { if (isLikelyReactApp()) return true; } catch (e) { }
         return false;
     }
@@ -1873,7 +1932,10 @@
             try { tu.block.dataset.tuTranslatedTemplate = translatedTemplate; } catch (e) { }
             const normalized = normalizeTranslatedTemplate(translatedTemplate, tu.placeholders);
             const parsed = parseTemplateFragment(normalized);
-            if (!parsed) return false;
+            if (!parsed) {
+                try { tu.block.dataset.translationStatus = 'failed'; } catch (e) { }
+                return false;
+            }
 
             const translatedTexts = [];
             const parsedWalker = document.createTreeWalker(parsed, NodeFilter.SHOW_TEXT);
@@ -1895,7 +1957,10 @@
             let n;
             while (n = origWalker.nextNode()) originalTextNodes.push(n);
 
-            if (translatedTexts.length !== originalTextNodes.length || translatedTexts.length === 0) return false;
+            if (translatedTexts.length !== originalTextNodes.length || translatedTexts.length === 0) {
+                try { tu.block.dataset.translationStatus = 'failed'; } catch (e) { }
+                return false;
+            }
 
             if (!('originalHtml' in tu.block.dataset)) {
                 try { tu.block.dataset.originalHtml = tu.originalInnerHTML; } catch (e) { }
@@ -1911,7 +1976,10 @@
             else tu.block.classList.remove('translated-text');
             if (!fromCacheRestore) translatedUnitsCount++;
             return true;
-        } catch (e) { return false; }
+        } catch (e) {
+            try { tu.block.dataset.translationStatus = 'failed'; } catch (_) { }
+            return false;
+        }
     }
 
     function normalizeTranslatedTemplate(tpl, placeholders) {
