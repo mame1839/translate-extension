@@ -471,11 +471,15 @@
     let translationUnits = new Map();
     let activeObservers = [];
     let observedRoots = new WeakSet();
+    let replayingDrainedMutations = false;
+    let scanCache = null;
     let observerDebounceTimer = null;
     let userInteractionTimer = null;
     let userInteractionListenersAttached = false;
     let scrollListenersAttached = false;
     let scrollDebounceTimer = null;
+    let lastScrollScanHeight = -1;
+    let domChangedSinceScrollScan = true;
     let progressInterval = null;
     let statusContainer = null;
     let statusShadowRoot = null;
@@ -924,6 +928,10 @@
                 if (!translationStarted) return;
                 if (isTranslating || isApplyingUpdates || translationCancelled || translationHasError) return;
                 if (Date.now() < postNavigationCooldownUntil) return;
+                const scrollHeight = document.documentElement ? document.documentElement.scrollHeight : 0;
+                if (scrollHeight === lastScrollScanHeight && !domChangedSinceScrollScan) return;
+                lastScrollScanHeight = scrollHeight;
+                domChangedSinceScrollScan = false;
                 try {
                     if (hasUntranslatedTextInDocument()) {
                         startTranslation();
@@ -948,6 +956,7 @@
         clearTimeout(observerDebounceTimer);
         clearTimeout(userInteractionTimer);
         pendingRetranslation = false;
+        lastScrollScanHeight = -1;
         try { translationUnits.clear(); } catch (e) { }
         domUpdateQueue = [];
         streamingBatchRegistry.clear();
@@ -1107,10 +1116,13 @@
 
     const mutationCallback = (mutations) => {
         if (translationHasError) return;
-        if (Date.now() < postNavigationCooldownUntil) return;
+        if (!translationStarted) return;
+        const withinCooldown = Date.now() < postNavigationCooldownUntil;
         let hasRelevantChange = false;
         for (const mutation of mutations) {
             if (isInsideExtensionUi(mutation.target)) continue;
+            domChangedSinceScrollScan = true;
+            if (withinCooldown) return;
             if (mutation.type === 'attributes') {
                 const target = mutation.target;
                 if (target && target.nodeType === Node.ELEMENT_NODE && !isFullyExcluded(target)) {
@@ -1133,7 +1145,7 @@
             }
             if (mutation.type !== 'childList') continue;
             for (const node of mutation.addedNodes) {
-                if (node.nodeType === Node.ELEMENT_NODE) {
+                if (node.nodeType === Node.ELEMENT_NODE && !replayingDrainedMutations) {
                     attachObserversTo(node);
                 }
                 if (containsTranslatableContent(node)) {
@@ -1174,7 +1186,21 @@
         return false;
     }
 
+    function withScanCache(fn) {
+        if (scanCache) return fn();
+        scanCache = { hiddenBlockStyles: new WeakMap(), documentHasReactCustomElement: null };
+        try {
+            return fn();
+        } finally {
+            scanCache = null;
+        }
+    }
+
     function hasUntranslatedDescendant(root) {
+        return withScanCache(() => hasUntranslatedDescendantScan(root));
+    }
+
+    function hasUntranslatedDescendantScan(root) {
         if (!root || root.nodeType !== Node.ELEMENT_NODE) return false;
         const status = root.dataset?.translationStatus;
         if (status === 'translated' || status === 'processing' || status === 'original' || status === 'failed') return false;
@@ -1211,6 +1237,10 @@
     }
 
     function hasUntranslatedTextInDocument() {
+        return withScanCache(hasUntranslatedTextInDocumentScan);
+    }
+
+    function hasUntranslatedTextInDocumentScan() {
         if (!document.body) return false;
         const queue = [document.body];
         const visited = new WeakSet();
@@ -1232,6 +1262,10 @@
     }
 
     function containsTranslatableContent(node) {
+        return withScanCache(() => containsTranslatableContentScan(node));
+    }
+
+    function containsTranslatableContentScan(node) {
         if (!node) return false;
         if (node.nodeType === Node.TEXT_NODE) {
             return isTranslatableText(node.textContent);
@@ -1257,35 +1291,43 @@
 
     function attachObserversTo(root) {
         if (!root) return;
+        if (root instanceof ShadowRoot) {
+            if (root.host?.dataset?.geminiIgnore === 'true') return;
+            observeMutationRoot(root);
+            attachShadowRootObserversWithin(root);
+            return;
+        }
+        if (root.nodeType !== Node.ELEMENT_NODE) return;
+        if (root.dataset?.geminiIgnore === 'true') return;
+        if (root === document.body) observeMutationRoot(root);
+        if (root.shadowRoot) attachObserversTo(root.shadowRoot);
+        attachShadowRootObserversWithin(root);
+    }
+
+    function observeMutationRoot(root) {
         if (observedRoots.has(root)) return;
-        if (root.nodeType === Node.ELEMENT_NODE && root.dataset?.geminiIgnore === 'true') return;
-        if (root instanceof ShadowRoot && root.host?.dataset?.geminiIgnore === 'true') return;
         try {
             const observer = new MutationObserver(mutationCallback);
             observer.observe(root, observerConfig);
             activeObservers.push(observer);
             observedRoots.add(root);
-        } catch (e) { return; }
-        if (root.nodeType === Node.ELEMENT_NODE) {
-            if (root.shadowRoot) attachObserversTo(root.shadowRoot);
-            const elements = root.querySelectorAll ? root.querySelectorAll('*') : [];
-            for (const el of elements) {
+        } catch (e) { }
+    }
+
+    function attachShadowRootObserversWithin(root) {
+        if (!root.querySelectorAll) return;
+        try {
+            for (const el of root.querySelectorAll('*')) {
                 if (el.shadowRoot && !observedRoots.has(el.shadowRoot)) {
                     attachObserversTo(el.shadowRoot);
                 }
             }
-        } else if (root instanceof ShadowRoot) {
-            const elements = root.querySelectorAll ? root.querySelectorAll('*') : [];
-            for (const el of elements) {
-                if (el.shadowRoot && !observedRoots.has(el.shadowRoot)) {
-                    attachObserversTo(el.shadowRoot);
-                }
-            }
-        }
+        } catch (e) { }
     }
 
     function watchForNewContent() {
         disconnectAllObservers();
+        domChangedSinceScrollScan = true;
         if (document.body) {
             attachObserversTo(document.body);
         } else {
@@ -1346,7 +1388,9 @@
         activeObservers = [];
         observedRoots = new WeakSet();
         if (drained.length > 0) {
+            replayingDrainedMutations = true;
             try { mutationCallback(drained); } catch (e) { }
+            replayingDrainedMutations = false;
         }
     }
 
@@ -1703,16 +1747,35 @@
         if (element.hasAttribute && element.hasAttribute('hidden')) return true;
         if (element.namespaceURI && element.namespaceURI !== 'http://www.w3.org/1999/xhtml') return true;
         if (BLOCK_TAGS.has(element.nodeName)) {
-            try {
-                const style = window.getComputedStyle(element);
-                if (style.display === 'none' || style.visibility === 'hidden') return true;
-            } catch (e) { }
+            if (scanCache) {
+                const cached = scanCache.hiddenBlockStyles.get(element);
+                if (cached !== undefined) return cached;
+                const hidden = isHiddenByComputedStyle(element);
+                scanCache.hiddenBlockStyles.set(element, hidden);
+                return hidden;
+            }
+            return isHiddenByComputedStyle(element);
         }
         return false;
     }
 
+    function isHiddenByComputedStyle(element) {
+        try {
+            const style = window.getComputedStyle(element);
+            return style.display === 'none' || style.visibility === 'hidden';
+        } catch (e) {
+            return false;
+        }
+    }
+
     function blockContainsReactCustomElement(node) {
         try {
+            if (scanCache) {
+                if (scanCache.documentHasReactCustomElement === null) {
+                    scanCache.documentHasReactCustomElement = !!document.querySelector('react-app, react-partial');
+                }
+                if (!scanCache.documentHasReactCustomElement && node.getRootNode() === document) return false;
+            }
             return !!node.querySelector('react-app, react-partial');
         } catch (e) { return false; }
     }
@@ -1761,6 +1824,10 @@
     }
 
     function collectTranslationUnits() {
+        return withScanCache(collectTranslationUnitsScan);
+    }
+
+    function collectTranslationUnitsScan() {
         const tus = [];
         translationUnits.clear();
         let tuIdCounter = 0;
