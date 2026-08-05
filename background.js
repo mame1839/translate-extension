@@ -1543,24 +1543,38 @@ async function pageCacheGet(key) {
     finally { try { db.close(); } catch (e) { } }
 }
 
+const PAGE_CACHE_QUOTA_PRUNE_TARGET = 250;
+
+function isQuotaExceededError(e) {
+    return !!(e && e.name === 'QuotaExceededError');
+}
+
+async function pageCachePutRecord(db, record) {
+    const tx = db.transaction(PAGE_CACHE_STORE, 'readwrite');
+    const store = tx.objectStore(PAGE_CACHE_STORE);
+    await reqAsPromise(store.put(record));
+    await awaitTransaction(tx);
+}
+
 async function pageCacheSet(key, cache) {
     if (!key || !cache) return false;
     let db;
     try { db = await openPageCacheDB(); } catch (e) { return false; }
     try {
-        const tx = db.transaction(PAGE_CACHE_STORE, 'readwrite');
-        const store = tx.objectStore(PAGE_CACHE_STORE);
         const record = { ...cache, key };
         if (!record.savedAt) record.savedAt = Date.now();
-        try { await reqAsPromise(store.put(record)); } catch (e) { return false; }
-        try { await awaitTransaction(tx); } catch (e) { return false; }
-        return true;
-    } catch (e) {
-        if (e && e.name === 'QuotaExceededError') {
-            try { await pageCachePrune(Math.floor(500 / 2)); } catch (err) { }
+        try {
+            await pageCachePutRecord(db, record);
+            return true;
+        } catch (e) {
+            if (!isQuotaExceededError(e)) return false;
         }
-        return false;
-    }
+        try { await pageCachePrune(PAGE_CACHE_QUOTA_PRUNE_TARGET); } catch (e) { }
+        try {
+            await pageCachePutRecord(db, record);
+            return true;
+        } catch (e) { return false; }
+    } catch (e) { return false; }
     finally { try { db.close(); } catch (e) { } }
 }
 
