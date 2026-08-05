@@ -1132,7 +1132,7 @@
             }
             if (mutation.type === 'characterData') {
                 const parent = mutation.target.parentElement;
-                if (parent && !isFullyExcluded(parent) && isTranslatableText(mutation.target.textContent)) {
+                if (parent && !isFullyExcluded(parent) && !isInsideEditableHost(parent) && isTranslatableText(mutation.target.textContent)) {
                     const block = findBlockAncestor(parent);
                     if (block) {
                         const status = block.dataset?.translationStatus;
@@ -1144,11 +1144,12 @@
                 continue;
             }
             if (mutation.type !== 'childList') continue;
+            const targetInsideEditableHost = isInsideEditableHost(mutation.target);
             for (const node of mutation.addedNodes) {
                 if (node.nodeType === Node.ELEMENT_NODE && !replayingDrainedMutations) {
                     attachObserversTo(node);
                 }
-                if (containsTranslatableContent(node)) {
+                if (!targetInsideEditableHost && containsTranslatableContent(node)) {
                     hasRelevantChange = true;
                 }
             }
@@ -1739,6 +1740,10 @@
     function isFullyExcluded(element) {
         if (!element || !(element instanceof Element) || !element.isConnected) return true;
         if (INLINE_SKIP_TAGS.has(element.nodeName)) return true;
+        if (element.isContentEditable === true) return true;
+        const editableAttr = element.getAttribute('contenteditable');
+        if (typeof editableAttr === 'string' && editableAttr.toLowerCase() !== 'false') return true;
+        if (element.getAttribute('role') === 'textbox') return true;
         if (element.getAttribute('translate') === 'no') return true;
         if (element.classList && element.classList.contains('notranslate')) return true;
         if (element.dataset?.geminiIgnore === 'true') return true;
@@ -1766,6 +1771,20 @@
         } catch (e) {
             return false;
         }
+    }
+
+    function isInsideEditableHost(node) {
+        let current = node && node.nodeType === Node.TEXT_NODE ? node.parentElement : node;
+        while (current && current.nodeType === Node.ELEMENT_NODE) {
+            if (current.isContentEditable === true) return true;
+            if (typeof current.getAttribute === 'function') {
+                const editableAttr = current.getAttribute('contenteditable');
+                if (typeof editableAttr === 'string' && editableAttr.toLowerCase() !== 'false') return true;
+                if (current.getAttribute('role') === 'textbox') return true;
+            }
+            current = current.parentElement || (current.getRootNode?.() instanceof ShadowRoot ? current.getRootNode().host : null);
+        }
+        return false;
     }
 
     function blockContainsReactCustomElement(node) {
@@ -1888,20 +1907,27 @@
 
     function buildTU(block) {
         const placeholders = [];
+        const textRuns = [];
         let template = '';
         let hasTranslatableText = false;
         let anchorDepth = 0;
-
-        function appendText(text) {
-            if (!text) return;
-            template += escapeHtml(text);
-        }
+        let runOpen = false;
 
         function visit(node) {
             if (node.nodeType === Node.TEXT_NODE) {
                 const text = node.textContent;
-                if (isTranslatableText(text)) hasTranslatableText = true;
-                appendText(text);
+                if (!text) return;
+                if (!runOpen) {
+                    textRuns.push({ nodes: [], translatable: false });
+                    runOpen = true;
+                }
+                const run = textRuns[textRuns.length - 1];
+                run.nodes.push(node);
+                if (isTranslatableText(text)) {
+                    hasTranslatableText = true;
+                    run.translatable = true;
+                }
+                template += escapeHtml(text);
                 return;
             }
             if (node.nodeType !== Node.ELEMENT_NODE) return;
@@ -1911,8 +1937,12 @@
                 return;
             }
 
-            if (node.dataset?.translationStatus === 'translated') {
-                appendText(node.textContent || '');
+            const childStatus = node.dataset?.translationStatus;
+            if (childStatus === 'translated' || childStatus === 'original') {
+                const idx = placeholders.length;
+                placeholders.push({ type: 'skip', ph: `s${idx}`, node });
+                template += `<s${idx}></s${idx}>`;
+                runOpen = false;
                 return;
             }
 
@@ -1920,6 +1950,7 @@
                 const idx = placeholders.length;
                 placeholders.push({ type: 'block', ph: `b${idx}`, node });
                 template += `<b${idx}></b${idx}>`;
+                runOpen = false;
                 return;
             }
 
@@ -1927,6 +1958,7 @@
                 const idx = placeholders.length;
                 placeholders.push({ type: 'skip', ph: `s${idx}`, node });
                 template += `<s${idx}></s${idx}>`;
+                runOpen = false;
                 return;
             }
 
@@ -1939,18 +1971,22 @@
                 const originalText = (node.textContent || '').trim();
                 placeholders.push({ type: 'anchor', ph: `a${idx}`, node, originalText });
                 template += `<a${idx}>`;
+                runOpen = false;
                 anchorDepth++;
                 for (const child of node.childNodes) visit(child);
                 anchorDepth--;
                 template += `</a${idx}>`;
+                runOpen = false;
                 return;
             }
 
             const idx = placeholders.length;
             placeholders.push({ type: 'tag', ph: `t${idx}`, node });
             template += `<t${idx}>`;
+            runOpen = false;
             for (const child of node.childNodes) visit(child);
             template += `</t${idx}>`;
+            runOpen = false;
         }
 
         for (const child of block.childNodes) visit(child);
@@ -1962,6 +1998,7 @@
             block,
             template: normalizedTemplate,
             placeholders,
+            textRuns,
             hasTranslatableText,
             originalInnerHTML: block.innerHTML
         };
@@ -2007,39 +2044,41 @@
         });
     }
 
+    function applyTemplateWithPlaceholders(tu, template) {
+        const normalized = normalizeTranslatedTemplate(template, tu.placeholders);
+        const parsed = parseTemplateFragment(normalized);
+        if (!parsed) return false;
+
+        const newChildren = [];
+        for (const child of parsed.childNodes) {
+            const restored = restoreNode(child, tu.placeholders);
+            if (restored) newChildren.push(restored);
+        }
+
+        if (typeof tu.block.replaceChildren === 'function') {
+            tu.block.replaceChildren(...newChildren);
+        } else {
+            while (tu.block.firstChild) tu.block.removeChild(tu.block.firstChild);
+            for (const child of newChildren) tu.block.appendChild(child);
+        }
+        return true;
+    }
+
     function applyTranslation(tu, translatedTemplate, fromCacheRestore) {
         if (!tu || !tu.block || !tu.block.isConnected) return;
         if (shouldUseTextOnlyApply(tu.block)) {
-            if (applyTranslationInPlace(tu, translatedTemplate, fromCacheRestore)) return;
+            applyTranslationInPlace(tu, translatedTemplate, fromCacheRestore);
             return;
         }
         try {
             try { tu.block.dataset.tuTranslatedTemplate = translatedTemplate; } catch (e) { }
-            const normalized = normalizeTranslatedTemplate(translatedTemplate, tu.placeholders);
-            const parsed = parseTemplateFragment(normalized);
-            if (!parsed) return;
-
-            const newChildren = [];
-            for (const child of parsed.childNodes) {
-                const restored = restoreNode(child, tu.placeholders);
-                if (restored) newChildren.push(restored);
-            }
-
-            const originalNodeSet = new Set();
-            for (const ph of tu.placeholders) {
-                if (ph.node) originalNodeSet.add(ph.node);
-            }
+            try { tu.block.dataset.tuTemplate = tu.template; } catch (e) { }
 
             if (!('originalHtml' in tu.block.dataset)) {
                 tu.block.dataset.originalHtml = tu.originalInnerHTML;
             }
 
-            if (typeof tu.block.replaceChildren === 'function') {
-                tu.block.replaceChildren(...newChildren);
-            } else {
-                while (tu.block.firstChild) tu.block.removeChild(tu.block.firstChild);
-                for (const child of newChildren) tu.block.appendChild(child);
-            }
+            if (!applyTemplateWithPlaceholders(tu, translatedTemplate)) return;
 
             tu.block.dataset.translatedHtml = tu.block.innerHTML;
             tu.block.dataset.translationStatus = 'translated';
@@ -2080,46 +2119,86 @@
         return false;
     }
 
+    function isExcludedFromTextRuns(element) {
+        const status = element.dataset?.translationStatus;
+        if (status === 'translated' || status === 'original') return true;
+        if (BLOCK_TAGS.has(element.nodeName) || isShadowHostingCustomElement(element) || isBlockLikeAnchorInShadowHost(element)) return true;
+        return isFullyExcluded(element);
+    }
+
+    function collectLiveTextRuns(block) {
+        const runs = [];
+        let runOpen = false;
+        const visitLive = (parent, insideAnchor) => {
+            for (const child of parent.childNodes) {
+                if (child.nodeType === Node.TEXT_NODE) {
+                    const text = child.textContent;
+                    if (!text) continue;
+                    if (!runOpen) {
+                        runs.push({ nodes: [], translatable: false });
+                        runOpen = true;
+                    }
+                    const run = runs[runs.length - 1];
+                    run.nodes.push(child);
+                    if (isTranslatableText(text)) run.translatable = true;
+                    continue;
+                }
+                if (child.nodeType !== Node.ELEMENT_NODE) continue;
+                if (isExcludedFromTextRuns(child)) {
+                    runOpen = false;
+                    continue;
+                }
+                if (child.nodeName === 'A' && insideAnchor) {
+                    visitLive(child, true);
+                    continue;
+                }
+                runOpen = false;
+                visitLive(child, insideAnchor || child.nodeName === 'A');
+                runOpen = false;
+            }
+        };
+        visitLive(block, false);
+        return runs;
+    }
+
+    function applyTemplateTextOnly(tu, template) {
+        const normalized = normalizeTranslatedTemplate(template, tu.placeholders);
+        const parsed = parseTemplateFragment(normalized);
+        if (!parsed) return false;
+
+        const translatedTexts = [];
+        const parsedWalker = document.createTreeWalker(parsed, NodeFilter.SHOW_TEXT);
+        let t;
+        while (t = parsedWalker.nextNode()) {
+            if (isTranslatableText(t.nodeValue)) translatedTexts.push(t.nodeValue);
+        }
+
+        let runs = tu.textRuns;
+        const runsAreLive = Array.isArray(runs) &&
+            runs.every(run => run.nodes.every(node => tu.block.contains(node)));
+        if (!runsAreLive) runs = collectLiveTextRuns(tu.block);
+
+        const translatableRuns = runs.filter(run => run.translatable);
+        if (translatableRuns.length === 0 || translatableRuns.length !== translatedTexts.length) return false;
+
+        translatableRuns.forEach((run, index) => {
+            run.nodes.forEach((node, nodeIndex) => {
+                node.nodeValue = nodeIndex === 0 ? translatedTexts[index] : '';
+            });
+        });
+        return true;
+    }
+
     function applyTranslationInPlace(tu, translatedTemplate, fromCacheRestore) {
         try {
             try { tu.block.dataset.tuTranslatedTemplate = translatedTemplate; } catch (e) { }
-            const normalized = normalizeTranslatedTemplate(translatedTemplate, tu.placeholders);
-            const parsed = parseTemplateFragment(normalized);
-            if (!parsed) {
+            try { tu.block.dataset.tuTemplate = tu.template; } catch (e) { }
+            if (!applyTemplateTextOnly(tu, translatedTemplate)) {
                 try { tu.block.dataset.translationStatus = 'failed'; } catch (e) { }
                 return false;
             }
-
-            const translatedTexts = [];
-            const parsedWalker = document.createTreeWalker(parsed, NodeFilter.SHOW_TEXT);
-            let t;
-            while (t = parsedWalker.nextNode()) translatedTexts.push(t.nodeValue);
-
-            const originalTextNodes = [];
-            const origWalker = document.createTreeWalker(tu.block, NodeFilter.SHOW_TEXT, {
-                acceptNode: (n) => {
-                    let p = n.parentElement;
-                    while (p && p !== tu.block) {
-                        if (INLINE_SKIP_TAGS.has(p.nodeName)) return NodeFilter.FILTER_REJECT;
-                        if (BLOCK_TAGS.has(p.nodeName)) return NodeFilter.FILTER_REJECT;
-                        p = p.parentElement;
-                    }
-                    return NodeFilter.FILTER_ACCEPT;
-                }
-            });
-            let n;
-            while (n = origWalker.nextNode()) originalTextNodes.push(n);
-
-            if (translatedTexts.length !== originalTextNodes.length || translatedTexts.length === 0) {
-                try { tu.block.dataset.translationStatus = 'failed'; } catch (e) { }
-                return false;
-            }
-
             if (!('originalHtml' in tu.block.dataset)) {
                 try { tu.block.dataset.originalHtml = tu.originalInnerHTML; } catch (e) { }
-            }
-            for (let i = 0; i < originalTextNodes.length; i++) {
-                originalTextNodes[i].nodeValue = translatedTexts[i];
             }
             try {
                 tu.block.dataset.translatedHtml = tu.block.innerHTML;
@@ -2212,7 +2291,11 @@
             const idx = parseInt(match[2], 10);
             const entry = placeholders[idx];
             if (!entry) return document.createTextNode(parsedNode.textContent || '');
-            if (entry.ph !== `${match[1]}${match[2]}`) return document.createTextNode(parsedNode.textContent || '');
+            const bothNodeKeeping = (match[1] === 'b' || match[1] === 's') &&
+                (entry.type === 'block' || entry.type === 'skip');
+            if (entry.ph !== `${match[1]}${match[2]}` && !bothNodeKeeping) {
+                return document.createTextNode(parsedNode.textContent || '');
+            }
             if (entry.type === 'tag' || entry.type === 'anchor') {
                 const originalNode = entry.node;
                 if (!originalNode) return null;
@@ -2238,6 +2321,36 @@
         return document.createTextNode(parsedNode.textContent || '');
     }
 
+    function revertBlockToOriginal(block) {
+        const textOnly = shouldUseTextOnlyApply(block);
+        const originalTemplate = block.dataset.tuTemplate;
+        if (typeof originalTemplate === 'string' && originalTemplate) {
+            try {
+                const tu = buildTU(block);
+                if (tu) {
+                    if (textOnly) return applyTemplateTextOnly(tu, originalTemplate);
+                    if (applyTemplateWithPlaceholders(tu, originalTemplate)) return true;
+                }
+            } catch (e) { }
+        }
+        if (textOnly) return false;
+        if (typeof block.dataset.originalHtml === 'string') {
+            setBlockContent(block, block.dataset.originalHtml);
+            return true;
+        }
+        return false;
+    }
+
+    function restoreTranslatedHtmlFallback(block) {
+        if (shouldUseTextOnlyApply(block)) return;
+        if ('translatedHtml' in block.dataset) {
+            setBlockContent(block, block.dataset.translatedHtml);
+            block.dataset.translationStatus = 'translated';
+            if (highlightTranslated) block.classList.add('translated-text');
+            else block.classList.remove('translated-text');
+        }
+    }
+
     function toggleAllTranslations() {
         if (isTranslating) return;
         clearTimeout(observerDebounceTimer);
@@ -2250,8 +2363,7 @@
             const shouldRevert = blocks.some(block => block.dataset.translationStatus === 'translated');
             blocks.forEach(block => {
                 if (shouldRevert) {
-                    if ('originalHtml' in block.dataset) {
-                        setBlockContent(block, block.dataset.originalHtml);
+                    if (block.dataset.translationStatus === 'translated' && revertBlockToOriginal(block)) {
                         block.dataset.translationStatus = 'original';
                         block.classList.remove('translated-text');
                     }
@@ -2262,22 +2374,15 @@
                         const tu = buildTU(block);
                         if (tu && tu.hasTranslatableText) {
                             applyTranslation(tu, block.dataset.tuTranslatedTemplate, true);
-                        } else if ('translatedHtml' in block.dataset) {
-                            setBlockContent(block, block.dataset.translatedHtml);
-                            block.dataset.translationStatus = 'translated';
+                        } else {
+                            restoreTranslatedHtmlFallback(block);
                         }
                     } catch (e) {
-                        if ('translatedHtml' in block.dataset) {
-                            setBlockContent(block, block.dataset.translatedHtml);
-                            block.dataset.translationStatus = 'translated';
-                        }
+                        restoreTranslatedHtmlFallback(block);
                     }
-                } else if ('translatedHtml' in block.dataset) {
-                    setBlockContent(block, block.dataset.translatedHtml);
-                    block.dataset.translationStatus = 'translated';
+                } else {
+                    restoreTranslatedHtmlFallback(block);
                 }
-                if (highlightTranslated) block.classList.add('translated-text');
-                else block.classList.remove('translated-text');
             });
             translationStarted = !shouldRevert;
         } finally {
