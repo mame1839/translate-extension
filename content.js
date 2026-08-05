@@ -666,9 +666,8 @@
 
     function getBlockOriginalText(block) {
         if (block.dataset?.translationStatus === 'translated' && typeof block.dataset.originalHtml === 'string') {
-            const temp = document.createElement('div');
-            temp.innerHTML = block.dataset.originalHtml;
-            return (temp.textContent || '').trim().replace(/\s+/g, ' ');
+            const parsed = parseTemplateFragment(block.dataset.originalHtml);
+            return ((parsed && parsed.textContent) || '').trim().replace(/\s+/g, ' ');
         }
         return (block.textContent || '').trim().replace(/\s+/g, ' ');
     }
@@ -959,6 +958,29 @@
         return '';
     }
 
+    const SVG_NS = 'http://www.w3.org/2000/svg';
+
+    function createSvgIcon(size, strokeWidth, shapes) {
+        const svg = document.createElementNS(SVG_NS, 'svg');
+        svg.setAttribute('width', size);
+        svg.setAttribute('height', size);
+        svg.setAttribute('viewBox', '0 0 24 24');
+        svg.setAttribute('fill', 'none');
+        svg.setAttribute('stroke', 'currentColor');
+        svg.setAttribute('stroke-width', strokeWidth);
+        svg.setAttribute('stroke-linecap', 'round');
+        svg.setAttribute('stroke-linejoin', 'round');
+        svg.setAttribute('aria-hidden', 'true');
+        for (const [shapeTag, shapeAttrs] of shapes) {
+            const shape = document.createElementNS(SVG_NS, shapeTag);
+            for (const [attrName, attrValue] of Object.entries(shapeAttrs)) {
+                shape.setAttribute(attrName, attrValue);
+            }
+            svg.appendChild(shape);
+        }
+        return svg;
+    }
+
     function createTranslationPrompt(showWarning) {
         if (promptContainer || document.getElementById('gemini-translator-prompt-container')) return;
         promptContainer = document.createElement('div');
@@ -978,7 +1000,14 @@
         header.className = 'prompt-header';
         const iconWrap = document.createElement('div');
         iconWrap.className = 'prompt-icon';
-        iconWrap.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 8 6 6"></path><path d="m4 14 6-6 2-3"></path><path d="M2 5h12"></path><path d="M7 2h1"></path><path d="m22 22-5-10-5 10"></path><path d="M14 18h6"></path></svg>';
+        iconWrap.appendChild(createSvgIcon('16', '2.25', [
+            ['path', { d: 'm5 8 6 6' }],
+            ['path', { d: 'm4 14 6-6 2-3' }],
+            ['path', { d: 'M2 5h12' }],
+            ['path', { d: 'M7 2h1' }],
+            ['path', { d: 'm22 22-5-10-5 10' }],
+            ['path', { d: 'M14 18h6' }]
+        ]));
         const textDiv = document.createElement('div');
         textDiv.className = 'prompt-text';
         textDiv.textContent = promptMessage;
@@ -2046,6 +2075,41 @@
         }
     }
 
+    const PARSE_CONTEXT_WRAPPERS = {
+        TABLE: ['<table>', '</table>'],
+        THEAD: ['<table><thead>', '</thead></table>'],
+        TBODY: ['<table><tbody>', '</tbody></table>'],
+        TFOOT: ['<table><tfoot>', '</tfoot></table>'],
+        TR: ['<table><tbody><tr>', '</tr></tbody></table>']
+    };
+
+    function collectContextParsedChildren(parsedBody, contextTagName) {
+        const contextElement = parsedBody.querySelector(contextTagName.toLowerCase());
+        if (!contextElement) return null;
+        let wrapperRoot = contextElement;
+        while (wrapperRoot.parentNode && wrapperRoot.parentNode !== parsedBody) {
+            wrapperRoot = wrapperRoot.parentNode;
+        }
+        const fosterParented = Array.from(parsedBody.childNodes).filter(node => node !== wrapperRoot);
+        return [...contextElement.childNodes, ...fosterParented];
+    }
+
+    function setBlockContent(block, html) {
+        const wrapper = PARSE_CONTEXT_WRAPPERS[block.tagName];
+        const parsedBody = parseTemplateFragment(wrapper ? wrapper[0] + html + wrapper[1] : html);
+        if (!parsedBody) return;
+        const newChildren = wrapper
+            ? collectContextParsedChildren(parsedBody, block.tagName)
+            : Array.from(parsedBody.childNodes);
+        if (!newChildren) return;
+        if (typeof block.replaceChildren === 'function') {
+            block.replaceChildren(...newChildren);
+        } else {
+            while (block.firstChild) block.removeChild(block.firstChild);
+            for (const child of newChildren) block.appendChild(child);
+        }
+    }
+
     function restoreNode(parsedNode, placeholders) {
         if (parsedNode.nodeType === Node.TEXT_NODE) {
             return document.createTextNode(parsedNode.textContent || '');
@@ -2097,7 +2161,7 @@
             blocks.forEach(block => {
                 if (shouldRevert) {
                     if ('originalHtml' in block.dataset) {
-                        block.innerHTML = block.dataset.originalHtml;
+                        setBlockContent(block, block.dataset.originalHtml);
                         block.dataset.translationStatus = 'original';
                         block.classList.remove('translated-text');
                     }
@@ -2109,17 +2173,17 @@
                         if (tu && tu.hasTranslatableText) {
                             applyTranslation(tu, block.dataset.tuTranslatedTemplate, true);
                         } else if ('translatedHtml' in block.dataset) {
-                            block.innerHTML = block.dataset.translatedHtml;
+                            setBlockContent(block, block.dataset.translatedHtml);
                             block.dataset.translationStatus = 'translated';
                         }
                     } catch (e) {
                         if ('translatedHtml' in block.dataset) {
-                            block.innerHTML = block.dataset.translatedHtml;
+                            setBlockContent(block, block.dataset.translatedHtml);
                             block.dataset.translationStatus = 'translated';
                         }
                     }
                 } else if ('translatedHtml' in block.dataset) {
-                    block.innerHTML = block.dataset.translatedHtml;
+                    setBlockContent(block, block.dataset.translatedHtml);
                     block.dataset.translationStatus = 'translated';
                 }
                 if (highlightTranslated) block.classList.add('translated-text');
@@ -2228,7 +2292,9 @@
         minimizeBtn.id = 'minimizeStatusBtn';
         minimizeBtn.type = 'button';
         minimizeBtn.title = 'Minimize';
-        minimizeBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="5" y1="12" x2="19" y2="12"></line></svg>';
+        minimizeBtn.appendChild(createSvgIcon('14', '2.5', [
+            ['line', { x1: '5', y1: '12', x2: '19', y2: '12' }]
+        ]));
 
         header.appendChild(title);
         header.appendChild(minimizeBtn);
