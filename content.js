@@ -522,12 +522,17 @@
                     applyStrings(chosenLang);
 
                     const isReactSpa = isLikelyReactApp();
+                    const currentUrl = window.location.href;
+                    const excludeList = items.excludeList || [];
+                    let siteOrigin = '';
+                    try { siteOrigin = new URL(currentUrl).origin; } catch (e) { }
+                    const isExcluded = excludeList.some(prefix => currentUrl.startsWith(prefix) || siteOrigin === prefix);
                     if (reloaded) {
                         cacheRestoreMap = null;
                         cacheRestoreActive = false;
                         await clearPageCache();
-                    } else if (!isReactSpa && items.autoRetranslateDomain !== false) {
-                        const restored = await tryRestoreFromCache();
+                    } else if (!isReactSpa && !isExcluded && items.autoRetranslateDomain !== false) {
+                        const restored = await tryRestoreFromCache(chosenLang);
                         if (restored || cacheRestoreActive) {
                             translationStarted = true;
                             if (items.toggleBlueBackground) {
@@ -551,12 +556,6 @@
                         if (!translationStarted) return;
                         startTranslation();
                     };
-
-                    const currentUrl = window.location.href;
-                    const excludeList = items.excludeList || [];
-                    let siteOrigin = '';
-                    try { siteOrigin = new URL(currentUrl).origin; } catch (e) { }
-                    const isExcluded = excludeList.some(prefix => currentUrl.startsWith(prefix) || siteOrigin === prefix);
 
                     const autoRetranslateEnabled = items.autoRetranslateDomain !== false;
 
@@ -731,10 +730,15 @@
         return textKey + '|' + (tagName || '');
     }
 
-    async function tryRestoreFromCache() {
+    async function tryRestoreFromCache(targetLanguage) {
         if (!cacheRestoreMap) {
+            if (!targetLanguage) return false;
             const cache = await getPageCache();
             if (!cache || !Array.isArray(cache.blocks)) return false;
+            if (cache.lang !== targetLanguage) {
+                await clearPageCache();
+                return false;
+            }
             const map = new Map();
             for (const entry of cache.blocks) {
                 if (entry && entry.textKey && entry.tagName) {
@@ -759,7 +763,9 @@
                 block.dataset.originalHtml = entry.originalHtml;
             }
             applyTranslation(tu, entry.translatedTemplate, true);
-            return block.dataset?.translationStatus === 'translated';
+            if (block.dataset?.translationStatus !== 'translated') return false;
+            block.dataset.tuTemplate = tu.template;
+            return true;
         } catch (e) { return false; }
     }
 
@@ -832,6 +838,17 @@
         return applied;
     }
 
+    function getStoredTargetLanguage() {
+        return new Promise(resolve => {
+            try {
+                chrome.storage.local.get(['targetLanguage'], (items) => {
+                    if (chrome.runtime.lastError) { resolve(null); return; }
+                    resolve((items && items.targetLanguage) || 'en');
+                });
+            } catch (e) { resolve(null); }
+        });
+    }
+
     async function saveCurrentTranslationToCache() {
         const blocks = collectCacheableBlocks();
         if (blocks.length === 0) return;
@@ -841,6 +858,9 @@
             if (block.dataset?.translationStatus !== 'translated') continue;
             if (typeof block.dataset.translatedHtml !== 'string') continue;
             if (typeof block.dataset.originalHtml !== 'string') continue;
+            const template = block.dataset.tuTemplate;
+            const translatedTemplate = block.dataset.tuTranslatedTemplate;
+            if (!template || !translatedTemplate) continue;
             const text = getBlockOriginalText(block);
             if (!text) continue;
             const textKey = computeBlockTextKey(text);
@@ -852,15 +872,18 @@
                 tagName: block.tagName,
                 originalHtml: block.dataset.originalHtml,
                 translatedHtml: block.dataset.translatedHtml,
-                template: block.dataset.tuTemplate || '',
-                translatedTemplate: block.dataset.tuTranslatedTemplate || ''
+                template,
+                translatedTemplate
             });
         }
         if (entries.length === 0) return;
+        const lang = await getStoredTargetLanguage();
+        if (!lang) return;
         let pageUrl = '';
         try { pageUrl = window.location.href; } catch (e) { }
         const saved = await savePageCache({
             url: pageUrl,
+            lang,
             blocks: entries,
             savedAt: Date.now()
         });
