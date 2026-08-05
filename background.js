@@ -37,6 +37,8 @@ const DEFAULTS = Object.freeze({
     timeout: 180
 });
 
+const ANTHROPIC_MAX_OUTPUT_TOKENS = 64000;
+
 const LANGUAGE_LIST = [
     { code: 'en', name: 'English' },       { code: 'zh', name: 'Chinese (Simplified)' },
     { code: 'zh-Hant', name: 'Chinese (Traditional)' },
@@ -671,6 +673,7 @@ async function performTranslation(apiCall, retryLimit, signal) {
                 errorMessages.modelNotFound,
                 errorMessages.invalidRequest,
                 errorMessages.maxTokensError,
+                errorMessages.insufficientQuota,
                 errorMessages.translationCancelled
             ];
             const msg = error?.message || '';
@@ -781,6 +784,11 @@ function handleOpenAIHttpError(response, data) {
         case 404:
             throw new Error(errorMessages.modelNotFound);
         case 429: {
+            const errorType = data?.error?.type || '';
+            const errorCode = data?.error?.code || '';
+            if (errorType === 'insufficient_quota' || errorCode === 'insufficient_quota') {
+                throw new Error(`${errorMessages.insufficientQuota}\n${message}`);
+            }
             const retryAfterHeader = response.headers.get('Retry-After');
             let retryAfterMs = null;
             if (retryAfterHeader) {
@@ -802,6 +810,24 @@ function handleOpenAIHttpError(response, data) {
     }
 }
 
+function geminiAllowsCustomTemperature(model) {
+    const versionMatch = /^gemini-(\d+)/i.exec(model || '');
+    return !!versionMatch && parseInt(versionMatch[1], 10) < 3;
+}
+
+function extractGeminiRetryDelayMs(data) {
+    const details = data?.error?.details;
+    if (!Array.isArray(details)) return null;
+    for (const detail of details) {
+        if (typeof detail?.['@type'] !== 'string') continue;
+        if (!detail['@type'].endsWith('google.rpc.RetryInfo')) continue;
+        if (typeof detail.retryDelay !== 'string') continue;
+        const delayMatch = /^(\d+(?:\.\d+)?)s$/.exec(detail.retryDelay.trim());
+        if (delayMatch) return Math.ceil(parseFloat(delayMatch[1]) * 1000);
+    }
+    return null;
+}
+
 async function translateWithGemini(text, retryLimit, signal, targetLanguage = 'English') {
     const { geminiApiKey: apiKey, geminiModel: model, maxToken, timeout } = await new Promise(resolve =>
         chrome.storage.local.get(['geminiApiKey', 'geminiModel', 'maxToken', 'timeout'], resolve));
@@ -810,13 +836,14 @@ async function translateWithGemini(text, retryLimit, signal, targetLanguage = 'E
     const actualMaxToken = maxToken || DEFAULTS.maxToken;
     const actualTimeout = timeout || DEFAULTS.timeout;
     const prompt = createTranslationPrompt(text, targetLanguage);
+    const generationConfig = {
+        maxOutputTokens: actualMaxToken,
+        responseMimeType: "application/json"
+    };
+    if (geminiAllowsCustomTemperature(actualModel)) generationConfig.temperature = 0.2;
     const requestBody = {
         contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: {
-            temperature: 0.2,
-            maxOutputTokens: actualMaxToken,
-            responseMimeType: "application/json"
-        }
+        generationConfig
     };
     return performTranslation(async () => {
         const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(actualModel)}:generateContent`;
@@ -854,6 +881,7 @@ async function translateWithGemini(text, retryLimit, signal, targetLanguage = 'E
                         const asInt = parseInt(retryAfterHeader, 10);
                         if (Number.isFinite(asInt)) retryAfterMs = asInt * 1000;
                     }
+                    if (retryAfterMs == null) retryAfterMs = extractGeminiRetryDelayMs(data);
                     const detailParts = [];
                     if (status) detailParts.push(status);
                     if (message) detailParts.push(message);
@@ -902,14 +930,12 @@ async function translateWithOpenAI(text, retryLimit, signal, targetLanguage = 'E
     const actualMaxToken = maxToken || DEFAULTS.maxToken;
     const actualTimeout = timeout || DEFAULTS.timeout;
     const prompt = createTranslationPrompt(text, targetLanguage);
-    const isReasoningModel = /^o\d/i.test(actualModel);
     const requestBody = {
         model: actualModel,
         messages: [{ role: 'user', content: prompt }],
         max_completion_tokens: actualMaxToken,
         response_format: { type: 'json_object' }
     };
-    if (!isReasoningModel) requestBody.temperature = 0.2;
     return performTranslation(async () => {
         const response = await fetchWithTimeout('https://api.openai.com/v1/chat/completions', {
             method: 'POST',
@@ -980,7 +1006,7 @@ async function translateWithAnthropic(text, retryLimit, signal, targetLanguage =
         chrome.storage.local.get(['anthropicApiKey', 'anthropicModel', 'maxToken', 'timeout'], resolve));
     if (!apiKey) throw new Error(errorMessages.apiKeyNotSet);
     const actualModel = (model || '').trim() || DEFAULTS.anthropicModel;
-    const actualMaxToken = maxToken || DEFAULTS.maxToken;
+    const actualMaxToken = Math.min(maxToken || DEFAULTS.maxToken, ANTHROPIC_MAX_OUTPUT_TOKENS);
     const actualTimeout = timeout || DEFAULTS.timeout;
     const prompt = createTranslationPrompt(text, targetLanguage);
     const requestBody = {
@@ -1031,6 +1057,7 @@ async function translateWithAnthropic(text, retryLimit, signal, targetLanguage =
                 case 502:
                 case 503:
                 case 504:
+                case 529:
                     throw new Error(`${errorMessages.serverError}\n${message}`);
                 default:
                     throw new Error(`${errorMessages.unknownError}\n${message}`);
