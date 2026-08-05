@@ -87,7 +87,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             'compatibleApiKey', 'compatibleModel', 'compatibleEndpoint',
             'delayBetweenRequests', 'maxToken', 'concurrencyLimit',
             'maxRetries', 'timeout',
-            'toggleBlueBackground', 'realTimeTranslation', 'showProgressPopup', 'excludeList', 'hidePromptAllSites', 'showContextMenu', 'autoRetranslateDomain'
+            'toggleBlueBackground', 'realTimeTranslation', 'showProgressPopup', 'excludeList', 'hidePromptAllSites', 'showContextMenu', 'autoRetranslateDomain', 'streamingTranslation'
         ]);
 
         const lang = items.targetLanguage || 'en';
@@ -119,6 +119,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.getElementById('hidePromptAllSites').checked = items.hidePromptAllSites === true;
         document.getElementById('showContextMenu').checked = items.showContextMenu !== false;
         document.getElementById('autoRetranslateDomain').checked = items.autoRetranslateDomain !== false;
+        document.getElementById('streamingTranslation').checked = items.streamingTranslation === true;
         document.getElementById('excludeList').value = (items.excludeList && Array.isArray(items.excludeList)) ? items.excludeList.join('\n') : '';
     } catch (error) {
         console.error('Error loading settings:', error);
@@ -157,6 +158,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             document.getElementById('hidePromptAllSites').checked = false;
             document.getElementById('showContextMenu').checked = true;
             document.getElementById('autoRetranslateDomain').checked = true;
+            document.getElementById('streamingTranslation').checked = false;
         },
         exclude: () => {
             document.getElementById('excludeList').value = '';
@@ -219,6 +221,7 @@ document.getElementById('saveBtn').addEventListener('click', async () => {
     const hidePromptAllSites = document.getElementById('hidePromptAllSites').checked;
     const showContextMenu = document.getElementById('showContextMenu').checked;
     const autoRetranslateDomain = document.getElementById('autoRetranslateDomain').checked;
+    const streamingTranslation = document.getElementById('streamingTranslation').checked;
     const excludeList = document.getElementById('excludeList').value.split(/\r?\n/).map(url => url.trim()).filter(url => url);
 
     const saveData = {
@@ -235,7 +238,7 @@ document.getElementById('saveBtn').addEventListener('click', async () => {
         compatibleEndpoint: providerSettings['openai-compatible'].endpoint.trim(),
         delayBetweenRequests, maxToken,
         concurrencyLimit, maxRetries, timeout,
-        toggleBlueBackground, realTimeTranslation, showProgressPopup, hidePromptAllSites, showContextMenu, autoRetranslateDomain, excludeList
+        toggleBlueBackground, realTimeTranslation, showProgressPopup, hidePromptAllSites, showContextMenu, autoRetranslateDomain, streamingTranslation, excludeList
     };
 
     try {

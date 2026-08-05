@@ -484,6 +484,9 @@
     let minimizedDiv = null;
     let domUpdateQueue = [];
     let isApplyingUpdates = false;
+    let streamingBatchRegistry = new Map();
+    let streamingBatchCounter = 0;
+    const streamingBatchSeed = Math.random().toString(36).slice(2, 10);
     let pendingRetranslation = false;
     let cacheRestoreMap = null;
     let cacheRestoreActive = false;
@@ -925,6 +928,7 @@
         pendingRetranslation = false;
         try { translationUnits.clear(); } catch (e) { }
         domUpdateQueue = [];
+        streamingBatchRegistry.clear();
     }
 
     function isLikelyReactApp() {
@@ -1317,6 +1321,7 @@
         expectedTotalUnits = 0;
         translationProgress = 0;
         domUpdateQueue = [];
+        streamingBatchRegistry.clear();
         isApplyingUpdates = false;
         if (cacheRestoreActive) {
             try { applyCacheRestore(); } catch (e) { }
@@ -1465,6 +1470,23 @@
             watchForNewContent();
             isApplyingUpdates = false;
         }
+    }
+
+    function handleStreamingUpdate(batchId, updates) {
+        if (!Array.isArray(updates) || updates.length === 0) return;
+        if (!isTranslating || translationCancelled || translationHasError) return;
+        const keyToTuId = streamingBatchRegistry.get(batchId);
+        if (!keyToTuId) return;
+        const translations = [];
+        for (const update of updates) {
+            if (!update || typeof update.key !== 'string' || typeof update.translatedTemplate !== 'string') continue;
+            const tuId = keyToTuId.get(update.key);
+            if (!tuId) continue;
+            translations.push({ id: tuId, translatedTemplate: update.translatedTemplate });
+        }
+        if (translations.length === 0) return;
+        domUpdateQueue.push(translations);
+        if (!isApplyingUpdates) applyQueuedUpdates();
     }
 
     function captureScrollAnchor() {
@@ -1849,8 +1871,13 @@
 
     async function processBatch(batch) {
         if (translationCancelled) return [];
+        const batchId = `${streamingBatchSeed}_${++streamingBatchCounter}`;
+        const keyToTuId = new Map();
+        batch.forEach((item, index) => keyToTuId.set(`TU_${index}`, item.id));
+        streamingBatchRegistry.set(batchId, keyToTuId);
         return new Promise((resolve, reject) => {
-            chrome.runtime.sendMessage({ action: "translateBatch", batch }, response => {
+            chrome.runtime.sendMessage({ action: "translateBatch", batch, batchId }, response => {
+                streamingBatchRegistry.delete(batchId);
                 if (chrome.runtime.lastError) {
                     return reject(new Error(chrome.runtime.lastError.message));
                 }
@@ -1902,12 +1929,19 @@
             } else {
                 tu.block.classList.remove('translated-text');
             }
-            if (!fromCacheRestore) translatedUnitsCount++;
+            countTranslatedUnitOnce(tu, fromCacheRestore);
         } catch (e) {
             if (tu.block && tu.block.dataset) {
                 delete tu.block.dataset.translationStatus;
             }
         }
+    }
+
+    function countTranslatedUnitOnce(tu, fromCacheRestore) {
+        if (fromCacheRestore) return;
+        if (tu.progressCounted) return;
+        tu.progressCounted = true;
+        translatedUnitsCount++;
     }
 
     function isInsideReactCustomElement(node) {
@@ -1974,7 +2008,7 @@
             } catch (e) { }
             if (highlightTranslated) tu.block.classList.add('translated-text');
             else tu.block.classList.remove('translated-text');
-            if (!fromCacheRestore) translatedUnitsCount++;
+            countTranslatedUnitOnce(tu, fromCacheRestore);
             return true;
         } catch (e) {
             try { tu.block.dataset.translationStatus = 'failed'; } catch (_) { }
@@ -2436,6 +2470,9 @@
                     case "translationCancelled":
                         if (!translationCancelled && !translationHasError) handleCancellation();
                         sendResponse({ status: "cancelled_ack" });
+                        return false;
+                    case "streamingTranslationUpdate":
+                        handleStreamingUpdate(request.batchId, request.translations);
                         return false;
                     default:
                         return false;
