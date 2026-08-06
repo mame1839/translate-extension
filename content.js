@@ -2808,11 +2808,554 @@
         }
     }
 
+    const SELECTION_CONTAINER_ID = 'gemini-translator-selection-container';
+    const SELECTION_MAX_CHARS = 5000;
+    const SELECTION_RTL_LANGS = new Set(['ar', 'ur', 'he', 'fa']);
+    const SELECTION_FONT = `-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, "Hiragino Kaku Gothic ProN", "Yu Gothic UI", Meiryo, sans-serif`;
+    const SELECTION_EASE = 'cubic-bezier(0.2, 0, 0, 1)';
+
+    const SELECTION_CSS = `
+        :host { all: initial; }
+        * { box-sizing: border-box; }
+        .sel-card {
+            width: 340px;
+            max-width: calc(100vw - 24px);
+            padding: 12px 14px 14px;
+            background: #ffffff;
+            border: 1px solid rgba(27, 27, 33, 0.09);
+            border-radius: 16px;
+            box-shadow: 0 2px 6px 2px rgba(23, 23, 40, 0.08), 0 1px 2px rgba(23, 23, 40, 0.10);
+            color: #1b1b21;
+            font-family: ${SELECTION_FONT};
+            font-size: 13.5px;
+            line-height: 1.5;
+            -webkit-font-smoothing: antialiased;
+            animation: selCardIn 160ms ${SELECTION_EASE};
+        }
+        @keyframes selCardIn {
+            from { opacity: 0; transform: translateY(-4px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .sel-head {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+        .sel-badge {
+            width: 24px;
+            height: 24px;
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 999px;
+            background: #d3e3fd;
+            color: #041e49;
+        }
+        .sel-title {
+            flex: 1;
+            min-width: 0;
+            font-size: 12px;
+            font-weight: 600;
+            letter-spacing: 0.04em;
+            color: #1a73e8;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .sel-title.error { color: #ba1a1a; }
+        .sel-icon-btn {
+            width: 28px;
+            height: 28px;
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0;
+            border: none;
+            border-radius: 999px;
+            background: transparent;
+            color: #4a4952;
+            cursor: pointer;
+            transition: background-color 150ms ${SELECTION_EASE};
+        }
+        .sel-icon-btn:hover { background: #f5f5fa; }
+        .sel-icon-btn:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.35); }
+        .sel-loading {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 2px 0 4px;
+            color: #4a4952;
+        }
+        .sel-spinner {
+            width: 16px;
+            height: 16px;
+            flex-shrink: 0;
+            border-radius: 50%;
+            border: 2px solid rgba(26, 115, 232, 0.25);
+            border-top-color: #1a73e8;
+            animation: selSpin 800ms linear infinite;
+        }
+        @keyframes selSpin { to { transform: rotate(360deg); } }
+        .sel-text {
+            margin: 0;
+            max-height: 260px;
+            overflow-y: auto;
+            overflow-wrap: anywhere;
+            white-space: pre-wrap;
+            font-size: 14px;
+            color: #1b1b21;
+        }
+        .sel-error {
+            margin: 0;
+            max-height: 220px;
+            overflow-y: auto;
+            overflow-wrap: anywhere;
+            white-space: pre-wrap;
+            padding: 10px 12px;
+            border-radius: 12px;
+            background: #ffe1de;
+            color: #7a1210;
+            font-size: 12.5px;
+        }
+        .sel-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+            margin-top: 12px;
+        }
+        .sel-btn {
+            min-height: 36px;
+            padding: 0 16px;
+            border: none;
+            border-radius: 999px;
+            background: #d3e3fd;
+            color: #041e49;
+            font-family: inherit;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 150ms ${SELECTION_EASE}, box-shadow 150ms ${SELECTION_EASE};
+        }
+        .sel-btn:hover { box-shadow: 0 1px 2px rgba(23, 23, 40, 0.10), 0 1px 3px 1px rgba(23, 23, 40, 0.06); }
+        .sel-btn:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.35); }
+        @media (prefers-color-scheme: dark) {
+            .sel-card {
+                background: #1a1a20;
+                border-color: rgba(232, 231, 240, 0.09);
+                color: #e5e4ea;
+                box-shadow: 0 2px 6px 2px rgba(0, 0, 0, 0.32), 0 1px 2px rgba(0, 0, 0, 0.4);
+            }
+            .sel-badge { background: #0842a0; color: #d3e3fd; }
+            .sel-title { color: #8ab4f8; }
+            .sel-title.error { color: #ffb4ab; }
+            .sel-icon-btn { color: #b6b5bf; }
+            .sel-icon-btn:hover { background: #1e1e24; }
+            .sel-icon-btn:focus-visible { box-shadow: 0 0 0 3px rgba(138, 180, 248, 0.4); }
+            .sel-loading { color: #b6b5bf; }
+            .sel-spinner { border-color: rgba(138, 180, 248, 0.25); border-top-color: #8ab4f8; }
+            .sel-text { color: #e5e4ea; }
+            .sel-error { background: #6e2621; color: #ffdad5; }
+            .sel-btn { background: #0842a0; color: #d3e3fd; }
+            .sel-btn:hover { box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 1px 3px 1px rgba(0, 0, 0, 0.25); }
+            .sel-btn:focus-visible { box-shadow: 0 0 0 3px rgba(138, 180, 248, 0.4); }
+        }
+    `;
+
+    let selectionContainer = null;
+    let selectionShadowRoot = null;
+    let selectionAnchorRange = null;
+    let selectionAnchorPoint = null;
+    let selectionCopyTimer = null;
+    let selectionStrings = null;
+    let selectionIsRtl = false;
+    let selectionRequestId = 0;
+    let selectionListenersAttached = false;
+
+    function watchSelectionPointer() {
+        try {
+            document.addEventListener('contextmenu', function (event) {
+                selectionAnchorPoint = { x: event.clientX, y: event.clientY };
+            }, true);
+        } catch (e) { }
+    }
+
+    function selectionLabel(key, fallback) {
+        const value = selectionStrings ? selectionStrings[key] : null;
+        return (typeof value === 'string' && value) ? value : fallback;
+    }
+
+    function createSelectionIcon(size, shapes) {
+        const ns = 'http://www.w3.org/2000/svg';
+        const svg = document.createElementNS(ns, 'svg');
+        svg.setAttribute('width', size);
+        svg.setAttribute('height', size);
+        svg.setAttribute('viewBox', '0 0 24 24');
+        svg.setAttribute('fill', 'none');
+        svg.setAttribute('stroke', 'currentColor');
+        svg.setAttribute('stroke-width', '2.25');
+        svg.setAttribute('stroke-linecap', 'round');
+        svg.setAttribute('stroke-linejoin', 'round');
+        svg.setAttribute('aria-hidden', 'true');
+        for (const [shapeTag, shapeAttrs] of shapes) {
+            const shape = document.createElementNS(ns, shapeTag);
+            for (const [attrName, attrValue] of Object.entries(shapeAttrs)) {
+                shape.setAttribute(attrName, attrValue);
+            }
+            svg.appendChild(shape);
+        }
+        return svg;
+    }
+
+    function showSelectionTranslation(rawText) {
+        const text = typeof rawText === 'string' ? rawText.trim() : '';
+        if (!text) return;
+        captureSelectionAnchor();
+        chrome.storage.local.get(['targetLanguage'], function (items) {
+            const lang = (items && items.targetLanguage) || 'en';
+            selectionStrings = (typeof getT === 'function') ? getT(lang) : null;
+            selectionIsRtl = SELECTION_RTL_LANGS.has(String(lang).split('-')[0]);
+            openSelectionPopup();
+            if (!selectionShadowRoot) return;
+            if (text.length > SELECTION_MAX_CHARS) {
+                const template = selectionLabel('selTooLong', 'Selection is too long (up to {max} characters).');
+                renderSelectionError(template.replace('{max}', String(SELECTION_MAX_CHARS)));
+                return;
+            }
+            renderSelectionLoading();
+            requestSelectionTranslation(text);
+        });
+    }
+
+    function captureSelectionAnchor() {
+        selectionAnchorRange = null;
+        try {
+            const selection = window.getSelection();
+            if (selection && selection.rangeCount > 0 && !selection.isCollapsed) {
+                selectionAnchorRange = selection.getRangeAt(0).cloneRange();
+            }
+        } catch (e) { }
+    }
+
+    function requestSelectionTranslation(text) {
+        const requestId = ++selectionRequestId;
+        const genericError = selectionLabel('error', 'An error occurred');
+        const handleFailure = (message) => {
+            if (requestId !== selectionRequestId) return;
+            renderSelectionError(message || genericError);
+        };
+        try {
+            chrome.runtime.sendMessage({ action: 'translateSelection', text }).then(function (response) {
+                if (requestId !== selectionRequestId) return;
+                if (!response) { handleFailure(genericError); return; }
+                if (response.cancelled) { closeSelectionPopup(); return; }
+                if (response.success) {
+                    renderSelectionResult(typeof response.translation === 'string' ? response.translation : '');
+                    return;
+                }
+                handleFailure(response.error);
+            }).catch(function (error) {
+                handleFailure(error?.message);
+            });
+        } catch (error) {
+            handleFailure(error?.message);
+        }
+    }
+
+    function openSelectionPopup() {
+        closeSelectionPopup();
+        const host = document.body || document.documentElement;
+        if (!host) return;
+        selectionContainer = document.createElement('div');
+        selectionContainer.id = SELECTION_CONTAINER_ID;
+        selectionContainer.dataset.geminiIgnore = 'true';
+        selectionContainer.style.cssText = 'position:fixed!important;top:0!important;left:0!important;margin:0!important;padding:0!important;border:none!important;display:block!important;z-index:2147483647!important;';
+        selectionShadowRoot = selectionContainer.attachShadow({ mode: 'open' });
+
+        const style = document.createElement('style');
+        style.textContent = SELECTION_CSS;
+        selectionShadowRoot.appendChild(style);
+
+        const card = document.createElement('div');
+        card.className = 'sel-card';
+        card.setAttribute('dir', selectionIsRtl ? 'rtl' : 'ltr');
+
+        const head = document.createElement('div');
+        head.className = 'sel-head';
+
+        const badge = document.createElement('span');
+        badge.className = 'sel-badge';
+        badge.appendChild(createSelectionIcon('14', [
+            ['path', { d: 'm5 8 6 6' }],
+            ['path', { d: 'm4 14 6-6 2-3' }],
+            ['path', { d: 'M2 5h12' }],
+            ['path', { d: 'M7 2h1' }],
+            ['path', { d: 'm22 22-5-10-5 10' }],
+            ['path', { d: 'M14 18h6' }]
+        ]));
+
+        const title = document.createElement('span');
+        title.className = 'sel-title';
+        title.id = 'selPanelTitle';
+        title.textContent = selectionLabel('selTitle', 'Translation');
+
+        const closeLabel = selectionLabel('selClose', 'Close');
+        const closeBtn = document.createElement('button');
+        closeBtn.className = 'sel-icon-btn';
+        closeBtn.type = 'button';
+        closeBtn.title = closeLabel;
+        closeBtn.setAttribute('aria-label', closeLabel);
+        closeBtn.appendChild(createSelectionIcon('14', [
+            ['line', { x1: '6', y1: '6', x2: '18', y2: '18' }],
+            ['line', { x1: '18', y1: '6', x2: '6', y2: '18' }]
+        ]));
+        closeBtn.addEventListener('click', function () { closeSelectionPopup(); });
+
+        head.appendChild(badge);
+        head.appendChild(title);
+        head.appendChild(closeBtn);
+
+        const body = document.createElement('div');
+        body.id = 'selPanelBody';
+
+        card.appendChild(head);
+        card.appendChild(body);
+        selectionShadowRoot.appendChild(card);
+        host.appendChild(selectionContainer);
+        attachSelectionListeners();
+        positionSelectionPopup();
+    }
+
+    function setSelectionBody(node) {
+        if (!selectionShadowRoot) return;
+        const body = selectionShadowRoot.getElementById('selPanelBody');
+        if (!body) return;
+        while (body.firstChild) body.removeChild(body.firstChild);
+        if (node) body.appendChild(node);
+    }
+
+    function setSelectionTitle(text, isError) {
+        if (!selectionShadowRoot) return;
+        const title = selectionShadowRoot.getElementById('selPanelTitle');
+        if (!title) return;
+        title.textContent = text;
+        title.classList.toggle('error', isError === true);
+    }
+
+    function clearSelectionActions() {
+        if (!selectionShadowRoot) return;
+        const actions = selectionShadowRoot.querySelector('.sel-actions');
+        if (actions && actions.parentNode) actions.parentNode.removeChild(actions);
+    }
+
+    function renderSelectionLoading() {
+        if (!selectionShadowRoot) return;
+        clearSelectionActions();
+        setSelectionTitle(selectionLabel('selTitle', 'Translation'), false);
+        const wrap = document.createElement('div');
+        wrap.className = 'sel-loading';
+        const spinner = document.createElement('span');
+        spinner.className = 'sel-spinner';
+        const label = document.createElement('span');
+        label.textContent = selectionLabel('selLoading', 'Translating…');
+        wrap.appendChild(spinner);
+        wrap.appendChild(label);
+        setSelectionBody(wrap);
+        positionSelectionPopup();
+    }
+
+    function renderSelectionResult(translation) {
+        if (!selectionShadowRoot) return;
+        clearSelectionActions();
+        setSelectionTitle(selectionLabel('selTitle', 'Translation'), false);
+        const paragraph = document.createElement('p');
+        paragraph.className = 'sel-text';
+        paragraph.setAttribute('dir', 'auto');
+        paragraph.textContent = translation;
+        setSelectionBody(paragraph);
+
+        const actions = document.createElement('div');
+        actions.className = 'sel-actions';
+        const copyBtn = document.createElement('button');
+        copyBtn.className = 'sel-btn';
+        copyBtn.type = 'button';
+        copyBtn.textContent = selectionLabel('selCopy', 'Copy');
+        copyBtn.addEventListener('click', function () { copySelectionTranslation(translation, copyBtn); });
+        actions.appendChild(copyBtn);
+        const card = selectionShadowRoot.querySelector('.sel-card');
+        if (card) card.appendChild(actions);
+        positionSelectionPopup();
+    }
+
+    function renderSelectionError(message) {
+        if (!selectionShadowRoot) return;
+        clearSelectionActions();
+        setSelectionTitle(selectionLabel('error', 'An error occurred'), true);
+        const box = document.createElement('div');
+        box.className = 'sel-error';
+        box.setAttribute('dir', 'auto');
+        box.textContent = message;
+        setSelectionBody(box);
+        positionSelectionPopup();
+    }
+
+    function copySelectionTranslation(translation, button) {
+        const finish = (copied) => {
+            if (selectionCopyTimer) clearTimeout(selectionCopyTimer);
+            button.textContent = copied
+                ? selectionLabel('selCopied', 'Copied')
+                : selectionLabel('selCopyFailed', 'Copy failed');
+            selectionCopyTimer = setTimeout(function () {
+                selectionCopyTimer = null;
+                try { button.textContent = selectionLabel('selCopy', 'Copy'); } catch (e) { }
+            }, 1600);
+        };
+        try {
+            const writing = navigator.clipboard?.writeText(translation);
+            if (writing && typeof writing.then === 'function') {
+                writing.then(() => finish(true)).catch(() => finish(copySelectionFallback(translation)));
+                return;
+            }
+        } catch (e) { }
+        finish(copySelectionFallback(translation));
+    }
+
+    function copySelectionFallback(translation) {
+        let holder = null;
+        try {
+            holder = document.createElement('textarea');
+            holder.value = translation;
+            holder.setAttribute('readonly', '');
+            holder.dataset.geminiIgnore = 'true';
+            holder.style.cssText = 'position:fixed;top:0;left:-9999px;opacity:0;';
+            (document.body || document.documentElement).appendChild(holder);
+            holder.select();
+            return document.execCommand('copy');
+        } catch (e) {
+            return false;
+        } finally {
+            if (holder && holder.parentNode) holder.parentNode.removeChild(holder);
+        }
+    }
+
+    function selectionAnchorRect() {
+        if (selectionAnchorRange) {
+            try {
+                const rect = selectionAnchorRange.getBoundingClientRect();
+                if (rect && (rect.width > 0 || rect.height > 0)) return rect;
+            } catch (e) { }
+        }
+        if (selectionAnchorPoint) {
+            return {
+                top: selectionAnchorPoint.y,
+                bottom: selectionAnchorPoint.y,
+                left: selectionAnchorPoint.x,
+                width: 0,
+                height: 0
+            };
+        }
+        return null;
+    }
+
+    function positionSelectionPopup() {
+        if (!selectionContainer || !selectionShadowRoot) return;
+        const card = selectionShadowRoot.querySelector('.sel-card');
+        if (!card) return;
+        const margin = 12;
+        const gap = 10;
+        const viewportWidth = document.documentElement?.clientWidth || window.innerWidth || 0;
+        const viewportHeight = document.documentElement?.clientHeight || window.innerHeight || 0;
+        const cardRect = card.getBoundingClientRect();
+        const width = cardRect.width || 340;
+        const height = cardRect.height || 120;
+        const anchor = selectionAnchorRect();
+        let left;
+        let top;
+        if (anchor) {
+            left = anchor.left + (anchor.width / 2) - (width / 2);
+            top = anchor.bottom + gap;
+            if (top + height > viewportHeight - margin) {
+                const above = anchor.top - height - gap;
+                top = above >= margin ? above : Math.max(margin, viewportHeight - height - margin);
+            }
+        } else {
+            left = (viewportWidth - width) / 2;
+            top = margin;
+        }
+        const maxLeft = Math.max(margin, viewportWidth - width - margin);
+        const maxTop = Math.max(margin, viewportHeight - height - margin);
+        left = Math.min(Math.max(margin, left), maxLeft);
+        top = Math.min(Math.max(margin, top), maxTop);
+        selectionContainer.style.left = `${Math.round(left)}px`;
+        selectionContainer.style.top = `${Math.round(top)}px`;
+    }
+
+    function closeSelectionPopup() {
+        detachSelectionListeners();
+        if (selectionCopyTimer) {
+            clearTimeout(selectionCopyTimer);
+            selectionCopyTimer = null;
+        }
+        const hadRequest = selectionRequestId > 0;
+        selectionRequestId++;
+        if (hadRequest) {
+            try { chrome.runtime.sendMessage({ action: 'cancelSelectionTranslation' }).catch(() => { }); } catch (e) { }
+        }
+        if (selectionContainer && selectionContainer.parentNode) {
+            selectionContainer.parentNode.removeChild(selectionContainer);
+        }
+        selectionContainer = null;
+        selectionShadowRoot = null;
+        selectionAnchorRange = null;
+    }
+
+    function attachSelectionListeners() {
+        if (selectionListenersAttached) return;
+        selectionListenersAttached = true;
+        try {
+            document.addEventListener('keydown', onSelectionKeyDown, true);
+            document.addEventListener('pointerdown', onSelectionPointerDown, true);
+            window.addEventListener('scroll', onSelectionViewportChange, true);
+            window.addEventListener('resize', onSelectionViewportChange, true);
+        } catch (e) { }
+    }
+
+    function detachSelectionListeners() {
+        if (!selectionListenersAttached) return;
+        selectionListenersAttached = false;
+        try {
+            document.removeEventListener('keydown', onSelectionKeyDown, true);
+            document.removeEventListener('pointerdown', onSelectionPointerDown, true);
+            window.removeEventListener('scroll', onSelectionViewportChange, true);
+            window.removeEventListener('resize', onSelectionViewportChange, true);
+        } catch (e) { }
+    }
+
+    function onSelectionKeyDown(event) {
+        if (event.key === 'Escape' || event.key === 'Esc') closeSelectionPopup();
+    }
+
+    function onSelectionPointerDown(event) {
+        if (!selectionContainer) return;
+        const target = event.target;
+        if (target === selectionContainer) return;
+        if (target instanceof Node && selectionContainer.contains(target)) return;
+        closeSelectionPopup();
+    }
+
+    function onSelectionViewportChange() {
+        positionSelectionPopup();
+    }
+
     if (document.readyState === "loading") {
         document.addEventListener("DOMContentLoaded", initTranslation);
     } else {
         setTimeout(initTranslation, 100);
     }
+
+    watchSelectionPointer();
 
     try {
         chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
@@ -2862,6 +3405,10 @@
                         return false;
                     case "streamingTranslationUpdate":
                         handleStreamingUpdate(request.batchId, request.translations);
+                        return false;
+                    case "showSelectionTranslation":
+                        showSelectionTranslation(request.text);
+                        sendResponse({ status: "showing" });
                         return false;
                     default:
                         return false;

@@ -1,4 +1,8 @@
 try {
+    importScripts('translations.js');
+} catch (e) { }
+
+try {
     chrome.alarms.create('translator-keepalive', { periodInMinutes: 0.5 });
     chrome.alarms.onAlarm.addListener(() => { });
 } catch (e) { }
@@ -151,6 +155,12 @@ chrome.runtime.onInstalled.addListener(function (details) {
                     id: "toggleTranslation",
                     title: chrome.i18n.getMessage('contextMenuToggle'),
                     contexts: ["all"],
+                    visible: items.showContextMenu !== false
+                });
+                chrome.contextMenus.create({
+                    id: SELECTION_MENU_ID,
+                    title: selectionMenuTitle(items.targetLanguage),
+                    contexts: ["selection"],
                     visible: items.showContextMenu !== false
                 });
             });
@@ -1494,6 +1504,249 @@ async function translateWithAnthropic(text, retryLimit, signal, targetLanguage =
         const responseText = data?.content?.[0]?.text || '';
         if (!responseText) throw new Error(errorMessages.emptyResponse);
         return parseTranslationResponse(responseText);
+    }, retryLimit, signal);
+}
+
+const SELECTION_MENU_ID = 'translateSelection';
+const SELECTION_MAX_OUTPUT_TOKENS = 16384;
+const selectionControllers = new Map();
+
+function selectionMenuTitle(langCode) {
+    try {
+        if (typeof getT === 'function') {
+            const strings = getT((langCode || 'en').trim());
+            if (strings && strings.selMenuTranslate) return strings.selMenuTranslate;
+        }
+    } catch (e) { }
+    return 'Translate selection';
+}
+
+chrome.storage.onChanged.addListener(function (changes, areaName) {
+    if (areaName !== 'local') return;
+    const update = {};
+    if (changes.targetLanguage !== undefined) {
+        update.title = selectionMenuTitle(changes.targetLanguage.newValue);
+    }
+    if (changes.showContextMenu !== undefined) {
+        update.visible = changes.showContextMenu.newValue !== false;
+    }
+    if (Object.keys(update).length === 0) return;
+    try {
+        const updating = chrome.contextMenus.update(SELECTION_MENU_ID, update);
+        if (updating && typeof updating.catch === 'function') updating.catch(() => { });
+    } catch (e) { }
+});
+
+chrome.contextMenus.onClicked.addListener(function (info, tab) {
+    if (info.menuItemId !== SELECTION_MENU_ID) return;
+    if (!tab?.id) return;
+    const text = (info.selectionText || '').trim();
+    if (!text) return;
+    const frameId = Number.isInteger(info.frameId) ? info.frameId : 0;
+    chrome.tabs.sendMessage(tab.id, { action: "showSelectionTranslation", text }, { frameId }).catch(() => { });
+});
+
+chrome.runtime.onMessage.addListener(function (request, sender, sendResponse) {
+    const tabId = sender.tab?.id;
+    if (!tabId) return false;
+    const frameId = Number.isInteger(sender.frameId) ? sender.frameId : 0;
+
+    if (request?.action === "translateSelection") {
+        runSelectionTranslation(toFrameKey(tabId, frameId), request.text, sendResponse);
+        return true;
+    }
+
+    if (request?.action === "cancelSelectionTranslation") {
+        abortSelectionTranslation(toFrameKey(tabId, frameId));
+        return false;
+    }
+
+    return false;
+});
+
+function abortSelectionTranslation(key) {
+    const controller = selectionControllers.get(key);
+    if (!controller) return;
+    selectionControllers.delete(key);
+    try { controller.abort(); } catch (e) { }
+}
+
+async function runSelectionTranslation(key, rawText, sendResponse) {
+    abortSelectionTranslation(key);
+    const text = typeof rawText === 'string' ? rawText.trim() : '';
+    if (!text) {
+        safeSendResponse(sendResponse, { success: false, error: errorMessages.emptyResponse });
+        return;
+    }
+    const controller = new AbortController();
+    selectionControllers.set(key, controller);
+    try {
+        const translation = await translateSelectionText(text, controller.signal);
+        safeSendResponse(sendResponse, { success: true, translation });
+    } catch (error) {
+        const message = error?.message || errorMessages.unknownError;
+        safeSendResponse(sendResponse, {
+            success: false,
+            cancelled: error?.name === 'AbortError',
+            fatal: isFatalTranslationErrorMessage(message),
+            error: message
+        });
+    } finally {
+        if (selectionControllers.get(key) === controller) selectionControllers.delete(key);
+    }
+}
+
+async function translateSelectionText(text, signal) {
+    if (signal?.aborted) throw createAbortError();
+    const { maxRetries, apiProvider, targetLanguage } = await new Promise(resolve =>
+        chrome.storage.local.get(['maxRetries', 'apiProvider', 'targetLanguage'], resolve));
+    const provider = (apiProvider || DEFAULTS.apiProvider).trim();
+    const retryLimit = maxRetries ?? DEFAULTS.maxRetries;
+    const langCode = (targetLanguage || 'en').trim();
+    const langEntry = LANGUAGE_LIST.find(l => l.code === langCode);
+    const prompt = createSelectionPrompt(text, langEntry ? langEntry.name : 'English');
+    if (provider === 'openai') return selectionRequestOpenAI(prompt, retryLimit, signal);
+    if (provider === 'anthropic') return selectionRequestAnthropic(prompt, retryLimit, signal);
+    if (provider === 'openai-compatible') return selectionRequestCompatible(prompt, retryLimit, signal);
+    return selectionRequestGemini(prompt, retryLimit, signal);
+}
+
+function createSelectionPrompt(sourceText, targetLanguage) {
+    return `Translate the text below into natural, fluent ${targetLanguage}, preserving the meaning, tone, and register of the source.
+
+Rules:
+- Output the translation only. No preface, explanation, notes, quotation marks, or markdown fences.
+- Keep the original line breaks, paragraph splits, and list markers.
+- Leave proper nouns, brand and product names, code identifiers, URLs, email addresses, file paths, and numbers as they are.
+- If the text is already written in ${targetLanguage}, repeat it unchanged.
+
+Text:
+${sourceText}`;
+}
+
+function selectionOutputTokenLimit(maxToken) {
+    return Math.min(maxToken || DEFAULTS.maxToken, SELECTION_MAX_OUTPUT_TOKENS);
+}
+
+function finishSelectionText(responseText, truncated) {
+    let cleaned = (responseText || '').trim();
+    const fenced = /^```[a-zA-Z0-9-]*[ \t]*\r?\n([\s\S]*?)\r?\n?```$/.exec(cleaned);
+    if (fenced) cleaned = fenced[1].trim();
+    if (!cleaned) throw new Error(truncated ? errorMessages.maxTokensError : errorMessages.emptyResponse);
+    return cleaned;
+}
+
+async function selectionRequestGemini(prompt, retryLimit, signal) {
+    const { geminiApiKey: apiKey, geminiModel: model, maxToken, timeout } = await new Promise(resolve =>
+        chrome.storage.local.get(['geminiApiKey', 'geminiModel', 'maxToken', 'timeout'], resolve));
+    if (!apiKey) throw new Error(errorMessages.apiKeyNotSet);
+    const actualModel = (model || '').trim() || DEFAULTS.geminiModel;
+    const actualTimeout = timeout || DEFAULTS.timeout;
+    const generationConfig = { maxOutputTokens: selectionOutputTokenLimit(maxToken) };
+    if (geminiAllowsCustomTemperature(actualModel)) generationConfig.temperature = 0.2;
+    return performTranslation(async () => {
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(actualModel)}:generateContent`;
+        const { response, data } = await fetchJsonWithTimeout(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
+            body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig }),
+            signal
+        }, actualTimeout);
+        if (!response.ok) handleGeminiHttpError(response, data);
+        const candidate = data?.candidates?.[0];
+        if (!candidate) {
+            const blockReason = data?.promptFeedback?.blockReason;
+            if (blockReason) throw new Error(`${errorMessages.invalidRequest} (blocked: ${blockReason})`);
+            throw new Error(`${errorMessages.unknownError} (no candidates)`);
+        }
+        if (candidate.finishReason === 'SAFETY' || candidate.finishReason === 'BLOCKLIST' || candidate.finishReason === 'PROHIBITED_CONTENT') {
+            throw new Error(`${errorMessages.invalidRequest} (content blocked: ${candidate.finishReason})`);
+        }
+        const parts = candidate.content?.parts;
+        const responseText = Array.isArray(parts) ? parts.map(p => p?.text || '').join('') : '';
+        return finishSelectionText(responseText, candidate.finishReason === 'MAX_TOKENS');
+    }, retryLimit, signal);
+}
+
+async function selectionRequestOpenAI(prompt, retryLimit, signal) {
+    const { openaiApiKey: apiKey, openaiModel: model, maxToken, timeout } = await new Promise(resolve =>
+        chrome.storage.local.get(['openaiApiKey', 'openaiModel', 'maxToken', 'timeout'], resolve));
+    if (!apiKey) throw new Error(errorMessages.apiKeyNotSet);
+    const actualModel = (model || '').trim() || DEFAULTS.openaiModel;
+    const actualTimeout = timeout || DEFAULTS.timeout;
+    return performTranslation(async () => {
+        const { response, data } = await fetchJsonWithTimeout('https://api.openai.com/v1/chat/completions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+            body: JSON.stringify({
+                model: actualModel,
+                messages: [{ role: 'user', content: prompt }],
+                max_completion_tokens: selectionOutputTokenLimit(maxToken)
+            }),
+            signal
+        }, actualTimeout);
+        if (!response.ok) handleOpenAIHttpError(response, data);
+        const choice = data?.choices?.[0];
+        if (!choice) throw new Error(`${errorMessages.unknownError} (no choices)`);
+        return finishSelectionText(choice.message?.content || '', choice.finish_reason === 'length');
+    }, retryLimit, signal);
+}
+
+async function selectionRequestCompatible(prompt, retryLimit, signal) {
+    const { compatibleApiKey: apiKey, compatibleModel: model, compatibleEndpoint: endpoint, maxToken, timeout } = await new Promise(resolve =>
+        chrome.storage.local.get(['compatibleApiKey', 'compatibleModel', 'compatibleEndpoint', 'maxToken', 'timeout'], resolve));
+    if (!endpoint) throw new Error(errorMessages.endpointNotSet);
+    const actualModel = (model || '').trim();
+    const actualTimeout = timeout || DEFAULTS.timeout;
+    const requestBody = {
+        messages: [{ role: 'user', content: prompt }],
+        temperature: 0.2,
+        max_tokens: selectionOutputTokenLimit(maxToken)
+    };
+    if (actualModel) requestBody.model = actualModel;
+    const headers = { 'Content-Type': 'application/json' };
+    if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`;
+    return performTranslation(async () => {
+        const { response, data } = await fetchJsonWithTimeout(endpoint.trim(), {
+            method: 'POST',
+            headers,
+            body: JSON.stringify(requestBody),
+            signal
+        }, actualTimeout);
+        if (!response.ok) handleOpenAIHttpError(response, data);
+        const choice = data?.choices?.[0];
+        if (!choice) throw new Error(`${errorMessages.unknownError} (no choices)`);
+        return finishSelectionText(choice.message?.content || '', choice.finish_reason === 'length');
+    }, retryLimit, signal);
+}
+
+async function selectionRequestAnthropic(prompt, retryLimit, signal) {
+    const { anthropicApiKey: apiKey, anthropicModel: model, maxToken, timeout } = await new Promise(resolve =>
+        chrome.storage.local.get(['anthropicApiKey', 'anthropicModel', 'maxToken', 'timeout'], resolve));
+    if (!apiKey) throw new Error(errorMessages.apiKeyNotSet);
+    const actualModel = (model || '').trim() || DEFAULTS.anthropicModel;
+    const actualTimeout = timeout || DEFAULTS.timeout;
+    return performTranslation(async () => {
+        const { response, data } = await fetchJsonWithTimeout('https://api.anthropic.com/v1/messages', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'x-api-key': apiKey,
+                'anthropic-version': '2023-06-01',
+                'anthropic-dangerous-direct-browser-access': 'true'
+            },
+            body: JSON.stringify({
+                model: actualModel,
+                max_tokens: Math.min(selectionOutputTokenLimit(maxToken), ANTHROPIC_MAX_OUTPUT_TOKENS),
+                messages: [{ role: 'user', content: prompt }]
+            }),
+            signal
+        }, actualTimeout);
+        if (!response.ok) handleAnthropicHttpError(response, data);
+        const responseText = Array.isArray(data?.content)
+            ? data.content.map(part => part?.type === 'text' ? (part.text || '') : '').join('')
+            : '';
+        return finishSelectionText(responseText, data?.stop_reason === 'max_tokens');
     }, retryLimit, signal);
 }
 
