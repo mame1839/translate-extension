@@ -33,6 +33,7 @@ let activeTab = null;
 let pageSupported = false;
 let busy = false;
 let lastSignature = '';
+let lastView = '';
 
 document.addEventListener('DOMContentLoaded', initPopup);
 
@@ -56,6 +57,9 @@ async function initPopup() {
         progressBlocks: document.getElementById('progressBlocks'),
         errorNote: document.getElementById('errorNote'),
         actionArea: document.getElementById('actionArea'),
+        alwaysRow: document.getElementById('alwaysRow'),
+        alwaysRowLabel: document.getElementById('alwaysRowLabel'),
+        alwaysSwitch: document.getElementById('alwaysSwitch'),
         excludeRow: document.getElementById('excludeRow'),
         excludeRowLabel: document.getElementById('excludeRowLabel'),
         excludeSwitch: document.getElementById('excludeSwitch'),
@@ -73,6 +77,7 @@ async function initPopup() {
     els.appTitle.textContent = t.popupName;
     els.settingsBtn.title = t.optionsBtn;
     els.settingsBtn.setAttribute('aria-label', t.optionsBtn);
+    els.alwaysRowLabel.textContent = t.alwaysTranslateBtn;
     els.excludeRowLabel.textContent = t.excludeBtn;
     const langMeta = LANGUAGES.find(entry => entry.code === lang);
     els.langChipLabel.textContent = langMeta ? langMeta.native : lang;
@@ -80,6 +85,7 @@ async function initPopup() {
 
     els.settingsBtn.addEventListener('click', openOptions);
     els.langChip.addEventListener('click', openOptions);
+    els.alwaysSwitch.addEventListener('change', onAlwaysSwitchChange);
     els.excludeSwitch.addEventListener('change', onExcludeSwitchChange);
     els.shortcutSettingsLink.addEventListener('click', openShortcutSettings);
 
@@ -186,7 +192,7 @@ function hostLabelFor(url) {
 
 async function queryPageState() {
     if (!pageSupported || !activeTab) {
-        return { translationStatus: 'unavailable', excluded: false, progress: 0 };
+        return { translationStatus: 'unavailable', excluded: false, alwaysTranslate: false, progress: 0 };
     }
     try {
         const response = await chrome.tabs.sendMessage(activeTab.id, { action: 'getPageState' }, { frameId: 0 });
@@ -211,11 +217,13 @@ async function refreshPageState(force) {
     const signature = [
         view,
         pageState.excluded ? 1 : 0,
+        pageState.alwaysTranslate ? 1 : 0,
         pageState.showingOriginal ? 1 : 0,
         Math.round(pageState.progress || 0),
         stats.translatedFragments || 0,
         stats.totalFragments || 0
     ].join('|');
+    lastView = view;
     if (!force && signature === lastSignature) return;
     lastSignature = signature;
     render(view, pageState);
@@ -242,9 +250,13 @@ function render(view, pageState) {
 
     els.errorNote.hidden = true;
 
+    const siteRowsDisabled = view === 'unavailable';
+    els.alwaysSwitch.checked = !!pageState.alwaysTranslate;
+    els.alwaysSwitch.disabled = siteRowsDisabled;
+    els.alwaysRow.classList.toggle('disabled', siteRowsDisabled);
     els.excludeSwitch.checked = !!pageState.excluded;
-    els.excludeSwitch.disabled = view === 'unavailable';
-    els.excludeRow.classList.toggle('disabled', view === 'unavailable');
+    els.excludeSwitch.disabled = siteRowsDisabled;
+    els.excludeRow.classList.toggle('disabled', siteRowsDisabled);
 
     renderActions(view, pageState);
 }
@@ -336,29 +348,43 @@ async function toggleTranslationView() {
     refreshPageState(true);
 }
 
-function normalizeExcludeList(value) {
+function normalizeSiteList(value) {
     if (Array.isArray(value)) return value.map(entry => String(entry).trim()).filter(Boolean);
     if (typeof value === 'string') return value.split(/\r?\n/).map(entry => entry.trim()).filter(Boolean);
     return [];
 }
 
-async function onExcludeSwitchChange() {
-    if (!activeTab || !pageSupported) {
-        els.excludeSwitch.checked = false;
-        return;
-    }
-    const wantExcluded = els.excludeSwitch.checked;
+async function applySiteListChange(listKey, opposingKey, enabled) {
+    if (!activeTab || !pageSupported) return false;
     let origin = '';
-    try { origin = new URL(activeTab.url).origin; } catch (e) { return; }
+    try { origin = new URL(activeTab.url).origin; } catch (e) { return false; }
     const tabUrl = activeTab.url || '';
-    const items = await chrome.storage.local.get(['excludeList']);
-    let list = normalizeExcludeList(items.excludeList);
     const matches = entry => tabUrl.startsWith(entry) || entry === origin;
-    if (wantExcluded) {
+    const items = await chrome.storage.local.get([listKey, opposingKey]);
+    let list = normalizeSiteList(items[listKey]);
+    let opposing = normalizeSiteList(items[opposingKey]);
+    if (enabled) {
         if (!list.some(matches)) list.push(origin);
+        opposing = opposing.filter(entry => !matches(entry));
     } else {
         list = list.filter(entry => !matches(entry));
     }
-    await chrome.storage.local.set({ excludeList: list });
+    await chrome.storage.local.set({ [listKey]: list, [opposingKey]: opposing });
+    return true;
+}
+
+async function onExcludeSwitchChange() {
+    await applySiteListChange('excludeList', 'alwaysTranslateList', els.excludeSwitch.checked);
+    refreshPageState(true);
+}
+
+async function onAlwaysSwitchChange() {
+    const enabled = els.alwaysSwitch.checked;
+    const shouldStartNow = enabled && lastView === 'idle';
+    const applied = await applySiteListChange('alwaysTranslateList', 'excludeList', enabled);
+    if (applied && shouldStartNow) {
+        await startTranslation();
+        return;
+    }
     refreshPageState(true);
 }

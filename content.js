@@ -513,12 +513,21 @@
         attributeFilter: ['style', 'class', 'hidden', 'aria-hidden']
     };
 
+    function matchesSiteList(list, currentUrl, siteOrigin) {
+        if (!Array.isArray(list)) return false;
+        return list.some(prefix => typeof prefix === 'string' && prefix.length > 0 && (currentUrl.startsWith(prefix) || siteOrigin === prefix));
+    }
+
+    function getCurrentSiteOrigin() {
+        try { return new URL(window.location.href).origin; } catch (e) { return ''; }
+    }
+
     function initTranslation() {
         try {
             postFinishScanCount = 0;
             const reloaded = isPageReloaded();
             chrome.storage.local.get(
-                ['targetLanguage', 'realTimeTranslation', 'excludeList', 'hidePromptAllSites', 'autoRetranslateDomain', 'toggleBlueBackground'],
+                ['targetLanguage', 'realTimeTranslation', 'excludeList', 'alwaysTranslateList', 'hidePromptAllSites', 'autoRetranslateDomain', 'toggleBlueBackground'],
                 async function (items) {
                     try { watchForNewContent(); } catch (e) { }
                     try { watchUserInteractions(); } catch (e) { }
@@ -531,15 +540,14 @@
 
                     const isReactSpa = isLikelyReactApp();
                     const currentUrl = window.location.href;
-                    const excludeList = items.excludeList || [];
-                    let siteOrigin = '';
-                    try { siteOrigin = new URL(currentUrl).origin; } catch (e) { }
-                    const isExcluded = excludeList.some(prefix => currentUrl.startsWith(prefix) || siteOrigin === prefix);
+                    const siteOrigin = getCurrentSiteOrigin();
+                    const isExcluded = matchesSiteList(items.excludeList, currentUrl, siteOrigin);
+                    const isAlwaysTranslate = !isExcluded && matchesSiteList(items.alwaysTranslateList, currentUrl, siteOrigin);
                     if (reloaded) {
                         cacheRestoreMap = null;
                         cacheRestoreActive = false;
                         await clearPageCache();
-                    } else if (!isReactSpa && !isExcluded && items.autoRetranslateDomain !== false) {
+                    } else if (!isReactSpa && !isExcluded && (items.autoRetranslateDomain !== false || isAlwaysTranslate)) {
                         const restored = await tryRestoreFromCache(chosenLang);
                         if (restored || cacheRestoreActive) {
                             translationStarted = true;
@@ -575,6 +583,11 @@
                     };
 
                     if (items.realTimeTranslation === true && !isReactSpa) {
+                        beginAutoTranslation();
+                        return;
+                    }
+
+                    if (isAlwaysTranslate && !isReactSpa) {
                         beginAutoTranslation();
                         return;
                     }
@@ -2912,17 +2925,17 @@
     function respondPopupPageState(sendResponse) {
         const pageState = collectPopupPageState();
         try {
-            chrome.storage.local.get(['excludeList'], function (items) {
-                const list = Array.isArray(items.excludeList) ? items.excludeList : [];
+            chrome.storage.local.get(['excludeList', 'alwaysTranslateList'], function (items) {
                 const currentUrl = window.location.href;
-                let siteOrigin = '';
-                try { siteOrigin = new URL(currentUrl).origin; } catch (e) { }
-                pageState.excluded = list.some(prefix => currentUrl.startsWith(prefix) || siteOrigin === prefix);
+                const siteOrigin = getCurrentSiteOrigin();
+                pageState.excluded = matchesSiteList(items.excludeList, currentUrl, siteOrigin);
+                pageState.alwaysTranslate = matchesSiteList(items.alwaysTranslateList, currentUrl, siteOrigin);
                 sendResponse(pageState);
             });
             return true;
         } catch (e) {
             pageState.excluded = false;
+            pageState.alwaysTranslate = false;
             sendResponse(pageState);
             return false;
         }

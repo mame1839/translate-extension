@@ -41,6 +41,7 @@ const NUMBER_FIELDS = {
 
 let currentProvider = DEFAULTS.apiProvider;
 let excludeEntries = [];
+let alwaysEntries = [];
 let saveTimer = null;
 let snackTimer = null;
 
@@ -73,7 +74,7 @@ function applyI18n(t) {
         const key = node.dataset.i18nPlaceholder;
         if (t[key] !== undefined) node.placeholder = t[key];
     });
-    renderExcludeRows();
+    renderSiteLists();
 }
 
 function applyDir(lang) {
@@ -132,7 +133,7 @@ function normalizeNumberField(id) {
     el(id).value = readNumberField(id);
 }
 
-function normalizeExcludeList(value) {
+function normalizeSiteList(value) {
     if (Array.isArray(value)) return value.map(entry => String(entry).trim()).filter(Boolean);
     if (typeof value === 'string') return value.split(/\r?\n/).map(entry => entry.trim()).filter(Boolean);
     return [];
@@ -145,19 +146,19 @@ function normalizeSiteEntry(raw) {
     return 'https://' + trimmed;
 }
 
-function renderExcludeRows() {
-    const container = el('excludeRows');
+function renderSiteRows(containerId, entries) {
+    const container = el(containerId);
     if (!container) return;
     const t = currentT();
     container.replaceChildren();
-    if (excludeEntries.length === 0) {
+    if (entries.length === 0) {
         const empty = document.createElement('div');
         empty.className = 'empty-list';
         empty.textContent = t.optEmptyList;
         container.appendChild(empty);
         return;
     }
-    excludeEntries.forEach((entry, index) => {
+    entries.forEach((entry, index) => {
         const row = document.createElement('div');
         row.className = 'chip-row';
         const host = document.createElement('span');
@@ -171,8 +172,8 @@ function renderExcludeRows() {
         removeBtn.setAttribute('aria-label', t.optRemove);
         removeBtn.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
         removeBtn.addEventListener('click', () => {
-            excludeEntries.splice(index, 1);
-            renderExcludeRows();
+            entries.splice(index, 1);
+            renderSiteRows(containerId, entries);
             scheduleSave();
         });
         row.appendChild(host);
@@ -181,13 +182,20 @@ function renderExcludeRows() {
     });
 }
 
-function addExcludeEntry() {
-    const input = el('excludeInput');
+function renderSiteLists() {
+    renderSiteRows('alwaysRows', alwaysEntries);
+    renderSiteRows('excludeRows', excludeEntries);
+}
+
+function addSiteEntry(inputId, entries, opposingEntries) {
+    const input = el(inputId);
     const entry = normalizeSiteEntry(input.value);
     if (!entry) return;
-    if (!excludeEntries.includes(entry)) {
-        excludeEntries.push(entry);
-        renderExcludeRows();
+    if (!entries.includes(entry)) {
+        entries.push(entry);
+        const opposingIndex = opposingEntries.indexOf(entry);
+        if (opposingIndex !== -1) opposingEntries.splice(opposingIndex, 1);
+        renderSiteLists();
         scheduleSave();
     }
     input.value = '';
@@ -256,7 +264,8 @@ async function saveNow() {
         translationStyle: el('translationStyle').value,
         customInstruction: el('customInstruction').value.trim(),
         glossaryText: el('glossaryText').value,
-        excludeList: excludeEntries.slice()
+        excludeList: excludeEntries.slice(),
+        alwaysTranslateList: alwaysEntries.slice()
     };
 
     try {
@@ -326,7 +335,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             'compatibleApiKey', 'compatibleModel', 'compatibleEndpoint',
             'delayBetweenRequests', 'maxToken', 'concurrencyLimit',
             'maxRetries', 'timeout',
-            'toggleBlueBackground', 'realTimeTranslation', 'showProgressPopup', 'excludeList', 'hidePromptAllSites', 'showContextMenu', 'autoRetranslateDomain', 'streamingTranslation',
+            'toggleBlueBackground', 'realTimeTranslation', 'showProgressPopup', 'excludeList', 'alwaysTranslateList', 'hidePromptAllSites', 'showContextMenu', 'autoRetranslateDomain', 'streamingTranslation',
             'translationStyle', 'customInstruction', 'glossaryText'
         ]);
 
@@ -363,7 +372,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         el('translationStyle').value = STYLE_PRESETS.includes(items.translationStyle) ? items.translationStyle : '';
         el('customInstruction').value = items.customInstruction || '';
         el('glossaryText').value = items.glossaryText || '';
-        excludeEntries = normalizeExcludeList(items.excludeList);
+        excludeEntries = normalizeSiteList(items.excludeList);
+        alwaysEntries = normalizeSiteList(items.alwaysTranslateList);
 
         applyI18n(getT(lang));
     } catch (e) {
@@ -420,12 +430,20 @@ document.addEventListener('DOMContentLoaded', async () => {
         el('eyeHide').hidden = !reveal;
     });
 
-    el('excludeAddBtn').addEventListener('click', addExcludeEntry);
-    el('excludeInput').addEventListener('keydown', event => {
-        if (event.key === 'Enter') {
-            event.preventDefault();
-            addExcludeEntry();
-        }
+    const siteListInputs = [
+        { addBtn: 'excludeAddBtn', input: 'excludeInput', entries: () => excludeEntries, opposing: () => alwaysEntries },
+        { addBtn: 'alwaysAddBtn', input: 'alwaysInput', entries: () => alwaysEntries, opposing: () => excludeEntries }
+    ];
+
+    siteListInputs.forEach(spec => {
+        const submit = () => addSiteEntry(spec.input, spec.entries(), spec.opposing());
+        el(spec.addBtn).addEventListener('click', submit);
+        el(spec.input).addEventListener('keydown', event => {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                submit();
+            }
+        });
     });
 
     document.querySelectorAll('[data-reset]').forEach(btn => {
@@ -438,11 +456,23 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     try {
         chrome.storage.onChanged.addListener((changes, area) => {
-            if (area !== 'local' || !changes.excludeList) return;
-            const incoming = normalizeExcludeList(changes.excludeList.newValue);
-            if (JSON.stringify(incoming) === JSON.stringify(excludeEntries)) return;
-            excludeEntries = incoming;
-            renderExcludeRows();
+            if (area !== 'local') return;
+            let changed = false;
+            if (changes.excludeList) {
+                const incoming = normalizeSiteList(changes.excludeList.newValue);
+                if (JSON.stringify(incoming) !== JSON.stringify(excludeEntries)) {
+                    excludeEntries = incoming;
+                    changed = true;
+                }
+            }
+            if (changes.alwaysTranslateList) {
+                const incoming = normalizeSiteList(changes.alwaysTranslateList.newValue);
+                if (JSON.stringify(incoming) !== JSON.stringify(alwaysEntries)) {
+                    alwaysEntries = incoming;
+                    changed = true;
+                }
+            }
+            if (changed) renderSiteLists();
         });
     } catch (e) { }
 });
