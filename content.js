@@ -1628,6 +1628,8 @@
             streamingEnabled = config.streamingTranslation === true;
             applyStrings(lang);
 
+            if (userInitiated) clearFailedMarkersForRetry();
+
             const allTus = collectTranslationUnits();
             if (allTus.length === 0) {
                 isTranslating = false;
@@ -1669,6 +1671,7 @@
                     .then(translations => {
                         if (runGeneration !== translationRunGeneration || translationCancelled) return;
                         batchesProcessed++;
+                        markMissingBatchUnitsFailed(batch, translations);
                         domUpdateQueue.push({ generation: runGeneration, translations });
                         applyQueuedUpdates();
                     })
@@ -2306,8 +2309,49 @@
         return batches;
     }
 
+    function markMissingBatchUnitsFailed(batch, translations) {
+        if (!Array.isArray(batch) || batch.length === 0) return;
+        const returnedIds = new Set();
+        if (Array.isArray(translations)) {
+            for (const translated of translations) {
+                if (translated && typeof translated.translatedTemplate === 'string') returnedIds.add(translated.id);
+            }
+        }
+        for (const item of batch) {
+            if (returnedIds.has(item.id)) continue;
+            const block = translationUnits.get(item.id)?.block;
+            if (!block || !block.isConnected) continue;
+            if (block.dataset?.translationStatus === 'translated') continue;
+            try { block.dataset.translationStatus = 'failed'; } catch (e) { }
+        }
+    }
+
+    function clearFailedMarkersForRetry() {
+        const queue = [];
+        if (document.body) queue.push(document.body);
+        const visited = new WeakSet();
+        while (queue.length > 0) {
+            const root = queue.shift();
+            if (!root || visited.has(root)) continue;
+            visited.add(root);
+            try {
+                root.querySelectorAll('[data-translation-status="failed"]').forEach(el => {
+                    delete el.dataset.translationStatus;
+                });
+                for (const el of root.querySelectorAll('*')) {
+                    if (el.shadowRoot && !visited.has(el.shadowRoot)) queue.push(el.shadowRoot);
+                }
+            } catch (e) { }
+        }
+    }
+
     async function processBatch(batch, runGeneration) {
-        if (translationCancelled) return [];
+        if (translationCancelled) {
+            const cancelled = new Error('TRANSLATION_CANCELLED');
+            cancelled.translationCancelled = true;
+            cancelled.translationErrorCode = 'translationCancelled';
+            throw cancelled;
+        }
         const batchId = `${streamingBatchSeed}_${++streamingBatchCounter}`;
         const keyToTuId = new Map();
         batch.forEach((item, index) => keyToTuId.set(`TU_${index}`, item.id));
