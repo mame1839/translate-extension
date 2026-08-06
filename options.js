@@ -14,10 +14,15 @@ const DEFAULTS = Object.freeze({
 });
 
 const MODEL_PLACEHOLDERS = {
-    gemini: 'gemini-3.1-flash-lite',
-    openai: 'gpt-5.4-nano-2026-03-17',
-    anthropic: 'claude-haiku-4-5-20251001',
-    'openai-compatible': ''
+    gemini: DEFAULTS.geminiModel,
+    openai: DEFAULTS.openaiModel,
+    anthropic: DEFAULTS.anthropicModel,
+    'openai-compatible': DEFAULTS.compatibleModel
+};
+
+const PROVIDER_ROW_DESCS = {
+    apiKeyDesc: { base: 'optApiKeyDesc', 'openai-compatible': 'optCompatibleApiKeyDesc' },
+    aiModelDesc: { base: 'optModelDesc', 'openai-compatible': 'optCompatibleModelDesc' }
 };
 
 const providerSettings = {
@@ -113,6 +118,17 @@ function normalizeProvider(provider) {
     return Object.prototype.hasOwnProperty.call(providerSettings, provider) ? provider : DEFAULTS.apiProvider;
 }
 
+function updateProviderRowDescs(provider) {
+    const t = currentT();
+    Object.keys(PROVIDER_ROW_DESCS).forEach(id => {
+        const variants = PROVIDER_ROW_DESCS[id];
+        const key = variants[provider] || variants.base;
+        const node = el(id);
+        node.dataset.i18n = key;
+        if (t[key] !== undefined) node.textContent = t[key];
+    });
+}
+
 function updateProviderUI(provider) {
     const settings = providerSettings[provider] || providerSettings.gemini;
     el('apiKey').value = settings.apiKey;
@@ -125,6 +141,7 @@ function updateProviderUI(provider) {
     } else {
         endpointGroup.style.display = 'none';
     }
+    updateProviderRowDescs(provider);
 }
 
 function languageNativeName(code) {
