@@ -10,5 +10,13 @@
   "contextMenuToggle": {
     "message": "切换翻译",
     "description": "Context menu item to toggle translation"
+  },
+  "commandTranslatePage": {
+    "message": "翻译此页面",
+    "description": "Keyboard shortcut description for starting translation"
+  },
+  "commandToggleTranslation": {
+    "message": "切换原文与译文",
+    "description": "Keyboard shortcut description for switching between original and translation"
   }
 }

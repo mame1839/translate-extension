@@ -10,5 +10,13 @@
   "contextMenuToggle": {
     "message": "Übersetzung umschalten",
     "description": "Context menu item to toggle translation"
+  },
+  "commandTranslatePage": {
+    "message": "Diese Seite übersetzen",
+    "description": "Keyboard shortcut description for starting translation"
+  },
+  "commandToggleTranslation": {
+    "message": "Zwischen Original und Übersetzung wechseln",
+    "description": "Keyboard shortcut description for switching between original and translation"
   }
 }

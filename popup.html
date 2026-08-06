@@ -62,6 +62,7 @@
 
     *, *::before, *::after { box-sizing: border-box; }
     html, body { margin: 0; }
+    [hidden] { display: none !important; }
 
     body {
       width: 320px;
@@ -322,6 +323,71 @@
     .site-row.disabled { cursor: default; }
     .site-row.disabled:hover { background: transparent; }
 
+    .shortcuts { display: flex; flex-direction: column; gap: 2px; }
+
+    .shortcut-caption {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--primary);
+      letter-spacing: 0.04em;
+      margin-bottom: 4px;
+    }
+
+    .shortcut-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-height: 28px;
+      padding: 0 4px;
+    }
+
+    .shortcut-label { flex: 1; font-size: 12.5px; color: var(--text-2); }
+
+    .shortcut-keys {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      flex-shrink: 0;
+      direction: ltr;
+      unicode-bidi: isolate;
+    }
+
+    .shortcut-keys kbd {
+      font: inherit;
+      font-size: 11px;
+      font-weight: 600;
+      line-height: 1.4;
+      color: var(--text-2);
+      background: var(--surface-1);
+      border: 1px solid var(--outline-soft);
+      border-radius: 6px;
+      padding: 2px 6px;
+      min-width: 24px;
+      text-align: center;
+    }
+
+    .shortcut-sep { font-size: 11px; color: var(--text-3); }
+    .shortcut-keys.unset { font-size: 12px; color: var(--text-3); }
+
+    .shortcut-link {
+      align-self: flex-start;
+      margin-inline-start: -2px;
+      margin-top: 2px;
+      padding: 4px 6px;
+      border: none;
+      border-radius: 8px;
+      background: transparent;
+      color: var(--primary);
+      font: inherit;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background-color 150ms var(--ease);
+    }
+
+    .shortcut-link:hover { background: color-mix(in srgb, var(--primary) 8%, transparent); }
+    .shortcut-link:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--ring); }
+
     .footer {
       display: flex;
       align-items: center;
@@ -409,6 +475,14 @@
   </div>
 
   <div class="divider"></div>
+
+  <div class="shortcuts" id="shortcutSection" hidden>
+    <div class="shortcut-caption" id="shortcutCaption"></div>
+    <div class="shortcut-rows" id="shortcutRows"></div>
+    <button class="shortcut-link" id="shortcutSettingsLink" type="button"></button>
+  </div>
+
+  <div class="divider" id="shortcutDivider" hidden></div>
 
   <div class="footer">
     <button class="lang-chip" id="langChip" type="button">
