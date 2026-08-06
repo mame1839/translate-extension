@@ -28,7 +28,8 @@ const providerSettings = {
 };
 
 const RTL_LANGS = new Set(['ar', 'ur', 'he', 'fa']);
-const SECTION_IDS = ['general', 'provider', 'behavior', 'sites', 'advanced'];
+const STYLE_PRESETS = ['', 'formal', 'casual', 'technical'];
+const SECTION_IDS = ['general', 'provider', 'behavior', 'style', 'sites', 'advanced'];
 
 const NUMBER_FIELDS = {
     maxToken: { min: 1, max: 1000000, fallback: DEFAULTS.maxToken },
@@ -67,6 +68,10 @@ function applyI18n(t) {
             node.title = t[key];
             node.setAttribute('aria-label', t[key]);
         }
+    });
+    document.querySelectorAll('[data-i18n-placeholder]').forEach(node => {
+        const key = node.dataset.i18nPlaceholder;
+        if (t[key] !== undefined) node.placeholder = t[key];
     });
     renderExcludeRows();
 }
@@ -248,6 +253,9 @@ async function saveNow() {
         showContextMenu: el('showContextMenu').checked,
         autoRetranslateDomain: el('autoRetranslateDomain').checked,
         streamingTranslation: el('streamingTranslation').checked,
+        translationStyle: el('translationStyle').value,
+        customInstruction: el('customInstruction').value.trim(),
+        glossaryText: el('glossaryText').value,
         excludeList: excludeEntries.slice()
     };
 
@@ -294,6 +302,11 @@ const resetHandlers = {
         el('showContextMenu').checked = true;
         el('autoRetranslateDomain').checked = true;
     },
+    style: () => {
+        el('translationStyle').value = '';
+        el('customInstruction').value = '';
+        el('glossaryText').value = '';
+    },
     advanced: () => {
         el('maxToken').value = DEFAULTS.maxToken;
         el('delayBetweenRequests').value = Math.round(DEFAULTS.delayBetweenRequests / 1000);
@@ -313,7 +326,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             'compatibleApiKey', 'compatibleModel', 'compatibleEndpoint',
             'delayBetweenRequests', 'maxToken', 'concurrencyLimit',
             'maxRetries', 'timeout',
-            'toggleBlueBackground', 'realTimeTranslation', 'showProgressPopup', 'excludeList', 'hidePromptAllSites', 'showContextMenu', 'autoRetranslateDomain', 'streamingTranslation'
+            'toggleBlueBackground', 'realTimeTranslation', 'showProgressPopup', 'excludeList', 'hidePromptAllSites', 'showContextMenu', 'autoRetranslateDomain', 'streamingTranslation',
+            'translationStyle', 'customInstruction', 'glossaryText'
         ]);
 
         const lang = items.targetLanguage || 'en';
@@ -346,6 +360,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         el('showContextMenu').checked = items.showContextMenu !== false;
         el('autoRetranslateDomain').checked = items.autoRetranslateDomain !== false;
         el('streamingTranslation').checked = items.streamingTranslation === true;
+        el('translationStyle').value = STYLE_PRESETS.includes(items.translationStyle) ? items.translationStyle : '';
+        el('customInstruction').value = items.customInstruction || '';
+        el('glossaryText').value = items.glossaryText || '';
         excludeEntries = normalizeExcludeList(items.excludeList);
 
         applyI18n(getT(lang));
@@ -377,9 +394,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         scheduleSave();
     });
 
-    ['apiKey', 'aiModel', 'endpointUrl'].forEach(id => {
+    ['apiKey', 'aiModel', 'endpointUrl', 'customInstruction', 'glossaryText'].forEach(id => {
         el(id).addEventListener('input', scheduleSave);
     });
+
+    el('translationStyle').addEventListener('change', scheduleSave);
 
     Object.keys(NUMBER_FIELDS).forEach(id => {
         el(id).addEventListener('input', scheduleSave);
