@@ -594,6 +594,7 @@
 
                     function showPromptIfNeeded() {
                         if (!IS_TOP_FRAME) return;
+                        if (isExcluded) return;
                         if (!languageDecision.pageIsTargetLanguage) {
                             if (items.hidePromptAllSites !== true) {
                                 createTranslationPrompt(false);
