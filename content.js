@@ -2619,6 +2619,49 @@
         }
     }
 
+    function collectPopupPageState() {
+        let translatedBlocks = 0;
+        let revertedBlocks = 0;
+        try {
+            translatedBlocks = document.querySelectorAll('[data-translation-status="translated"]').length;
+            revertedBlocks = document.querySelectorAll('[data-translation-status="original"]').length;
+        } catch (e) { }
+        let translationStatus = 'idle';
+        if (isTranslating || isApplyingUpdates) translationStatus = 'translating';
+        else if (translationHasError) translationStatus = 'error';
+        else if (translatedBlocks > 0 || revertedBlocks > 0) translationStatus = 'translated';
+        return {
+            translationStatus,
+            showingOriginal: translatedBlocks === 0 && revertedBlocks > 0,
+            progress: translationProgress,
+            stats: {
+                batches: batchesProcessed,
+                totalBatches,
+                translatedFragments: translatedUnitsCount,
+                totalFragments: expectedTotalUnits
+            }
+        };
+    }
+
+    function respondPopupPageState(sendResponse) {
+        const pageState = collectPopupPageState();
+        try {
+            chrome.storage.local.get(['excludeList'], function (items) {
+                const list = Array.isArray(items.excludeList) ? items.excludeList : [];
+                const currentUrl = window.location.href;
+                let siteOrigin = '';
+                try { siteOrigin = new URL(currentUrl).origin; } catch (e) { }
+                pageState.excluded = list.some(prefix => currentUrl.startsWith(prefix) || siteOrigin === prefix);
+                sendResponse(pageState);
+            });
+            return true;
+        } catch (e) {
+            pageState.excluded = false;
+            sendResponse(pageState);
+            return false;
+        }
+    }
+
     if (document.readyState === "loading") {
         document.addEventListener("DOMContentLoaded", initTranslation);
     } else {
@@ -2641,6 +2684,12 @@
                                 totalFragments: expectedTotalUnits
                             }
                         });
+                        return false;
+                    case "getPageState":
+                        return respondPopupPageState(sendResponse);
+                    case "cancelTranslationFromPopup":
+                        if (isTranslating && !translationCancelled && !translationHasError) handleCancelButtonClick();
+                        sendResponse({ status: "cancelling" });
                         return false;
                     case "startTranslationFromPopup":
                         if (isTranslating) {

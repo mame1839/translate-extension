@@ -4,193 +4,360 @@
 <head>
   <meta charset="utf-8">
   <meta name="color-scheme" content="light dark">
-  <title>AI Website Translator</title>
+  <title>AI Translator</title>
   <style>
     :root {
       color-scheme: light dark;
-      --color-primary: #6366f1;
-      --color-primary-hover: #4f46e5;
-      --color-primary-soft: rgba(99, 102, 241, 0.12);
-      --color-primary-ring: rgba(99, 102, 241, 0.22);
-      --color-surface: #ffffff;
-      --color-surface-2: #f7f8fb;
-      --color-border: rgba(15, 23, 42, 0.08);
-      --color-border-strong: rgba(15, 23, 42, 0.14);
-      --color-text: #0f172a;
-      --color-text-secondary: #475569;
-      --color-text-tertiary: #94a3b8;
-      --radius-sm: 8px;
-      --radius-md: 12px;
-      --ease: cubic-bezier(0.4, 0, 0.2, 1);
+      --primary: #1a73e8;
+      --on-primary: #ffffff;
+      --primary-container: #d3e3fd;
+      --on-primary-container: #041e49;
+      --bg: #ffffff;
+      --surface-1: #f5f5fa;
+      --surface-2: #ededf4;
+      --outline: rgba(27, 27, 33, 0.16);
+      --outline-soft: rgba(27, 27, 33, 0.09);
+      --text: #1b1b21;
+      --text-2: #4a4952;
+      --text-3: #7b7a84;
+      --error: #ba1a1a;
+      --error-container: #ffe1de;
+      --on-error-container: #7a1210;
+      --success: #0d7a4d;
+      --success-container: #d3f2e1;
+      --warning-container: #ffefc8;
+      --on-warning-container: #6d5100;
+      --ring: rgba(26, 115, 232, 0.35);
+      --elev-1: 0 1px 2px rgba(23, 23, 40, 0.10), 0 1px 3px 1px rgba(23, 23, 40, 0.06);
+      --elev-2: 0 2px 6px 2px rgba(23, 23, 40, 0.08), 0 1px 2px rgba(23, 23, 40, 0.10);
+      --ease: cubic-bezier(0.2, 0, 0, 1);
     }
 
     @media (prefers-color-scheme: dark) {
       :root {
-        --color-primary: #818cf8;
-        --color-primary-hover: #a5b4fc;
-        --color-primary-soft: rgba(129, 140, 248, 0.2);
-        --color-primary-ring: rgba(129, 140, 248, 0.32);
-        --color-surface: #141a28;
-        --color-surface-2: #1a2133;
-        --color-border: rgba(255, 255, 255, 0.08);
-        --color-border-strong: rgba(255, 255, 255, 0.14);
-        --color-text: #f1f5f9;
-        --color-text-secondary: #cbd5e1;
-        --color-text-tertiary: #64748b;
+        --primary: #8ab4f8;
+        --on-primary: #062e6f;
+        --primary-container: #0842a0;
+        --on-primary-container: #d3e3fd;
+        --bg: #17171c;
+        --surface-1: #1e1e24;
+        --surface-2: #26262d;
+        --outline: rgba(232, 231, 240, 0.18);
+        --outline-soft: rgba(232, 231, 240, 0.09);
+        --text: #e5e4ea;
+        --text-2: #b6b5bf;
+        --text-3: #85848e;
+        --error: #ffb4ab;
+        --error-container: #6e2621;
+        --on-error-container: #ffdad5;
+        --success: #6fd9a4;
+        --success-container: #16512f;
+        --warning-container: #574400;
+        --on-warning-container: #ffe08d;
+        --ring: rgba(138, 180, 248, 0.4);
+        --elev-1: 0 1px 2px rgba(0, 0, 0, 0.4), 0 1px 3px 1px rgba(0, 0, 0, 0.25);
+        --elev-2: 0 2px 6px 2px rgba(0, 0, 0, 0.32), 0 1px 2px rgba(0, 0, 0, 0.4);
       }
     }
 
     *, *::before, *::after { box-sizing: border-box; }
+    html, body { margin: 0; }
 
     body {
-      width: 288px;
-      margin: 0;
-      padding: 16px;
-      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Inter, "Hiragino Kaku Gothic ProN", "Hiragino Sans", "Yu Gothic UI", Meiryo, sans-serif;
-      font-feature-settings: "kern" 1, "liga" 1, "calt" 1, "palt" 1;
+      width: 320px;
+      padding: 12px 16px 14px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, "Hiragino Kaku Gothic ProN", "Yu Gothic UI", Meiryo, sans-serif;
+      font-size: 13.5px;
+      line-height: 1.45;
+      color: var(--text);
+      background: var(--bg);
       -webkit-font-smoothing: antialiased;
-      font-size: 14px;
-      line-height: 1.5;
-      color: var(--color-text);
-      background: var(--color-surface);
     }
 
-    .brand {
+    .appbar {
       display: flex;
       align-items: center;
       gap: 10px;
       margin-bottom: 12px;
     }
 
-    .brand-icon {
+    .app-icon {
+      width: 28px;
+      height: 28px;
+      border-radius: 8px;
+      background: var(--primary);
+      color: var(--on-primary);
+      display: grid;
+      place-items: center;
+      flex-shrink: 0;
+    }
+
+    .app-title {
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: 0.01em;
+      flex: 1;
+    }
+
+    .icon-btn {
       width: 32px;
       height: 32px;
-      border-radius: 10px;
-      background: linear-gradient(135deg, #6366f1 0%, #a855f7 60%, #ec4899 100%);
-      color: #ffffff;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      box-shadow: 0 4px 12px -2px rgba(99, 102, 241, 0.45);
+      display: grid;
+      place-items: center;
+      border: none;
+      border-radius: 999px;
+      background: transparent;
+      color: var(--text-2);
+      cursor: pointer;
+      padding: 0;
+      transition: background-color 150ms var(--ease);
     }
 
-    .brand-title {
-      display: flex;
-      flex-direction: column;
-      line-height: 1.2;
+    .icon-btn:hover { background: var(--surface-2); color: var(--text); }
+    .icon-btn:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--ring); }
+
+    .status-card {
+      background: var(--surface-1);
+      border-radius: 12px;
+      padding: 12px 14px;
+      margin-bottom: 12px;
     }
 
-    .brand-title .name {
-      font-weight: 700;
-      font-size: 14px;
-      letter-spacing: -0.01em;
-    }
+    .status-line { display: flex; align-items: center; gap: 8px; }
+    .status-ico { width: 20px; height: 20px; display: grid; place-items: center; flex-shrink: 0; }
+    .status-label { font-size: 13.5px; font-weight: 600; }
 
-    .brand-title .sub {
-      font-size: 11px;
-      color: var(--color-text-tertiary);
-      margin-top: 2px;
-    }
-
-    .hint {
+    .status-host {
+      margin: 2px 0 0 28px;
       font-size: 12px;
-      color: var(--color-text-secondary);
-      margin: 0 0 14px;
+      color: var(--text-3);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      direction: ltr;
+      unicode-bidi: isolate;
+      text-align: start;
+    }
+
+    :dir(rtl) .status-host { margin: 2px 28px 0 0; }
+
+    .status-idle .status-ico { color: var(--text-3); }
+    .status-translating .status-ico { color: var(--primary); }
+    .status-translated .status-ico { color: var(--success); }
+    .status-excluded .status-ico { color: var(--text-3); }
+    .status-unavailable .status-ico { color: var(--text-3); }
+    .status-error .status-ico { color: var(--error); }
+
+    .progress-wrap { margin-top: 10px; }
+
+    .linear {
+      height: 4px;
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--primary) 20%, transparent);
+      overflow: hidden;
+      position: relative;
+    }
+
+    .linear-fill {
+      position: absolute;
+      inset-block: 0;
+      inset-inline-start: 0;
+      width: 0%;
+      border-radius: 999px;
+      background: var(--primary);
+      transition: width 300ms var(--ease);
+    }
+
+    .progress-caption {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      margin-top: 6px;
+      font-size: 11.5px;
+      color: var(--text-3);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .error-note {
+      margin-top: 8px;
+      font-size: 12.5px;
+      color: var(--on-error-container);
+      background: var(--error-container);
+      border-radius: 8px;
+      padding: 8px 10px;
+      line-height: 1.45;
     }
 
     .btn {
       width: 100%;
-      padding: 10px 14px;
-      font-size: 13px;
+      min-height: 40px;
+      padding: 9px 16px;
+      font: inherit;
+      font-size: 13.5px;
       font-weight: 600;
-      font-family: inherit;
-      border: 1px solid transparent;
-      border-radius: var(--radius-sm);
+      border: none;
+      border-radius: 999px;
       cursor: pointer;
-      transition: background-color 150ms var(--ease), color 150ms var(--ease), border-color 150ms var(--ease), transform 100ms var(--ease), box-shadow 150ms var(--ease);
       display: inline-flex;
       align-items: center;
       justify-content: center;
       gap: 8px;
-      letter-spacing: -0.005em;
+      transition: background-color 150ms var(--ease), box-shadow 150ms var(--ease);
     }
 
-    .btn + .btn {
-      margin-top: 8px;
-    }
+    .btn:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--ring); }
+    .btn[disabled] { opacity: 0.5; cursor: default; }
+    .btn-filled { background: var(--primary); color: var(--on-primary); }
+    .btn-filled:not([disabled]):hover { box-shadow: var(--elev-1); background: color-mix(in srgb, var(--primary) 92%, var(--text)); }
+    .btn-tonal { background: var(--primary-container); color: var(--on-primary-container); }
+    .btn-tonal:not([disabled]):hover { box-shadow: var(--elev-1); }
+    .btn-outlined { background: transparent; color: var(--primary); border: 1px solid var(--outline); }
+    .btn-outlined:not([disabled]):hover { background: color-mix(in srgb, var(--primary) 8%, transparent); }
+    .btn-danger-tonal { background: var(--error-container); color: var(--on-error-container); }
+    .btn-danger-tonal:not([disabled]):hover { box-shadow: var(--elev-1); }
 
-    .btn-primary {
-      background: var(--color-primary);
-      color: #ffffff;
-      box-shadow: 0 1px 2px rgba(79, 70, 229, 0.2), 0 4px 12px -2px rgba(79, 70, 229, 0.3);
-    }
-
-    .btn-primary:hover {
-      background: var(--color-primary-hover);
-      transform: translateY(-1px);
-      box-shadow: 0 2px 4px rgba(79, 70, 229, 0.25), 0 8px 16px -4px rgba(79, 70, 229, 0.35);
-    }
-
-    .btn-primary:active { transform: translateY(0); }
-
-    .btn-primary:focus-visible {
-      outline: none;
-      box-shadow: 0 0 0 4px var(--color-primary-ring), 0 4px 12px -2px rgba(79, 70, 229, 0.3);
-    }
-
-    .btn-ghost {
+    .btn-text {
       background: transparent;
-      color: var(--color-text-secondary);
-      border-color: var(--color-border);
+      color: var(--primary);
+      min-height: 32px;
+      padding: 5px 10px;
+      width: auto;
+      font-weight: 600;
+      font-size: 12.5px;
     }
 
-    .btn-ghost:hover {
-      background: var(--color-surface-2);
-      color: var(--color-text);
-      border-color: var(--color-border-strong);
+    .btn-text:not([disabled]):hover { background: color-mix(in srgb, var(--primary) 8%, transparent); }
+
+    .action-area { display: flex; flex-direction: column; gap: 8px; margin-bottom: 4px; min-height: 40px; }
+    .action-row { display: flex; gap: 8px; justify-content: center; }
+
+    .segmented {
+      display: flex;
+      border: 1px solid var(--outline);
+      border-radius: 999px;
+      overflow: hidden;
     }
 
-    .btn-ghost:focus-visible {
-      outline: none;
-      box-shadow: 0 0 0 4px var(--color-primary-ring);
+    .segmented button {
+      flex: 1;
+      min-height: 36px;
+      border: none;
+      background: transparent;
+      font: inherit;
+      font-size: 12.5px;
+      font-weight: 600;
+      color: var(--text-2);
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      transition: background-color 150ms var(--ease);
     }
 
-    .btn[disabled] {
-      opacity: 0.55;
-      cursor: not-allowed;
-      transform: none !important;
+    .segmented button + button { border-inline-start: 1px solid var(--outline); }
+
+    .segmented button[aria-pressed="true"] {
+      background: var(--primary-container);
+      color: var(--on-primary-container);
     }
 
-    .divider {
-      height: 1px;
-      background: var(--color-border);
-      margin: 14px -16px;
+    .segmented button:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--ring); }
+
+    .divider { height: 1px; background: var(--outline-soft); margin: 12px -16px; }
+
+    .site-rows { display: flex; flex-direction: column; }
+
+    .site-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-height: 40px;
+      cursor: pointer;
+      border-radius: 8px;
+      padding: 2px 4px;
     }
 
-    .status {
-      margin-top: 10px;
+    .site-row:hover { background: var(--surface-1); }
+    .site-row .row-label { flex: 1; font-size: 13px; }
+    .site-row .row-ico { color: var(--text-3); width: 20px; height: 20px; display: grid; place-items: center; flex-shrink: 0; }
+
+    .switch { position: relative; width: 40px; height: 22px; flex-shrink: 0; }
+    .switch input { position: absolute; opacity: 0; width: 0; height: 0; }
+
+    .track {
+      position: absolute;
+      inset: 0;
+      border-radius: 999px;
+      background: var(--surface-2);
+      border: 1px solid var(--outline);
+      transition: background-color 180ms var(--ease), border-color 180ms var(--ease);
+    }
+
+    .track::after {
+      content: "";
+      position: absolute;
+      top: 3px;
+      inset-inline-start: 3px;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: var(--text-3);
+      transition: transform 180ms var(--ease), background-color 180ms var(--ease), width 180ms var(--ease), height 180ms var(--ease), top 180ms var(--ease);
+    }
+
+    .switch input:checked + .track { background: var(--primary); border-color: var(--primary); }
+
+    .switch input:checked + .track::after {
+      background: var(--on-primary);
+      transform: translateX(18px);
+      top: 2px;
+      width: 16px;
+      height: 16px;
+    }
+
+    :dir(rtl) .switch input:checked + .track::after { transform: translateX(-18px); }
+    .switch input:focus-visible + .track { box-shadow: 0 0 0 3px var(--ring); }
+    .switch input:disabled + .track { opacity: 0.45; }
+    .site-row.disabled { cursor: default; }
+    .site-row.disabled:hover { background: transparent; }
+
+    .footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-top: 2px;
+    }
+
+    .lang-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border: 1px solid var(--outline);
+      border-radius: 8px;
+      background: transparent;
+      color: var(--text-2);
+      font: inherit;
       font-size: 12px;
-      color: var(--color-text-tertiary);
-      min-height: 16px;
-      line-height: 1.4;
-      transition: color 150ms var(--ease);
+      font-weight: 500;
+      padding: 5px 10px;
+      cursor: pointer;
+      transition: background-color 150ms var(--ease);
     }
 
-    .status.info { color: var(--color-text-secondary); }
-    .status.success { color: #047857; }
-    .status.error { color: #dc2626; }
+    .lang-chip:hover { background: var(--surface-1); }
+    .lang-chip:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--ring); }
+    .lang-chip .chev { color: var(--text-3); }
 
-    @media (prefers-color-scheme: dark) {
-      .status.success { color: #34d399; }
-      .status.error { color: #f87171; }
-    }
+    .version { font-size: 11px; color: var(--text-3); font-variant-numeric: tabular-nums; }
   </style>
 </head>
 
 <body>
-  <div class="brand">
-    <div class="brand-icon" aria-hidden="true">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round">
+  <div class="appbar">
+    <div class="app-icon" aria-hidden="true">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round">
         <path d="m5 8 6 6"></path>
         <path d="m4 14 6-6 2-3"></path>
         <path d="M2 5h12"></path>
@@ -199,36 +366,64 @@
         <path d="M14 18h6"></path>
       </svg>
     </div>
-    <div class="brand-title">
-      <div class="name">AI Translator</div>
-      <div class="sub">AI Website Translator</div>
-    </div>
+    <div class="app-title" id="appTitle">AI Translator</div>
+    <button class="icon-btn" id="settingsBtn" type="button">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="3"></circle>
+        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+      </svg>
+    </button>
   </div>
 
-  <p class="hint">Translate this page to English.</p>
+  <div class="status-card status-idle" id="statusCard">
+    <div class="status-line">
+      <span class="status-ico" id="statusIco"></span>
+      <span class="status-label" id="statusLabel"></span>
+    </div>
+    <div class="status-host" id="statusHost"></div>
+    <div class="progress-wrap" id="progressWrap" hidden>
+      <div class="linear"><div class="linear-fill" id="linearFill"></div></div>
+      <div class="progress-caption"><span id="progressPct"></span><span id="progressBlocks"></span></div>
+    </div>
+    <div class="error-note" id="errorNote" hidden></div>
+  </div>
 
-  <button id="translateBtn" class="btn btn-primary" type="button">
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-      <polyline points="9 18 15 12 9 6"></polyline>
-    </svg>
-    <span>Translate</span>
-  </button>
-  <button id="excludeBtn" class="btn btn-ghost" type="button">
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-      <circle cx="12" cy="12" r="10"></circle>
-      <line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line>
-    </svg>
-    <span>Exclude this site</span>
-  </button>
-  <button id="optionsBtn" class="btn btn-ghost" type="button">
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-      <circle cx="12" cy="12" r="3"></circle>
-      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
-    </svg>
-    <span>Settings</span>
-  </button>
+  <div class="action-area" id="actionArea"></div>
 
-  <div class="status" id="statusText" role="status" aria-live="polite"></div>
+  <div class="divider"></div>
+
+  <div class="site-rows">
+    <label class="site-row" id="excludeRow">
+      <span class="row-ico" aria-hidden="true">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"></circle>
+          <line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line>
+        </svg>
+      </span>
+      <span class="row-label" id="excludeRowLabel"></span>
+      <span class="switch">
+        <input type="checkbox" id="excludeSwitch">
+        <span class="track"></span>
+      </span>
+    </label>
+  </div>
+
+  <div class="divider"></div>
+
+  <div class="footer">
+    <button class="lang-chip" id="langChip" type="button">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="10"></circle>
+        <path d="M2 12h20"></path>
+        <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+      </svg>
+      <span id="langChipLabel"></span>
+      <svg class="chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="6 9 12 15 18 9"></polyline>
+      </svg>
+    </button>
+    <span class="version" id="versionLabel"></span>
+  </div>
 
   <script src="translations.js"></script>
   <script src="popup.js"></script>
