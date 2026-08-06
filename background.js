@@ -152,14 +152,14 @@ chrome.runtime.onInstalled.addListener(function (details) {
             if (Object.keys(toSet).length > 0) chrome.storage.local.set(toSet);
             chrome.contextMenus.removeAll(() => {
                 chrome.contextMenus.create({
-                    id: "toggleTranslation",
-                    title: chrome.i18n.getMessage('contextMenuToggle'),
+                    id: TOGGLE_MENU_ID,
+                    title: contextMenuTitle('selMenuToggle', items.targetLanguage),
                     contexts: ["all"],
                     visible: items.showContextMenu !== false
                 });
                 chrome.contextMenus.create({
                     id: SELECTION_MENU_ID,
-                    title: selectionMenuTitle(items.targetLanguage),
+                    title: contextMenuTitle('selMenuTranslate', items.targetLanguage),
                     contexts: ["selection"],
                     visible: items.showContextMenu !== false
                 });
@@ -362,14 +362,6 @@ function handleTabUrlChange(tabId, newUrl) {
 chrome.contextMenus.onClicked.addListener(function (info, tab) {
     if (info.menuItemId === "toggleTranslation" && tab?.id) {
         chrome.tabs.sendMessage(tab.id, { action: "toggleTranslation" }).catch(() => { });
-    }
-});
-
-chrome.storage.onChanged.addListener(function (changes) {
-    if (changes.showContextMenu !== undefined) {
-        chrome.contextMenus.update("toggleTranslation", {
-            visible: changes.showContextMenu.newValue !== false
-        }).catch(() => {});
     }
 });
 
@@ -1560,34 +1552,47 @@ async function translateWithAnthropic(text, retryLimit, signal, targetLanguage =
     }, retryLimit, signal);
 }
 
+const TOGGLE_MENU_ID = 'toggleTranslation';
 const SELECTION_MENU_ID = 'translateSelection';
 const SELECTION_MAX_OUTPUT_TOKENS = 16384;
 const selectionControllers = new Map();
 
-function selectionMenuTitle(langCode) {
+const CONTEXT_MENU_TITLE_FALLBACKS = {
+    selMenuToggle: 'Toggle translation',
+    selMenuTranslate: 'Translate selection'
+};
+
+function contextMenuTitle(key, langCode) {
     try {
         if (typeof getT === 'function') {
             const strings = getT((langCode || 'en').trim());
-            if (strings && strings.selMenuTranslate) return strings.selMenuTranslate;
+            if (strings && strings[key]) return strings[key];
         }
     } catch (e) { }
-    return 'Translate selection';
+    return CONTEXT_MENU_TITLE_FALLBACKS[key];
 }
 
 chrome.storage.onChanged.addListener(function (changes, areaName) {
     if (areaName !== 'local') return;
-    const update = {};
-    if (changes.targetLanguage !== undefined) {
-        update.title = selectionMenuTitle(changes.targetLanguage.newValue);
-    }
+    const shared = {};
     if (changes.showContextMenu !== undefined) {
-        update.visible = changes.showContextMenu.newValue !== false;
+        shared.visible = changes.showContextMenu.newValue !== false;
     }
-    if (Object.keys(update).length === 0) return;
-    try {
-        const updating = chrome.contextMenus.update(SELECTION_MENU_ID, update);
-        if (updating && typeof updating.catch === 'function') updating.catch(() => { });
-    } catch (e) { }
+    const languageChanged = changes.targetLanguage !== undefined;
+    if (!languageChanged && Object.keys(shared).length === 0) return;
+    const newLanguage = languageChanged ? changes.targetLanguage.newValue : null;
+    const menus = [
+        { id: TOGGLE_MENU_ID, key: 'selMenuToggle' },
+        { id: SELECTION_MENU_ID, key: 'selMenuTranslate' }
+    ];
+    for (const menu of menus) {
+        const update = { ...shared };
+        if (languageChanged) update.title = contextMenuTitle(menu.key, newLanguage);
+        try {
+            const updating = chrome.contextMenus.update(menu.id, update);
+            if (updating && typeof updating.catch === 'function') updating.catch(() => { });
+        } catch (e) { }
+    }
 });
 
 chrome.contextMenus.onClicked.addListener(function (info, tab) {
