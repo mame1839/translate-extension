@@ -11,6 +11,13 @@ const STATE_ICONS = {
 
 const SEGMENT_CHECK = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>';
 
+const SHORTCUT_ROWS = [
+    { command: 'translate-page', labelKey: 'shortcutTranslateLabel' },
+    { command: 'toggle-translation', labelKey: 'shortcutToggleLabel' }
+];
+
+const SHORTCUT_SETTINGS_URL = 'chrome://extensions/shortcuts';
+
 const STATE_LABEL_KEYS = {
     idle: 'popupStateIdle',
     translating: 'translating',
@@ -54,7 +61,12 @@ async function initPopup() {
         excludeSwitch: document.getElementById('excludeSwitch'),
         langChip: document.getElementById('langChip'),
         langChipLabel: document.getElementById('langChipLabel'),
-        versionLabel: document.getElementById('versionLabel')
+        versionLabel: document.getElementById('versionLabel'),
+        shortcutSection: document.getElementById('shortcutSection'),
+        shortcutDivider: document.getElementById('shortcutDivider'),
+        shortcutCaption: document.getElementById('shortcutCaption'),
+        shortcutRows: document.getElementById('shortcutRows'),
+        shortcutSettingsLink: document.getElementById('shortcutSettingsLink')
     };
 
     document.title = t.popupName;
@@ -69,6 +81,9 @@ async function initPopup() {
     els.settingsBtn.addEventListener('click', openOptions);
     els.langChip.addEventListener('click', openOptions);
     els.excludeSwitch.addEventListener('change', onExcludeSwitchChange);
+    els.shortcutSettingsLink.addEventListener('click', openShortcutSettings);
+
+    setupShortcuts();
 
     try {
         const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -85,6 +100,73 @@ async function initPopup() {
 
 function openOptions() {
     chrome.runtime.openOptionsPage();
+}
+
+function openShortcutSettings() {
+    try {
+        chrome.tabs.create({ url: SHORTCUT_SETTINGS_URL });
+        window.close();
+    } catch (e) { }
+}
+
+async function setupShortcuts() {
+    els.shortcutCaption.textContent = t.shortcutCaption;
+    els.shortcutSettingsLink.textContent = t.shortcutSettingsLink;
+    let commands = null;
+    try {
+        commands = await chrome.commands.getAll();
+    } catch (e) {
+        commands = null;
+    }
+    if (!Array.isArray(commands)) {
+        els.shortcutSection.hidden = true;
+        els.shortcutDivider.hidden = true;
+        return;
+    }
+    const assigned = new Map();
+    commands.forEach(entry => {
+        if (entry && entry.name) assigned.set(entry.name, String(entry.shortcut || '').trim());
+    });
+    els.shortcutRows.replaceChildren();
+    SHORTCUT_ROWS.forEach(row => {
+        els.shortcutRows.appendChild(buildShortcutRow(t[row.labelKey], assigned.get(row.command)));
+    });
+    els.shortcutSection.hidden = false;
+    els.shortcutDivider.hidden = false;
+}
+
+function buildShortcutRow(label, shortcut) {
+    const row = document.createElement('div');
+    row.className = 'shortcut-row';
+    const name = document.createElement('span');
+    name.className = 'shortcut-label';
+    name.textContent = label;
+    row.appendChild(name);
+    row.appendChild(buildShortcutKeys(shortcut));
+    return row;
+}
+
+function buildShortcutKeys(shortcut) {
+    const keys = document.createElement('span');
+    keys.className = 'shortcut-keys';
+    const parts = String(shortcut || '').split('+').map(part => part.trim()).filter(Boolean);
+    if (parts.length === 0) {
+        keys.classList.add('unset');
+        keys.textContent = t.shortcutUnset;
+        return keys;
+    }
+    parts.forEach((part, index) => {
+        if (index > 0) {
+            const sep = document.createElement('span');
+            sep.className = 'shortcut-sep';
+            sep.textContent = '+';
+            keys.appendChild(sep);
+        }
+        const key = document.createElement('kbd');
+        key.textContent = part;
+        keys.appendChild(key);
+    });
+    return keys;
 }
 
 function isSupportedUrl(url) {

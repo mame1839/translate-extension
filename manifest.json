@@ -37,6 +37,20 @@
       "128": "images/icon128.png"
     }
   },
+  "commands": {
+    "translate-page": {
+      "suggested_key": {
+        "default": "Alt+T"
+      },
+      "description": "__MSG_commandTranslatePage__"
+    },
+    "toggle-translation": {
+      "suggested_key": {
+        "default": "Alt+Shift+O"
+      },
+      "description": "__MSG_commandToggleTranslation__"
+    }
+  },
   "options_ui": {
     "page": "options.html",
     "open_in_tab": true

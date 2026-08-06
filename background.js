@@ -924,7 +924,60 @@ const PROMPT_EXAMPLE_OUTPUTS = {
     }
 };
 
-function createTranslationPrompt(jsonPayload, targetLanguage, targetLanguageCode) {
+const STYLE_PROMPT_LINES = Object.freeze({
+    formal: '- Regardless of the source register, write the translation in a consistently polite, formal register suitable for business and official documents.',
+    casual: '- Regardless of the source register, write the translation in a relaxed, friendly, conversational register.',
+    technical: '- Regardless of the source register, write the translation in precise, concise technical-documentation style with consistent terminology.'
+});
+
+function parseGlossaryPairs(glossaryText) {
+    const pairs = new Map();
+    if (typeof glossaryText !== 'string') return pairs;
+    for (const line of glossaryText.split(/\r?\n/)) {
+        const separatorIndex = line.indexOf('=');
+        if (separatorIndex < 0) continue;
+        const source = line.slice(0, separatorIndex).trim();
+        const target = line.slice(separatorIndex + 1).trim();
+        if (source && target) pairs.set(source, target);
+    }
+    return pairs;
+}
+
+function buildGlossarySection(glossaryText) {
+    const pairs = parseGlossaryPairs(glossaryText);
+    if (pairs.size === 0) return '';
+    const entryLines = [];
+    for (const [source, target] of pairs) {
+        entryLines.push(source === target
+            ? `- "${source}" → keep "${source}" untranslated`
+            : `- "${source}" → "${target}"`);
+    }
+    return `## Glossary (must follow)\nWhenever a source term below appears, render it exactly as the specified target form, adapting only inflection where the grammar of the target language requires it:\n${entryLines.join('\n')}`;
+}
+
+function buildStyleSection(translationStyle, customInstruction) {
+    const styleLines = [];
+    const presetLine = STYLE_PROMPT_LINES[translationStyle];
+    if (typeof presetLine === 'string') styleLines.push(presetLine);
+    const instruction = typeof customInstruction === 'string' ? customInstruction.replace(/\s+/g, ' ').trim() : '';
+    if (instruction) styleLines.push(`- Additional instruction from the user (it never overrides the placeholder and output format rules): ${instruction}`);
+    if (styleLines.length === 0) return '';
+    return `## Style\n${styleLines.join('\n')}`;
+}
+
+function buildPromptCustomSections(translationStyle, customInstruction, glossaryText) {
+    const sections = [buildGlossarySection(glossaryText), buildStyleSection(translationStyle, customInstruction)].filter(Boolean);
+    if (sections.length === 0) return '';
+    return sections.join('\n\n') + '\n\n';
+}
+
+async function getPromptCustomSections() {
+    const { translationStyle, customInstruction, glossaryText } = await new Promise(resolve =>
+        chrome.storage.local.get(['translationStyle', 'customInstruction', 'glossaryText'], resolve));
+    return buildPromptCustomSections(translationStyle, customInstruction, glossaryText);
+}
+
+function createTranslationPrompt(jsonPayload, targetLanguage, targetLanguageCode, customSections = '') {
     const localizedExamples = PROMPT_EXAMPLE_OUTPUTS[targetLanguageCode];
     const exampleOutputs = localizedExamples || PROMPT_EXAMPLE_OUTPUTS.ja;
     const exampleLanguageNote = localizedExamples
@@ -1003,7 +1056,7 @@ Output: {"TU_0":"${exampleOutputs.disappearingArticle}"}
 Input:  {"TU_0":"Overview <b0></b0> See the <s1></s1> icon."}
 Output: {"TU_0":"${exampleOutputs.blockAndSkipPlaceholders}"}
 
-## Input JSON
+${customSections}## Input JSON
 ${jsonPayload}`;
 }
 
@@ -1305,7 +1358,7 @@ async function translateWithGemini(text, retryLimit, signal, targetLanguage = 'E
     const actualModel = (model || '').trim() || DEFAULTS.geminiModel;
     const actualMaxToken = maxToken || DEFAULTS.maxToken;
     const actualTimeout = timeout || DEFAULTS.timeout;
-    const prompt = createTranslationPrompt(text, targetLanguage, targetLanguageCode);
+    const prompt = createTranslationPrompt(text, targetLanguage, targetLanguageCode, await getPromptCustomSections());
     const generationConfig = {
         maxOutputTokens: actualMaxToken,
         responseMimeType: "application/json"
@@ -1370,7 +1423,7 @@ async function translateWithOpenAI(text, retryLimit, signal, targetLanguage = 'E
     const actualModel = (model || '').trim() || DEFAULTS.openaiModel;
     const actualMaxToken = maxToken || DEFAULTS.maxToken;
     const actualTimeout = timeout || DEFAULTS.timeout;
-    const prompt = createTranslationPrompt(text, targetLanguage, targetLanguageCode);
+    const prompt = createTranslationPrompt(text, targetLanguage, targetLanguageCode, await getPromptCustomSections());
     const requestBody = {
         model: actualModel,
         messages: [{ role: 'user', content: prompt }],
@@ -1419,7 +1472,7 @@ async function translateWithOpenAICompatible(text, retryLimit, signal, targetLan
     const actualModel = (model || '').trim();
     const actualMaxToken = maxToken || DEFAULTS.maxToken;
     const actualTimeout = timeout || DEFAULTS.timeout;
-    const prompt = createTranslationPrompt(text, targetLanguage, targetLanguageCode);
+    const prompt = createTranslationPrompt(text, targetLanguage, targetLanguageCode, await getPromptCustomSections());
     const requestBody = {
         messages: [{ role: 'user', content: prompt }],
         temperature: 0.2,
@@ -1466,7 +1519,7 @@ async function translateWithAnthropic(text, retryLimit, signal, targetLanguage =
     const actualModel = (model || '').trim() || DEFAULTS.anthropicModel;
     const actualMaxToken = Math.min(maxToken || DEFAULTS.maxToken, ANTHROPIC_MAX_OUTPUT_TOKENS);
     const actualTimeout = timeout || DEFAULTS.timeout;
-    const prompt = createTranslationPrompt(text, targetLanguage, targetLanguageCode);
+    const prompt = createTranslationPrompt(text, targetLanguage, targetLanguageCode, await getPromptCustomSections());
     const requestBody = {
         model: actualModel,
         max_tokens: actualMaxToken,
@@ -1914,3 +1967,37 @@ async function pageCachePrune(maxEntries) {
     } catch (e) { }
     finally { try { db.close(); } catch (e) { } }
 }
+
+const KEYBOARD_COMMAND_ACTIONS = {
+    'translate-page': 'startTranslationFromPopup',
+    'toggle-translation': 'toggleTranslation'
+};
+
+function isCommandDispatchableUrl(url) {
+    if (!url) return true;
+    return url.startsWith('http://') || url.startsWith('https://');
+}
+
+function dispatchKeyboardCommand(tabId, url, action) {
+    if (!Number.isInteger(tabId) || tabId < 0) return;
+    if (!isCommandDispatchableUrl(url)) return;
+    chrome.tabs.sendMessage(tabId, { action }).catch(() => { });
+}
+
+function handleKeyboardCommand(command, tab) {
+    const action = KEYBOARD_COMMAND_ACTIONS[command];
+    if (!action) return;
+    if (tab && Number.isInteger(tab.id) && tab.id >= 0) {
+        dispatchKeyboardCommand(tab.id, tab.url, action);
+        return;
+    }
+    chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
+        if (chrome.runtime.lastError) return;
+        const target = Array.isArray(tabs) ? tabs[0] : null;
+        if (target) dispatchKeyboardCommand(target.id, target.url, action);
+    });
+}
+
+try {
+    chrome.commands.onCommand.addListener(handleKeyboardCommand);
+} catch (e) { }

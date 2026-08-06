@@ -10,5 +10,13 @@
   "contextMenuToggle": {
     "message": "번역 켜기/끄기",
     "description": "Context menu item to toggle translation"
+  },
+  "commandTranslatePage": {
+    "message": "이 페이지 번역",
+    "description": "Keyboard shortcut description for starting translation"
+  },
+  "commandToggleTranslation": {
+    "message": "원문과 번역문 전환",
+    "description": "Keyboard shortcut description for switching between original and translation"
   }
 }

@@ -10,5 +10,13 @@
   "contextMenuToggle": {
     "message": "Bật/tắt dịch thuật",
     "description": "Context menu item to toggle translation"
+  },
+  "commandTranslatePage": {
+    "message": "Dịch trang này",
+    "description": "Keyboard shortcut description for starting translation"
+  },
+  "commandToggleTranslation": {
+    "message": "Chuyển giữa bản gốc và bản dịch",
+    "description": "Keyboard shortcut description for switching between original and translation"
   }
 }

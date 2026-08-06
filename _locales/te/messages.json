@@ -10,5 +10,13 @@
   "contextMenuToggle": {
     "message": "అనువాదాన్ని ఆన్/ఆఫ్ చేయండి",
     "description": "Context menu item to toggle translation"
+  },
+  "commandTranslatePage": {
+    "message": "ఈ పేజీని అనువదించండి",
+    "description": "Keyboard shortcut description for starting translation"
+  },
+  "commandToggleTranslation": {
+    "message": "అసలు మరియు అనువాదం మధ్య మార్చండి",
+    "description": "Keyboard shortcut description for switching between original and translation"
   }
 }
