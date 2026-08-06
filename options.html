@@ -126,11 +126,23 @@
             </div>
             <div class="row-control">
               <select id="apiProvider">
+                <option value="chrome-builtin" data-i18n="builtinProviderOption">Chrome built-in (no API key)</option>
                 <option value="gemini">Google (Gemini)</option>
                 <option value="openai">OpenAI (ChatGPT)</option>
                 <option value="anthropic">Anthropic (Claude)</option>
                 <option value="openai-compatible">OpenAI Compatible</option>
               </select>
+            </div>
+          </div>
+          <div class="row stack" id="builtinGroup" hidden>
+            <div class="row-main">
+              <div class="row-label" data-i18n="builtinLabel">Translation engine</div>
+              <div class="row-desc" data-i18n="builtinDesc"></div>
+            </div>
+            <div class="row-control field-wide builtin-control">
+              <div class="builtin-status" id="builtinStatus" role="status" aria-live="polite"></div>
+              <div class="builtin-progress" id="builtinProgress" hidden><span id="builtinProgressBar"></span></div>
+              <button class="btn-tonal" type="button" id="builtinPrepareBtn" data-i18n="builtinPrepareBtn" hidden>Prepare engine</button>
             </div>
           </div>
           <div class="row stack" id="endpointGroup">
@@ -142,7 +154,7 @@
               <input type="text" id="endpointUrl" class="ltr-input" placeholder="https://api.example.com/v1/chat/completions" autocomplete="off" spellcheck="false">
             </div>
           </div>
-          <div class="row stack">
+          <div class="row stack" id="apiKeyGroup">
             <div class="row-main">
               <label class="row-label" for="apiKey" data-i18n="apiKeyLabel">API Key</label>
               <div class="row-desc" data-i18n="optApiKeyDesc"></div>
@@ -162,7 +174,7 @@
               </button>
             </div>
           </div>
-          <div class="row stack">
+          <div class="row stack" id="modelGroup">
             <div class="row-main">
               <label class="row-label" for="aiModel" data-i18n="aiModelLabel">AI Model</label>
               <div class="row-desc" data-i18n="optModelDesc"></div>

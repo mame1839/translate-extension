@@ -20,7 +20,10 @@ const MODEL_PLACEHOLDERS = {
     'openai-compatible': ''
 };
 
+const BUILTIN_PROVIDER = 'chrome-builtin';
+
 const providerSettings = {
+    'chrome-builtin': { apiKey: '', model: '' },
     gemini: { apiKey: '', model: DEFAULTS.geminiModel },
     openai: { apiKey: '', model: DEFAULTS.openaiModel },
     anthropic: { apiKey: '', model: DEFAULTS.anthropicModel },
@@ -43,6 +46,8 @@ let currentProvider = DEFAULTS.apiProvider;
 let excludeEntries = [];
 let saveTimer = null;
 let snackTimer = null;
+let builtinStatusToken = 0;
+let builtinPreparing = false;
 
 function el(id) {
     return document.getElementById(id);
@@ -95,9 +100,13 @@ function populateLanguageSelect(selected) {
 
 function updateProviderUI(provider) {
     const settings = providerSettings[provider] || providerSettings.gemini;
+    const isBuiltin = provider === BUILTIN_PROVIDER;
     el('apiKey').value = settings.apiKey;
     el('aiModel').value = settings.model;
     el('aiModel').placeholder = MODEL_PLACEHOLDERS[provider] || '';
+    el('apiKeyGroup').hidden = isBuiltin;
+    el('modelGroup').hidden = isBuiltin;
+    el('builtinGroup').hidden = !isBuiltin;
     const endpointGroup = el('endpointGroup');
     if (provider === 'openai-compatible') {
         el('endpointUrl').value = settings.endpoint || '';
@@ -105,6 +114,88 @@ function updateProviderUI(provider) {
     } else {
         endpointGroup.style.display = 'none';
     }
+    if (isBuiltin) refreshBuiltinStatus();
+}
+
+function languageNativeName(code) {
+    const entry = LANGUAGES.find(lang => lang.code === code);
+    return entry ? entry.native : code;
+}
+
+function setBuiltinStatus(text, tone) {
+    const status = el('builtinStatus');
+    status.textContent = text;
+    status.classList.toggle('is-ready', tone === 'ready');
+    status.classList.toggle('is-error', tone === 'error');
+}
+
+function setBuiltinProgress(percent) {
+    const wrap = el('builtinProgress');
+    if (percent === null) {
+        wrap.hidden = true;
+        return;
+    }
+    wrap.hidden = false;
+    el('builtinProgressBar').style.inlineSize = `${clampInt(percent, 0, 100, 0)}%`;
+}
+
+async function refreshBuiltinStatus() {
+    if (builtinPreparing) return;
+    const token = ++builtinStatusToken;
+    const t = currentT();
+    setBuiltinProgress(null);
+    setBuiltinStatus(t.builtinChecking, '');
+    el('builtinPrepareBtn').hidden = true;
+    let status = null;
+    try {
+        status = await chrome.runtime.sendMessage({ action: 'builtinTranslatorStatus', targetLanguage: getUiLang() });
+    } catch (e) { }
+    if (token !== builtinStatusToken) return;
+    if (!status || !status.supported) {
+        setBuiltinStatus(t.builtinUnsupportedBrowser, 'error');
+        return;
+    }
+    if (status.availability === 'available') {
+        setBuiltinStatus(t.builtinReady, 'ready');
+        return;
+    }
+    if (status.availability === 'downloadable' || status.availability === 'downloading') {
+        setBuiltinStatus(t.builtinNeedsDownload, '');
+        el('builtinPrepareBtn').hidden = false;
+        return;
+    }
+    setBuiltinStatus(t.builtinUnsupportedLanguage.replace('{language}', languageNativeName(getUiLang())), 'error');
+}
+
+async function prepareBuiltinEngine() {
+    if (builtinPreparing) return;
+    builtinPreparing = true;
+    builtinStatusToken++;
+    const t = currentT();
+    el('builtinPrepareBtn').disabled = true;
+    setBuiltinStatus(t.builtinPreparing.replace('{percent}', '0'), '');
+    setBuiltinProgress(0);
+    let result = null;
+    try {
+        result = await chrome.runtime.sendMessage({ action: 'builtinTranslatorPrepare', targetLanguage: getUiLang() });
+    } catch (e) { }
+    builtinPreparing = false;
+    el('builtinPrepareBtn').disabled = false;
+    setBuiltinProgress(null);
+    if (result && result.ok) {
+        setBuiltinStatus(currentT().builtinReady, 'ready');
+        el('builtinPrepareBtn').hidden = true;
+        return;
+    }
+    setBuiltinStatus(currentT().builtinPrepareFailed, 'error');
+    el('builtinPrepareBtn').hidden = false;
+}
+
+function handleBuiltinProgressMessage(message) {
+    if (!message || message.action !== 'builtinTranslatorProgress' || !builtinPreparing) return;
+    const percent = clampInt(message.percent, 0, 100, 0);
+    setBuiltinProgress(percent);
+    setBuiltinStatus(currentT().builtinPreparing.replace('{percent}', String(percent)), '');
 }
 
 function saveCurrentProviderToMemory() {
@@ -286,6 +377,7 @@ const resetHandlers = {
         el('toggleBlueBackground').checked = false;
     },
     provider: () => {
+        providerSettings[BUILTIN_PROVIDER] = { apiKey: '', model: '' };
         providerSettings.gemini = { apiKey: '', model: DEFAULTS.geminiModel };
         providerSettings.openai = { apiKey: '', model: DEFAULTS.openaiModel };
         providerSettings.anthropic = { apiKey: '', model: DEFAULTS.anthropicModel };
@@ -384,8 +476,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         const lang = getUiLang();
         applyDir(lang);
         applyI18n(getT(lang));
+        if (currentProvider === BUILTIN_PROVIDER) refreshBuiltinStatus();
         scheduleSave();
     });
+
+    el('builtinPrepareBtn').addEventListener('click', prepareBuiltinEngine);
+
+    try {
+        chrome.runtime.onMessage.addListener(handleBuiltinProgressMessage);
+    } catch (e) { }
 
     el('apiProvider').addEventListener('change', () => {
         saveCurrentProviderToMemory();
