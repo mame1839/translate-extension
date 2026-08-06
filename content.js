@@ -1908,6 +1908,7 @@
         invalidRequest: 'errInvalidRequest',
         unknownError: 'errUnknown',
         builtinUnavailable: 'builtinUnsupportedBrowser',
+        builtinEngineUnavailable: 'builtinEngineUnavailable',
         builtinLanguageUnsupported: 'builtinErrorLanguage',
         builtinSourceUnknown: 'builtinErrorSource',
         builtinPrepareFailed: 'builtinPrepareFailed'
@@ -1930,6 +1931,7 @@
         jsonExtractFailed: 'retry',
         unknownError: 'close',
         builtinUnavailable: 'settings',
+        builtinEngineUnavailable: 'settings',
         builtinLanguageUnsupported: 'settings',
         builtinSourceUnknown: 'settings',
         builtinPrepareFailed: 'retry'

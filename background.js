@@ -10,8 +10,9 @@ try {
 const errorMessages = {
     apiKeyNotSet: 'API key is not set. Please configure it in the options page.',
     endpointNotSet: 'Endpoint URL is not set. Please configure it in the options page.',
-    builtinUnavailable: 'Chrome built-in translation is not available in this browser. Use desktop Chrome 138 or later, or choose another provider in the options page.',
-    builtinLanguageUnsupported: 'Chrome built-in translation does not support this language pair. Please choose another provider in the options page.',
+    builtinUnavailable: 'Built-in translation is not available in this browser. Use desktop Chrome 138 or later, or Edge 148 or later, or choose another provider in the options page.',
+    builtinEngineUnavailable: 'Could not obtain the built-in translation engine. Check your network and free disk space, or choose another provider in the options page.',
+    builtinLanguageUnsupported: 'Built-in translation does not support this language pair. Please choose another provider in the options page.',
     builtinSourceUnknown: 'Could not detect the language of this page. Please choose another provider in the options page.',
     builtinPrepareFailed: 'Failed to prepare the built-in translation engine. Check your network and free disk space, then try again.',
     jsonParseFailed: 'Failed to parse JSON response from AI.',
@@ -36,6 +37,7 @@ const FATAL_TRANSLATION_ERRORS = [
     errorMessages.endpointNotSet,
     errorMessages.insufficientQuota,
     errorMessages.builtinUnavailable,
+    errorMessages.builtinEngineUnavailable,
     errorMessages.builtinLanguageUnsupported,
     errorMessages.builtinSourceUnknown
 ];
@@ -88,6 +90,8 @@ const BUILTIN_TRANSLATOR_CACHE_LIMIT = 4;
 const BUILTIN_LANGUAGE_SAMPLE_LIMIT = 4000;
 const BUILTIN_SOURCE_MIN_PERCENTAGE = 30;
 const BUILTIN_MAX_CONSECUTIVE_FAILURES = 3;
+const BUILTIN_BASELINE_SOURCE = 'en';
+const BUILTIN_BASELINE_TARGET = 'es';
 const BUILTIN_STRICT_TAG_SOURCE = '<(\\/?)([atbs])(\\d+)>';
 const BUILTIN_LOOSE_TAG_SOURCE = '<\\s*(\\/?)\\s*([atbsATBS])(\\d+)\\s*\\/?\\s*>';
 
@@ -209,14 +213,14 @@ chrome.runtime.onMessage.addListener(function (request, sender, sendResponse) {
     if (request.action === "builtinTranslatorStatus") {
         getBuiltinTranslatorStatus(request.targetLanguage)
             .then(sendResponse)
-            .catch(() => sendResponse({ supported: false, availability: 'unsupported' }));
+            .catch(() => sendResponse({ supported: false, availability: 'unsupported', engineReachable: false }));
         return true;
     }
 
     if (request.action === "builtinTranslatorPrepare") {
         prepareBuiltinTranslator(request.targetLanguage)
             .then(sendResponse)
-            .catch(() => sendResponse({ ok: false, availability: 'unavailable' }));
+            .catch(() => sendResponse({ ok: false, reason: 'prepareFailed' }));
         return true;
     }
 
@@ -782,6 +786,7 @@ async function performTranslation(apiCall, retryLimit, signal) {
                 errorMessages.insufficientQuota,
                 errorMessages.translationCancelled,
                 errorMessages.builtinUnavailable,
+                errorMessages.builtinEngineUnavailable,
                 errorMessages.builtinLanguageUnsupported,
                 errorMessages.builtinSourceUnknown
             ];
@@ -873,6 +878,27 @@ async function getBuiltinAvailability(sourceLanguage, targetLanguage) {
     } catch (e) {
         return 'unavailable';
     }
+}
+
+function isBuiltinAvailabilityUsable(availability) {
+    return availability === 'available' || availability === 'downloadable' || availability === 'downloading';
+}
+
+function builtinProbeSourceFor(targetLanguage) {
+    return targetLanguage === 'en' ? 'ja' : 'en';
+}
+
+async function builtinEngineReachable() {
+    const availability = await getBuiltinAvailability(BUILTIN_BASELINE_SOURCE, BUILTIN_BASELINE_TARGET);
+    return isBuiltinAvailabilityUsable(availability);
+}
+
+async function classifyBuiltinUnusablePair(sourceLanguage, targetLanguage) {
+    if (sourceLanguage === BUILTIN_BASELINE_SOURCE && targetLanguage === BUILTIN_BASELINE_TARGET) {
+        return 'builtinEngineUnavailable';
+    }
+    const engineReachable = await builtinEngineReachable();
+    return engineReachable ? 'builtinLanguageUnsupported' : 'builtinEngineUnavailable';
 }
 
 function abortableBuiltinPromise(promise, signal) {
@@ -1127,8 +1153,8 @@ async function translateBatchWithChromeBuiltin(fragmentBatch, retryLimit, signal
 
     const availability = await getBuiltinAvailability(sourceLanguage, targetLanguage);
     if (availability === 'unsupported') throw createTranslationError('builtinUnavailable');
-    if (availability !== 'available' && availability !== 'downloadable' && availability !== 'downloading') {
-        throw createTranslationError('builtinLanguageUnsupported');
+    if (!isBuiltinAvailabilityUsable(availability)) {
+        throw createTranslationError(await classifyBuiltinUnusablePair(sourceLanguage, targetLanguage));
     }
 
     let translator;
@@ -1172,27 +1198,29 @@ async function translateBatchWithChromeBuiltin(fragmentBatch, retryLimit, signal
 }
 
 async function getBuiltinTranslatorStatus(targetLanguageCode) {
-    if (!builtinTranslatorSupported()) return { supported: false, availability: 'unsupported' };
+    if (!builtinTranslatorSupported()) return { supported: false, availability: 'unsupported', engineReachable: false };
     const targetLanguage = normalizeBuiltinLanguageTag(targetLanguageCode);
-    const probeSource = targetLanguage === 'en' ? 'ja' : 'en';
+    const probeSource = builtinProbeSourceFor(targetLanguage);
     const availability = await getBuiltinAvailability(probeSource, targetLanguage);
-    return { supported: true, availability, targetLanguage };
+    const usable = isBuiltinAvailabilityUsable(availability);
+    const engineReachable = usable ? true : await builtinEngineReachable();
+    return { supported: true, availability, targetLanguage, engineReachable };
 }
 
 async function prepareBuiltinTranslator(targetLanguageCode) {
     const status = await getBuiltinTranslatorStatus(targetLanguageCode);
-    if (!status.supported) return { ok: false, availability: 'unsupported' };
-    if (status.availability !== 'available' && status.availability !== 'downloadable' && status.availability !== 'downloading') {
-        return { ok: false, availability: 'unavailable' };
+    if (!status.supported) return { ok: false, reason: 'unsupportedBrowser' };
+    if (!isBuiltinAvailabilityUsable(status.availability)) {
+        return { ok: false, reason: status.engineReachable ? 'unsupportedLanguage' : 'engineUnavailable' };
     }
-    const probeSource = status.targetLanguage === 'en' ? 'ja' : 'en';
+    const probeSource = builtinProbeSourceFor(status.targetLanguage);
     try {
         await acquireBuiltinTranslator(probeSource, status.targetLanguage);
     } catch (error) {
         forgetBuiltinTranslator(probeSource, status.targetLanguage);
-        return { ok: false, availability: 'downloadable' };
+        return { ok: false, reason: 'prepareFailed' };
     }
-    return { ok: true, availability: 'available' };
+    return { ok: true };
 }
 
 const PROMPT_EXAMPLE_OUTPUTS = {

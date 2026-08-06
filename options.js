@@ -22,6 +22,13 @@ const MODEL_PLACEHOLDERS = {
 
 const BUILTIN_PROVIDER = 'chrome-builtin';
 
+const BUILTIN_PREPARE_FAILURE_KEYS = {
+    unsupportedBrowser: 'builtinUnsupportedBrowser',
+    engineUnavailable: 'builtinEngineUnavailable',
+    unsupportedLanguage: 'builtinUnsupportedLanguage',
+    prepareFailed: 'builtinPrepareFailed'
+};
+
 const providerSettings = {
     'chrome-builtin': { apiKey: '', model: '' },
     gemini: { apiKey: '', model: DEFAULTS.geminiModel },
@@ -155,12 +162,16 @@ function setBuiltinProgress(percent) {
     el('builtinProgressBar').style.inlineSize = `${clampInt(percent, 0, 100, 0)}%`;
 }
 
+function builtinMessage(key) {
+    const text = currentT()[key] || '';
+    return text.replace('{language}', languageNativeName(getUiLang()));
+}
+
 async function refreshBuiltinStatus() {
     if (builtinPreparing) return;
     const token = ++builtinStatusToken;
-    const t = currentT();
     setBuiltinProgress(null);
-    setBuiltinStatus(t.builtinChecking, '');
+    setBuiltinStatus(builtinMessage('builtinChecking'), '');
     el('builtinPrepareBtn').hidden = true;
     let status = null;
     try {
@@ -168,28 +179,27 @@ async function refreshBuiltinStatus() {
     } catch (e) { }
     if (token !== builtinStatusToken) return;
     if (!status || !status.supported) {
-        setBuiltinStatus(t.builtinUnsupportedBrowser, 'error');
+        setBuiltinStatus(builtinMessage('builtinUnsupportedBrowser'), 'error');
         return;
     }
     if (status.availability === 'available') {
-        setBuiltinStatus(t.builtinReady, 'ready');
+        setBuiltinStatus(builtinMessage('builtinReady'), 'ready');
         return;
     }
     if (status.availability === 'downloadable' || status.availability === 'downloading') {
-        setBuiltinStatus(t.builtinNeedsDownload, '');
+        setBuiltinStatus(builtinMessage('builtinNeedsDownload'), '');
         el('builtinPrepareBtn').hidden = false;
         return;
     }
-    setBuiltinStatus(t.builtinUnsupportedLanguage.replace('{language}', languageNativeName(getUiLang())), 'error');
+    setBuiltinStatus(builtinMessage(status.engineReachable ? 'builtinUnsupportedLanguage' : 'builtinEngineUnavailable'), 'error');
 }
 
 async function prepareBuiltinEngine() {
     if (builtinPreparing) return;
     builtinPreparing = true;
     builtinStatusToken++;
-    const t = currentT();
     el('builtinPrepareBtn').disabled = true;
-    setBuiltinStatus(t.builtinPreparing.replace('{percent}', '0'), '');
+    setBuiltinStatus(currentT().builtinPreparing.replace('{percent}', '0'), '');
     setBuiltinProgress(0);
     let result = null;
     try {
@@ -199,12 +209,13 @@ async function prepareBuiltinEngine() {
     el('builtinPrepareBtn').disabled = false;
     setBuiltinProgress(null);
     if (result && result.ok) {
-        setBuiltinStatus(currentT().builtinReady, 'ready');
+        setBuiltinStatus(builtinMessage('builtinReady'), 'ready');
         el('builtinPrepareBtn').hidden = true;
         return;
     }
-    setBuiltinStatus(currentT().builtinPrepareFailed, 'error');
-    el('builtinPrepareBtn').hidden = false;
+    const failureKey = BUILTIN_PREPARE_FAILURE_KEYS[result?.reason] || 'builtinPrepareFailed';
+    setBuiltinStatus(builtinMessage(failureKey), 'error');
+    el('builtinPrepareBtn').hidden = failureKey !== 'builtinPrepareFailed';
 }
 
 function handleBuiltinProgressMessage(message) {
