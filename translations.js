@@ -168,7 +168,6 @@ const TRANSLATIONS = {
         panelStreamingNote: 'Applying text as it arrives',
         panelMinimize: 'Minimize',
         panelRestore: 'Restore',
-        panelShowOriginal: 'Show original',
     },
     zh: {
         popupName: 'AI 翻译', popupSub: 'AI Website Translator',
@@ -315,7 +314,6 @@ const TRANSLATIONS = {
         panelStreamingNote: '边接收边显示译文',
         panelMinimize: '最小化',
         panelRestore: '还原',
-        panelShowOriginal: '显示原文',
     },
     'zh-Hant': {
         popupName: 'AI 翻譯', popupSub: 'AI Website Translator',
@@ -462,7 +460,6 @@ const TRANSLATIONS = {
         panelStreamingNote: '邊接收邊顯示譯文',
         panelMinimize: '最小化',
         panelRestore: '還原',
-        panelShowOriginal: '顯示原文',
     },
     hi: {
         popupName: 'AI अनुवादक', popupSub: 'AI Website Translator',
@@ -609,7 +606,6 @@ const TRANSLATIONS = {
         panelStreamingNote: 'अनुवाद आते ही दिखाया जा रहा है',
         panelMinimize: 'छोटा करें',
         panelRestore: 'पुनर्स्थापित करें',
-        panelShowOriginal: 'मूल दिखाएँ',
     },
     es: {
         popupName: 'Traductor AI', popupSub: 'AI Website Translator',
@@ -756,7 +752,6 @@ const TRANSLATIONS = {
         panelStreamingNote: 'Mostrando el texto a medida que llega',
         panelMinimize: 'Minimizar',
         panelRestore: 'Restaurar',
-        panelShowOriginal: 'Ver original',
     },
     fr: {
         popupName: 'Traducteur IA', popupSub: 'AI Website Translator',
@@ -903,7 +898,6 @@ const TRANSLATIONS = {
         panelStreamingNote: 'Le texte s\'affiche au fur et à mesure',
         panelMinimize: 'Réduire',
         panelRestore: 'Restaurer',
-        panelShowOriginal: 'Voir l\'original',
     },
     ar: {
         popupName: 'مترجم AI', popupSub: 'AI Website Translator',
@@ -1050,7 +1044,6 @@ const TRANSLATIONS = {
         panelStreamingNote: 'يُعرض النص المترجم فور وصوله',
         panelMinimize: 'تصغير',
         panelRestore: 'استعادة',
-        panelShowOriginal: 'عرض النص الأصلي',
     },
     bn: {
         popupName: 'AI অনুবাদক', popupSub: 'AI Website Translator',
@@ -1197,7 +1190,6 @@ const TRANSLATIONS = {
         panelStreamingNote: 'অনুবাদ আসামাত্র দেখানো হচ্ছে',
         panelMinimize: 'ছোট করুন',
         panelRestore: 'পুনরুদ্ধার করুন',
-        panelShowOriginal: 'মূল লেখা দেখুন',
     },
     ru: {
         popupName: 'AI Переводчик', popupSub: 'AI Website Translator',
@@ -1344,7 +1336,6 @@ const TRANSLATIONS = {
         panelStreamingNote: 'Текст появляется по мере получения',
         panelMinimize: 'Свернуть',
         panelRestore: 'Развернуть',
-        panelShowOriginal: 'Показать оригинал',
     },
     pt: {
         popupName: 'Tradutor AI', popupSub: 'AI Website Translator',
@@ -1491,7 +1482,6 @@ const TRANSLATIONS = {
         panelStreamingNote: 'Exibindo o texto conforme ele chega',
         panelMinimize: 'Minimizar',
         panelRestore: 'Restaurar',
-        panelShowOriginal: 'Ver original',
     },
     ur: {
         popupName: 'AI مترجم', popupSub: 'AI Website Translator',
@@ -1638,7 +1628,6 @@ const TRANSLATIONS = {
         panelStreamingNote: 'ترجمہ موصول ہوتے ہی دکھایا جا رہا ہے',
         panelMinimize: 'چھوٹا کریں',
         panelRestore: 'بحال کریں',
-        panelShowOriginal: 'اصل متن دکھائیں',
     },
     id: {
         popupName: 'Penerjemah AI', popupSub: 'AI Website Translator',
@@ -1785,7 +1774,6 @@ const TRANSLATIONS = {
         panelStreamingNote: 'Teks ditampilkan begitu diterima',
         panelMinimize: 'Perkecil',
         panelRestore: 'Pulihkan',
-        panelShowOriginal: 'Lihat asli',
     },
     de: {
         popupName: 'KI-Übersetzer', popupSub: 'AI Website Translator',
@@ -1932,7 +1920,6 @@ const TRANSLATIONS = {
         panelStreamingNote: 'Text wird angezeigt, sobald er eintrifft',
         panelMinimize: 'Minimieren',
         panelRestore: 'Wiederherstellen',
-        panelShowOriginal: 'Original anzeigen',
     },
     ja: {
         popupName: 'AI 翻訳', popupSub: 'AI Website Translator',
@@ -2079,7 +2066,6 @@ const TRANSLATIONS = {
         panelStreamingNote: '受信した訳文から順に表示しています',
         panelMinimize: '最小化',
         panelRestore: '元に戻す',
-        panelShowOriginal: '原文を表示',
     },
     sw: {
         popupName: 'Mtafsiri AI', popupSub: 'AI Website Translator',
@@ -2226,7 +2212,6 @@ const TRANSLATIONS = {
         panelStreamingNote: 'Maandishi yanaonyeshwa yanapowasili',
         panelMinimize: 'Punguza',
         panelRestore: 'Rejesha',
-        panelShowOriginal: 'Onyesha asili',
     },
     mr: {
         popupName: 'AI अनुवादक', popupSub: 'AI Website Translator',
@@ -2373,7 +2358,6 @@ const TRANSLATIONS = {
         panelStreamingNote: 'भाषांतर येताच दाखवले जात आहे',
         panelMinimize: 'लहान करा',
         panelRestore: 'पूर्ववत करा',
-        panelShowOriginal: 'मूळ दाखवा',
     },
     te: {
         popupName: 'AI అనువాదకుడు', popupSub: 'AI Website Translator',
@@ -2520,7 +2504,6 @@ const TRANSLATIONS = {
         panelStreamingNote: 'అనువాదం అందిన వెంటనే చూపిస్తోంది',
         panelMinimize: 'కుదించు',
         panelRestore: 'పునరుద్ధరించు',
-        panelShowOriginal: 'అసలు చూపించు',
     },
     tr: {
         popupName: 'AI Çevirmen', popupSub: 'AI Website Translator',
@@ -2667,7 +2650,6 @@ const TRANSLATIONS = {
         panelStreamingNote: 'Metin geldikçe gösteriliyor',
         panelMinimize: 'Küçült',
         panelRestore: 'Geri yükle',
-        panelShowOriginal: 'Özgün metni göster',
     },
     ta: {
         popupName: 'AI மொழிபெயர்ப்பாளர்', popupSub: 'AI Website Translator',
@@ -2814,7 +2796,6 @@ const TRANSLATIONS = {
         panelStreamingNote: 'வரும் வரிசையில் மொழிபெயர்ப்பு காட்டப்படுகிறது',
         panelMinimize: 'சிறிதாக்கு',
         panelRestore: 'மீட்டமை',
-        panelShowOriginal: 'மூலத்தைக் காட்டு',
     },
     vi: {
         popupName: 'Dịch AI', popupSub: 'AI Website Translator',
@@ -2961,7 +2942,6 @@ const TRANSLATIONS = {
         panelStreamingNote: 'Hiển thị văn bản ngay khi nhận được',
         panelMinimize: 'Thu nhỏ',
         panelRestore: 'Khôi phục',
-        panelShowOriginal: 'Xem bản gốc',
     },
     ko: {
         popupName: 'AI 번역기', popupSub: 'AI Website Translator',
@@ -3108,7 +3088,6 @@ const TRANSLATIONS = {
         panelStreamingNote: '수신되는 대로 번역문을 표시합니다',
         panelMinimize: '최소화',
         panelRestore: '복원',
-        panelShowOriginal: '원문 보기',
     },
 };
 
