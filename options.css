@@ -396,9 +396,13 @@ input[type="number"] {
 
 .switch input {
   position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
   opacity: 0;
-  width: 0;
-  height: 0;
+  z-index: 1;
+  cursor: pointer;
 }
 
 .track {
@@ -408,7 +412,6 @@ input[type="number"] {
   background: var(--surface-2);
   border: 1px solid var(--outline);
   transition: background-color 180ms var(--ease), border-color 180ms var(--ease);
-  cursor: pointer;
 }
 
 .track::after {
