@@ -2238,6 +2238,55 @@ async function pageCacheStats() {
     return { entries, bytes };
 }
 
+const PAGE_CACHE_LIST_PAGE_SIZE = 25;
+
+function pageCacheSummarize(record) {
+    return {
+        key: record.key,
+        url: typeof record.url === 'string' ? record.url : '',
+        lang: typeof record.lang === 'string' ? record.lang : '',
+        savedAt: Number.isFinite(record.savedAt) ? record.savedAt : 0,
+        blocks: Array.isArray(record.blocks) ? record.blocks.length : 0
+    };
+}
+
+async function pageCacheList(offset, limit) {
+    const start = Math.max(0, Number.isFinite(offset) ? Math.floor(offset) : 0);
+    const size = Math.min(PAGE_CACHE_LIST_PAGE_SIZE, Math.max(1, Number.isFinite(limit) ? Math.floor(limit) : PAGE_CACHE_LIST_PAGE_SIZE));
+    let db;
+    try { db = await openPageCacheDB(); } catch (e) { return { pages: [], total: 0, offset: start }; }
+    let total = 0;
+    const pages = [];
+    try {
+        total = await pageCacheCountEntries(db);
+        if (total > start) {
+            const tx = db.transaction(PAGE_CACHE_STORE, 'readonly');
+            const store = tx.objectStore(PAGE_CACHE_STORE);
+            const index = store.index('savedAt');
+            await new Promise((resolve) => {
+                let skipped = 0;
+                let cursorReq;
+                try { cursorReq = index.openCursor(null, 'prev'); } catch (e) { resolve(); return; }
+                cursorReq.onsuccess = (event) => {
+                    const cursor = event.target.result;
+                    if (!cursor || pages.length >= size) { resolve(); return; }
+                    if (skipped < start) {
+                        skipped++;
+                        cursor.continue();
+                        return;
+                    }
+                    try { pages.push(pageCacheSummarize(cursor.value)); } catch (e) { }
+                    cursor.continue();
+                };
+                cursorReq.onerror = (e) => { try { e.preventDefault(); } catch (err) { } resolve(); };
+            });
+            try { await awaitTransaction(tx); } catch (e) { }
+        }
+    } catch (e) { }
+    finally { try { db.close(); } catch (e) { } }
+    return { pages, total, offset: start };
+}
+
 async function pageCacheClearAll() {
     let db;
     try { db = await openPageCacheDB(); } catch (e) { return false; }
@@ -2277,6 +2326,20 @@ chrome.runtime.onMessage.addListener(function (request, sender, sendResponse) {
         pageCacheClearAll()
             .then(cleared => sendResponse({ cleared }))
             .catch(() => sendResponse({ cleared: false }));
+        return true;
+    }
+
+    if (request.action === "pageCacheList") {
+        pageCacheList(request.offset, request.limit)
+            .then(result => sendResponse(result))
+            .catch(() => sendResponse({ pages: [], total: 0, offset: 0 }));
+        return true;
+    }
+
+    if (request.action === "pageCacheRemove") {
+        pageCacheDelete(request.key)
+            .then(() => sendResponse({ removed: true }))
+            .catch(() => sendResponse({ removed: false }));
         return true;
     }
 

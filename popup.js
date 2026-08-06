@@ -281,7 +281,7 @@ function renderActions(view, pageState) {
         area.appendChild(buildSegmented(pageState));
         const row = document.createElement('div');
         row.className = 'action-row';
-        row.appendChild(actionButton('btn btn-text', t.popupRetranslate, startTranslation));
+        row.appendChild(actionButton('btn btn-text', t.popupRetranslate, retranslateFromScratch));
         area.appendChild(row);
     } else if (view === 'excluded') {
         area.appendChild(actionButton('btn btn-outlined', t.popupTranslateAnyway, startTranslation));
@@ -323,6 +323,17 @@ async function startTranslation() {
     setActionsDisabled(true);
     try {
         await chrome.tabs.sendMessage(activeTab.id, { action: 'startTranslationFromPopup' });
+    } catch (e) { }
+    busy = false;
+    refreshPageState(true);
+}
+
+async function retranslateFromScratch() {
+    if (busy || !activeTab || !pageSupported) return;
+    busy = true;
+    setActionsDisabled(true);
+    try {
+        await chrome.tabs.sendMessage(activeTab.id, { action: 'clearPageCacheAndRetranslate' });
     } catch (e) { }
     busy = false;
     refreshPageState(true);
