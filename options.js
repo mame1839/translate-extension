@@ -27,23 +27,58 @@ const providerSettings = {
     'openai-compatible': { apiKey: '', model: DEFAULTS.compatibleModel, endpoint: '' }
 };
 
+const RTL_LANGS = new Set(['ar', 'ur', 'he', 'fa']);
+const SECTION_IDS = ['general', 'provider', 'behavior', 'sites', 'advanced'];
+
+const NUMBER_FIELDS = {
+    maxToken: { min: 1, max: 1000000, fallback: DEFAULTS.maxToken },
+    delayBetweenRequests: { min: 0, max: 3600, fallback: Math.round(DEFAULTS.delayBetweenRequests / 1000) },
+    concurrencyLimit: { min: 1, max: 50, fallback: DEFAULTS.concurrencyLimit },
+    maxRetries: { min: 0, max: 10, fallback: DEFAULTS.maxRetries },
+    timeout: { min: 1, max: 600, fallback: DEFAULTS.timeout }
+};
+
 let currentProvider = DEFAULTS.apiProvider;
+let excludeEntries = [];
+let saveTimer = null;
+let snackTimer = null;
+
+function el(id) {
+    return document.getElementById(id);
+}
+
+function getUiLang() {
+    return el('targetLanguage').value || 'en';
+}
+
+function currentT() {
+    return getT(getUiLang());
+}
 
 function applyI18n(t) {
     document.title = t.pageTitle;
-    document.querySelectorAll('[data-i18n]').forEach(el => {
-        const key = el.dataset.i18n;
-        if (t[key] !== undefined) el.textContent = t[key];
+    document.querySelectorAll('[data-i18n]').forEach(node => {
+        const key = node.dataset.i18n;
+        if (t[key] !== undefined) node.textContent = t[key];
     });
-    document.querySelectorAll('[data-i18n-tip]').forEach(el => {
-        const key = el.dataset.i18nTip;
-        if (t[key] !== undefined) el.dataset.tip = t[key];
+    document.querySelectorAll('[data-i18n-title]').forEach(node => {
+        const key = node.dataset.i18nTitle;
+        if (t[key] !== undefined) {
+            node.title = t[key];
+            node.setAttribute('aria-label', t[key]);
+        }
     });
+    renderExcludeRows();
+}
+
+function applyDir(lang) {
+    document.documentElement.lang = lang;
+    document.documentElement.dir = RTL_LANGS.has(lang.split('-')[0]) ? 'rtl' : 'ltr';
 }
 
 function populateLanguageSelect(selected) {
-    const sel = document.getElementById('targetLanguage');
-    sel.innerHTML = '';
+    const sel = el('targetLanguage');
+    sel.replaceChildren();
     LANGUAGES.forEach(lang => {
         const opt = document.createElement('option');
         opt.value = lang.code;
@@ -55,12 +90,12 @@ function populateLanguageSelect(selected) {
 
 function updateProviderUI(provider) {
     const settings = providerSettings[provider] || providerSettings.gemini;
-    document.getElementById('apiKey').value = settings.apiKey;
-    document.getElementById('aiModel').value = settings.model;
-    document.getElementById('aiModel').placeholder = MODEL_PLACEHOLDERS[provider] || '';
-    const endpointGroup = document.getElementById('endpointGroup');
+    el('apiKey').value = settings.apiKey;
+    el('aiModel').value = settings.model;
+    el('aiModel').placeholder = MODEL_PLACEHOLDERS[provider] || '';
+    const endpointGroup = el('endpointGroup');
     if (provider === 'openai-compatible') {
-        document.getElementById('endpointUrl').value = settings.endpoint || '';
+        el('endpointUrl').value = settings.endpoint || '';
         endpointGroup.style.display = '';
     } else {
         endpointGroup.style.display = 'none';
@@ -70,12 +105,203 @@ function updateProviderUI(provider) {
 function saveCurrentProviderToMemory() {
     const settings = providerSettings[currentProvider];
     if (!settings) return;
-    settings.apiKey = document.getElementById('apiKey').value;
-    settings.model = document.getElementById('aiModel').value;
+    settings.apiKey = el('apiKey').value;
+    settings.model = el('aiModel').value;
     if (currentProvider === 'openai-compatible') {
-        settings.endpoint = document.getElementById('endpointUrl').value;
+        settings.endpoint = el('endpointUrl').value;
     }
 }
+
+function clampInt(value, min, max, fallback) {
+    const n = parseInt(value, 10);
+    if (Number.isNaN(n)) return fallback;
+    return Math.min(max, Math.max(min, n));
+}
+
+function readNumberField(id) {
+    const spec = NUMBER_FIELDS[id];
+    return clampInt(el(id).value, spec.min, spec.max, spec.fallback);
+}
+
+function normalizeNumberField(id) {
+    el(id).value = readNumberField(id);
+}
+
+function normalizeExcludeList(value) {
+    if (Array.isArray(value)) return value.map(entry => String(entry).trim()).filter(Boolean);
+    if (typeof value === 'string') return value.split(/\r?\n/).map(entry => entry.trim()).filter(Boolean);
+    return [];
+}
+
+function normalizeSiteEntry(raw) {
+    const trimmed = String(raw || '').trim();
+    if (!trimmed) return '';
+    if (/^https?:\/\//i.test(trimmed)) return trimmed;
+    return 'https://' + trimmed;
+}
+
+function renderExcludeRows() {
+    const container = el('excludeRows');
+    if (!container) return;
+    const t = currentT();
+    container.replaceChildren();
+    if (excludeEntries.length === 0) {
+        const empty = document.createElement('div');
+        empty.className = 'empty-list';
+        empty.textContent = t.optEmptyList;
+        container.appendChild(empty);
+        return;
+    }
+    excludeEntries.forEach((entry, index) => {
+        const row = document.createElement('div');
+        row.className = 'chip-row';
+        const host = document.createElement('span');
+        host.className = 'host';
+        host.textContent = entry;
+        host.title = entry;
+        const removeBtn = document.createElement('button');
+        removeBtn.type = 'button';
+        removeBtn.className = 'icon-btn';
+        removeBtn.title = t.optRemove;
+        removeBtn.setAttribute('aria-label', t.optRemove);
+        removeBtn.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+        removeBtn.addEventListener('click', () => {
+            excludeEntries.splice(index, 1);
+            renderExcludeRows();
+            scheduleSave();
+        });
+        row.appendChild(host);
+        row.appendChild(removeBtn);
+        container.appendChild(row);
+    });
+}
+
+function addExcludeEntry() {
+    const input = el('excludeInput');
+    const entry = normalizeSiteEntry(input.value);
+    if (!entry) return;
+    if (!excludeEntries.includes(entry)) {
+        excludeEntries.push(entry);
+        renderExcludeRows();
+        scheduleSave();
+    }
+    input.value = '';
+    input.focus();
+}
+
+function isValidEndpoint(raw) {
+    try {
+        const parsed = new URL(raw);
+        return parsed.protocol === 'https:' || parsed.protocol === 'http:';
+    } catch (e) {
+        return false;
+    }
+}
+
+function showSnackbar(message, isError) {
+    const snackbar = el('snackbar');
+    el('snackbarText').textContent = message;
+    snackbar.classList.toggle('error', !!isError);
+    snackbar.classList.add('show');
+    clearTimeout(snackTimer);
+    snackTimer = setTimeout(() => snackbar.classList.remove('show'), 2400);
+}
+
+function scheduleSave() {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(saveNow, 400);
+}
+
+async function saveNow() {
+    clearTimeout(saveTimer);
+    saveTimer = null;
+    saveCurrentProviderToMemory();
+    const t = currentT();
+
+    const compatibleEndpointRaw = providerSettings['openai-compatible'].endpoint.trim();
+    if (currentProvider === 'openai-compatible' && compatibleEndpointRaw && !isValidEndpoint(compatibleEndpointRaw)) {
+        showSnackbar(t.optInvalidEndpoint, true);
+        return;
+    }
+
+    const saveData = {
+        targetLanguage: getUiLang(),
+        apiProvider: currentProvider,
+        geminiApiKey: providerSettings.gemini.apiKey,
+        geminiModel: providerSettings.gemini.model.trim() || DEFAULTS.geminiModel,
+        openaiApiKey: providerSettings.openai.apiKey,
+        openaiModel: providerSettings.openai.model.trim() || DEFAULTS.openaiModel,
+        anthropicApiKey: providerSettings.anthropic.apiKey,
+        anthropicModel: providerSettings.anthropic.model.trim() || DEFAULTS.anthropicModel,
+        compatibleApiKey: providerSettings['openai-compatible'].apiKey,
+        compatibleModel: providerSettings['openai-compatible'].model.trim(),
+        compatibleEndpoint: compatibleEndpointRaw,
+        delayBetweenRequests: readNumberField('delayBetweenRequests') * 1000,
+        maxToken: readNumberField('maxToken'),
+        concurrencyLimit: readNumberField('concurrencyLimit'),
+        maxRetries: readNumberField('maxRetries'),
+        timeout: readNumberField('timeout'),
+        toggleBlueBackground: el('toggleBlueBackground').checked,
+        realTimeTranslation: el('realTimeTranslation').checked,
+        showProgressPopup: el('showProgressPopup').checked,
+        hidePromptAllSites: el('hidePromptAllSites').checked,
+        showContextMenu: el('showContextMenu').checked,
+        autoRetranslateDomain: el('autoRetranslateDomain').checked,
+        streamingTranslation: el('streamingTranslation').checked,
+        excludeList: excludeEntries.slice()
+    };
+
+    try {
+        await chrome.storage.local.set(saveData);
+        showSnackbar(t.saved, false);
+    } catch (e) {
+        showSnackbar(t.saveError, true);
+    }
+}
+
+function activateSection(id) {
+    const target = SECTION_IDS.includes(id) ? id : SECTION_IDS[0];
+    document.querySelectorAll('.nav-item').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.section === target);
+    });
+    document.querySelectorAll('main > section').forEach(section => {
+        section.hidden = section.dataset.panel !== target;
+    });
+    try { history.replaceState(null, '', '#' + target); } catch (e) { }
+}
+
+const resetHandlers = {
+    general: () => {
+        populateLanguageSelect('en');
+        applyDir('en');
+        applyI18n(getT('en'));
+        el('toggleBlueBackground').checked = false;
+    },
+    provider: () => {
+        providerSettings.gemini = { apiKey: '', model: DEFAULTS.geminiModel };
+        providerSettings.openai = { apiKey: '', model: DEFAULTS.openaiModel };
+        providerSettings.anthropic = { apiKey: '', model: DEFAULTS.anthropicModel };
+        providerSettings['openai-compatible'] = { apiKey: '', model: DEFAULTS.compatibleModel, endpoint: '' };
+        currentProvider = DEFAULTS.apiProvider;
+        el('apiProvider').value = currentProvider;
+        updateProviderUI(currentProvider);
+    },
+    behavior: () => {
+        el('realTimeTranslation').checked = false;
+        el('hidePromptAllSites').checked = false;
+        el('streamingTranslation').checked = false;
+        el('showProgressPopup').checked = true;
+        el('showContextMenu').checked = true;
+        el('autoRetranslateDomain').checked = true;
+    },
+    advanced: () => {
+        el('maxToken').value = DEFAULTS.maxToken;
+        el('delayBetweenRequests').value = Math.round(DEFAULTS.delayBetweenRequests / 1000);
+        el('concurrencyLimit').value = DEFAULTS.concurrencyLimit;
+        el('maxRetries').value = DEFAULTS.maxRetries;
+        el('timeout').value = DEFAULTS.timeout;
+    }
+};
 
 document.addEventListener('DOMContentLoaded', async () => {
     try {
@@ -92,7 +318,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         const lang = items.targetLanguage || 'en';
         populateLanguageSelect(lang);
-        applyI18n(getT(lang));
+        applyDir(lang);
 
         providerSettings.gemini.apiKey = items.geminiApiKey || '';
         providerSettings.gemini.model = items.geminiModel || DEFAULTS.geminiModel;
@@ -105,165 +331,99 @@ document.addEventListener('DOMContentLoaded', async () => {
         providerSettings['openai-compatible'].endpoint = items.compatibleEndpoint || '';
 
         currentProvider = items.apiProvider || DEFAULTS.apiProvider;
-        document.getElementById('apiProvider').value = currentProvider;
+        el('apiProvider').value = currentProvider;
         updateProviderUI(currentProvider);
 
-        document.getElementById('delayBetweenRequests').value = Math.round((items.delayBetweenRequests ?? DEFAULTS.delayBetweenRequests) / 1000);
-        document.getElementById('maxToken').value = items.maxToken ?? DEFAULTS.maxToken;
-        document.getElementById('concurrencyLimit').value = items.concurrencyLimit ?? DEFAULTS.concurrencyLimit;
-        document.getElementById('maxRetries').value = items.maxRetries ?? DEFAULTS.maxRetries;
-        document.getElementById('timeout').value = items.timeout ?? DEFAULTS.timeout;
-        document.getElementById('toggleBlueBackground').checked = items.toggleBlueBackground === true;
-        document.getElementById('realTimeTranslation').checked = items.realTimeTranslation === true;
-        document.getElementById('showProgressPopup').checked = items.showProgressPopup !== false;
-        document.getElementById('hidePromptAllSites').checked = items.hidePromptAllSites === true;
-        document.getElementById('showContextMenu').checked = items.showContextMenu !== false;
-        document.getElementById('autoRetranslateDomain').checked = items.autoRetranslateDomain !== false;
-        document.getElementById('streamingTranslation').checked = items.streamingTranslation === true;
-        document.getElementById('excludeList').value = (items.excludeList && Array.isArray(items.excludeList)) ? items.excludeList.join('\n') : '';
-    } catch (error) {
-        console.error('Error loading settings:', error);
+        el('delayBetweenRequests').value = Math.round((items.delayBetweenRequests ?? DEFAULTS.delayBetweenRequests) / 1000);
+        el('maxToken').value = items.maxToken ?? DEFAULTS.maxToken;
+        el('concurrencyLimit').value = items.concurrencyLimit ?? DEFAULTS.concurrencyLimit;
+        el('maxRetries').value = items.maxRetries ?? DEFAULTS.maxRetries;
+        el('timeout').value = items.timeout ?? DEFAULTS.timeout;
+        el('toggleBlueBackground').checked = items.toggleBlueBackground === true;
+        el('realTimeTranslation').checked = items.realTimeTranslation === true;
+        el('showProgressPopup').checked = items.showProgressPopup !== false;
+        el('hidePromptAllSites').checked = items.hidePromptAllSites === true;
+        el('showContextMenu').checked = items.showContextMenu !== false;
+        el('autoRetranslateDomain').checked = items.autoRetranslateDomain !== false;
+        el('streamingTranslation').checked = items.streamingTranslation === true;
+        excludeEntries = normalizeExcludeList(items.excludeList);
+
+        applyI18n(getT(lang));
+    } catch (e) {
+        applyI18n(getT('en'));
     }
 
-    const maxTokenInput = document.getElementById('maxToken');
+    activateSection((location.hash || '').replace('#', ''));
 
-    const resetHandlers = {
-        language: () => {
-            populateLanguageSelect('en');
-            document.getElementById('targetLanguage').value = 'en';
-            applyI18n(getT('en'));
-        },
-        api: () => {
-            providerSettings.gemini = { apiKey: '', model: DEFAULTS.geminiModel };
-            providerSettings.openai = { apiKey: '', model: DEFAULTS.openaiModel };
-            providerSettings.anthropic = { apiKey: '', model: DEFAULTS.anthropicModel };
-            providerSettings['openai-compatible'] = { apiKey: '', model: DEFAULTS.compatibleModel, endpoint: '' };
-            currentProvider = DEFAULTS.apiProvider;
-            document.getElementById('apiProvider').value = currentProvider;
-            updateProviderUI(currentProvider);
-        },
-        output: () => {
-            maxTokenInput.value = DEFAULTS.maxToken;
-        },
-        network: () => {
-            document.getElementById('delayBetweenRequests').value = Math.round(DEFAULTS.delayBetweenRequests / 1000);
-            document.getElementById('concurrencyLimit').value = DEFAULTS.concurrencyLimit;
-            document.getElementById('maxRetries').value = DEFAULTS.maxRetries;
-            document.getElementById('timeout').value = DEFAULTS.timeout;
-        },
-        display: () => {
-            document.getElementById('toggleBlueBackground').checked = false;
-            document.getElementById('realTimeTranslation').checked = false;
-            document.getElementById('showProgressPopup').checked = true;
-            document.getElementById('hidePromptAllSites').checked = false;
-            document.getElementById('showContextMenu').checked = true;
-            document.getElementById('autoRetranslateDomain').checked = true;
-            document.getElementById('streamingTranslation').checked = false;
-        },
-        exclude: () => {
-            document.getElementById('excludeList').value = '';
-        },
-    };
+    document.querySelectorAll('.nav-item').forEach(btn => {
+        btn.addEventListener('click', () => activateSection(btn.dataset.section));
+    });
 
-    document.querySelectorAll('.btn-reset').forEach(btn => {
-        btn.addEventListener('click', () => {
-            const t = getT(document.getElementById('targetLanguage').value);
-            if (confirm(t.resetConfirm)) {
-                resetHandlers[btn.dataset.reset]?.();
-            }
+    window.addEventListener('hashchange', () => {
+        activateSection((location.hash || '').replace('#', ''));
+    });
+
+    el('targetLanguage').addEventListener('change', () => {
+        const lang = getUiLang();
+        applyDir(lang);
+        applyI18n(getT(lang));
+        scheduleSave();
+    });
+
+    el('apiProvider').addEventListener('change', () => {
+        saveCurrentProviderToMemory();
+        currentProvider = el('apiProvider').value;
+        updateProviderUI(currentProvider);
+        scheduleSave();
+    });
+
+    ['apiKey', 'aiModel', 'endpointUrl'].forEach(id => {
+        el(id).addEventListener('input', scheduleSave);
+    });
+
+    Object.keys(NUMBER_FIELDS).forEach(id => {
+        el(id).addEventListener('input', scheduleSave);
+        el(id).addEventListener('change', () => {
+            normalizeNumberField(id);
+            scheduleSave();
         });
     });
 
-    document.querySelectorAll('.help-icon').forEach(el => {
-        el.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); });
+    ['toggleBlueBackground', 'realTimeTranslation', 'showProgressPopup', 'hidePromptAllSites', 'showContextMenu', 'autoRetranslateDomain', 'streamingTranslation'].forEach(id => {
+        el(id).addEventListener('change', scheduleSave);
     });
-});
 
-document.getElementById('targetLanguage').addEventListener('change', () => {
-    const lang = document.getElementById('targetLanguage').value;
-    applyI18n(getT(lang));
-});
+    el('toggleKeyVisibility').addEventListener('click', () => {
+        const input = el('apiKey');
+        const reveal = input.type === 'password';
+        input.type = reveal ? 'text' : 'password';
+        el('eyeShow').hidden = reveal;
+        el('eyeHide').hidden = !reveal;
+    });
 
-document.getElementById('apiProvider').addEventListener('change', () => {
-    saveCurrentProviderToMemory();
-    currentProvider = document.getElementById('apiProvider').value;
-    updateProviderUI(currentProvider);
-});
-
-document.getElementById('saveBtn').addEventListener('click', async () => {
-    saveCurrentProviderToMemory();
-
-    const compatibleEndpointRaw = providerSettings['openai-compatible'].endpoint.trim();
-    if (currentProvider === 'openai-compatible' && compatibleEndpointRaw) {
-        try {
-            const parsedEndpoint = new URL(compatibleEndpointRaw);
-            if (parsedEndpoint.protocol !== 'https:' && parsedEndpoint.protocol !== 'http:') {
-                const t = getT(document.getElementById('targetLanguage').value);
-                showStatus(t.saveError, 'error');
-                return;
-            }
-        } catch (e) {
-            const t = getT(document.getElementById('targetLanguage').value);
-            showStatus(t.saveError, 'error');
-            return;
+    el('excludeAddBtn').addEventListener('click', addExcludeEntry);
+    el('excludeInput').addEventListener('keydown', event => {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            addExcludeEntry();
         }
-    }
+    });
 
-    const targetLanguage = document.getElementById('targetLanguage').value;
-    const delayBetweenRequests = clampInt(document.getElementById('delayBetweenRequests').value, 0, 3600, Math.round(DEFAULTS.delayBetweenRequests / 1000)) * 1000;
-    const maxToken = clampInt(document.getElementById('maxToken').value, 1, 1000000, DEFAULTS.maxToken);
-    const concurrencyLimit = clampInt(document.getElementById('concurrencyLimit').value, 1, 50, DEFAULTS.concurrencyLimit);
-    const maxRetries = clampInt(document.getElementById('maxRetries').value, 0, 10, DEFAULTS.maxRetries);
-    const timeout = clampInt(document.getElementById('timeout').value, 1, 600, DEFAULTS.timeout);
-    const toggleBlueBackground = document.getElementById('toggleBlueBackground').checked;
-    const realTimeTranslation = document.getElementById('realTimeTranslation').checked;
-    const showProgressPopup = document.getElementById('showProgressPopup').checked;
-    const hidePromptAllSites = document.getElementById('hidePromptAllSites').checked;
-    const showContextMenu = document.getElementById('showContextMenu').checked;
-    const autoRetranslateDomain = document.getElementById('autoRetranslateDomain').checked;
-    const streamingTranslation = document.getElementById('streamingTranslation').checked;
-    const excludeList = document.getElementById('excludeList').value.split(/\r?\n/).map(url => url.trim()).filter(url => url);
-
-    const saveData = {
-        targetLanguage,
-        apiProvider: currentProvider,
-        geminiApiKey: providerSettings.gemini.apiKey,
-        geminiModel: providerSettings.gemini.model.trim() || DEFAULTS.geminiModel,
-        openaiApiKey: providerSettings.openai.apiKey,
-        openaiModel: providerSettings.openai.model.trim() || DEFAULTS.openaiModel,
-        anthropicApiKey: providerSettings.anthropic.apiKey,
-        anthropicModel: providerSettings.anthropic.model.trim() || DEFAULTS.anthropicModel,
-        compatibleApiKey: providerSettings['openai-compatible'].apiKey,
-        compatibleModel: providerSettings['openai-compatible'].model.trim(),
-        compatibleEndpoint: providerSettings['openai-compatible'].endpoint.trim(),
-        delayBetweenRequests, maxToken,
-        concurrencyLimit, maxRetries, timeout,
-        toggleBlueBackground, realTimeTranslation, showProgressPopup, hidePromptAllSites, showContextMenu, autoRetranslateDomain, streamingTranslation, excludeList
-    };
+    document.querySelectorAll('[data-reset]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            if (!confirm(currentT().resetConfirm)) return;
+            resetHandlers[btn.dataset.reset]?.();
+            scheduleSave();
+        });
+    });
 
     try {
-        await chrome.storage.local.set(saveData);
-        const t = getT(targetLanguage);
-        showStatus(t.saved, 'success');
-    } catch (error) {
-        console.error('Error saving settings:', error);
-        const t = getT(document.getElementById('targetLanguage').value);
-        showStatus(t.saveError, 'error');
-    }
+        chrome.storage.onChanged.addListener((changes, area) => {
+            if (area !== 'local' || !changes.excludeList) return;
+            const incoming = normalizeExcludeList(changes.excludeList.newValue);
+            if (JSON.stringify(incoming) === JSON.stringify(excludeEntries)) return;
+            excludeEntries = incoming;
+            renderExcludeRows();
+        });
+    } catch (e) { }
 });
-
-function clampInt(value, min, max, fallback) {
-    const n = parseInt(value, 10);
-    if (Number.isNaN(n)) return fallback;
-    return Math.min(max, Math.max(min, n));
-}
-
-function showStatus(message, type) {
-    const status = document.getElementById('status');
-    status.textContent = message;
-    status.className = type;
-    setTimeout(() => {
-        status.className = '';
-        status.textContent = '';
-    }, 3000);
-}
