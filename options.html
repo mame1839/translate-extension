@@ -75,6 +75,14 @@
         </svg>
         <span class="nav-label" data-i18n="navAdvanced">Advanced</span>
       </button>
+      <button class="nav-item" type="button" data-section="data">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <ellipse cx="12" cy="5" rx="8" ry="3"></ellipse>
+          <path d="M4 5v6c0 1.66 3.58 3 8 3s8-1.34 8-3V5"></path>
+          <path d="M4 11v6c0 1.66 3.58 3 8 3s8-1.34 8-3v-6"></path>
+        </svg>
+        <span class="nav-label" data-i18n="dataTitle">Data &amp; cache</span>
+      </button>
     </nav>
 
     <main id="main">
@@ -403,6 +411,52 @@
             <div class="row-control">
               <input type="number" id="timeout" min="1" max="600" placeholder="180">
               <span class="unit" data-i18n="optUnitSeconds"></span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section data-panel="data" hidden>
+        <div class="section-head">
+          <div>
+            <h2 data-i18n="dataTitle">Data &amp; cache</h2>
+            <p data-i18n="dataDesc"></p>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-caption" data-i18n="usageCaption"></div>
+          <div class="usage-body" id="usageBody"></div>
+          <div class="row">
+            <div class="row-main">
+              <div class="row-desc" id="usageSince"></div>
+            </div>
+            <div class="row-control">
+              <button class="btn-text" type="button" id="usageResetBtn" data-i18n="usageResetBtn">Reset usage</button>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-caption" data-i18n="dataCacheCaption"></div>
+          <div class="row stack">
+            <div class="row-main">
+              <div class="row-label" data-i18n="dataCacheLabel">Page cache</div>
+              <div class="row-desc" data-i18n="dataCacheDesc"></div>
+            </div>
+            <div class="row-control stat-row">
+              <div class="stat">
+                <div class="stat-label" data-i18n="dataCacheEntriesLabel"></div>
+                <div class="stat-value" id="cacheEntries">—</div>
+              </div>
+              <div class="stat">
+                <div class="stat-label" data-i18n="dataCacheSizeLabel"></div>
+                <div class="stat-value" id="cacheSize">—</div>
+              </div>
+            </div>
+          </div>
+          <div class="row">
+            <div class="row-main"></div>
+            <div class="row-control">
+              <button class="btn-danger-tonal" type="button" id="cacheClearBtn" data-i18n="dataClearBtn">Delete cache</button>
             </div>
           </div>
         </div>

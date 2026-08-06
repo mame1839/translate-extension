@@ -29,7 +29,18 @@ const providerSettings = {
 
 const RTL_LANGS = new Set(['ar', 'ur', 'he', 'fa']);
 const STYLE_PRESETS = ['', 'formal', 'casual', 'technical'];
-const SECTION_IDS = ['general', 'provider', 'behavior', 'style', 'sites', 'advanced'];
+const SECTION_IDS = ['general', 'provider', 'behavior', 'style', 'sites', 'advanced', 'data'];
+
+const USAGE_PROVIDER_LABELS = {
+    gemini: 'Google (Gemini)',
+    openai: 'OpenAI (ChatGPT)',
+    anthropic: 'Anthropic (Claude)',
+    'openai-compatible': 'OpenAI Compatible'
+};
+
+const USAGE_PROVIDER_ORDER = ['gemini', 'openai', 'anthropic', 'openai-compatible'];
+
+const BYTE_UNITS = ['B', 'KB', 'MB', 'GB'];
 
 const NUMBER_FIELDS = {
     maxToken: { min: 1, max: 1000000, fallback: DEFAULTS.maxToken },
@@ -44,6 +55,8 @@ let excludeEntries = [];
 let alwaysEntries = [];
 let saveTimer = null;
 let snackTimer = null;
+let usageStats = null;
+let cacheStats = null;
 
 function el(id) {
     return document.getElementById(id);
@@ -75,6 +88,8 @@ function applyI18n(t) {
         if (t[key] !== undefined) node.placeholder = t[key];
     });
     renderSiteLists();
+    renderUsageStats();
+    renderCacheStats();
 }
 
 function applyDir(lang) {
@@ -276,6 +291,178 @@ async function saveNow() {
     }
 }
 
+function formatNumber(value, lang) {
+    const safe = Number.isFinite(value) ? value : 0;
+    try {
+        return safe.toLocaleString(lang);
+    } catch (e) {
+        return String(safe);
+    }
+}
+
+function formatBytes(bytes, lang) {
+    let value = Number.isFinite(bytes) && bytes > 0 ? bytes : 0;
+    let unit = 0;
+    while (value >= 1024 && unit < BYTE_UNITS.length - 1) {
+        value /= 1024;
+        unit++;
+    }
+    const rounded = unit === 0 ? Math.round(value) : Math.round(value * 10) / 10;
+    return `${formatNumber(rounded, lang)} ${BYTE_UNITS[unit]}`;
+}
+
+function formatDate(timestamp, lang) {
+    try {
+        return new Date(timestamp).toLocaleDateString(lang);
+    } catch (e) {
+        return new Date(timestamp).toISOString().slice(0, 10);
+    }
+}
+
+function buildStatTile(label, value) {
+    const tile = document.createElement('div');
+    tile.className = 'stat';
+    const labelNode = document.createElement('div');
+    labelNode.className = 'stat-label';
+    labelNode.textContent = label;
+    const valueNode = document.createElement('div');
+    valueNode.className = 'stat-value';
+    valueNode.textContent = value;
+    tile.appendChild(labelNode);
+    tile.appendChild(valueNode);
+    return tile;
+}
+
+function buildUsageRow(provider, entry, t, lang) {
+    const row = document.createElement('div');
+    row.className = 'row stack';
+    const main = document.createElement('div');
+    main.className = 'row-main';
+    const name = document.createElement('div');
+    name.className = 'provider-name';
+    name.textContent = USAGE_PROVIDER_LABELS[provider] || provider;
+    main.appendChild(name);
+    const tiles = document.createElement('div');
+    tiles.className = 'row-control stat-row';
+    tiles.appendChild(buildStatTile(t.usageInputTokens, formatNumber(entry.inputTokens, lang)));
+    tiles.appendChild(buildStatTile(t.usageOutputTokens, formatNumber(entry.outputTokens, lang)));
+    tiles.appendChild(buildStatTile(t.usageRequests, formatNumber(entry.requests, lang)));
+    row.appendChild(main);
+    row.appendChild(tiles);
+    return row;
+}
+
+function buildUsageEmptyRow(t) {
+    const row = document.createElement('div');
+    row.className = 'row';
+    const main = document.createElement('div');
+    main.className = 'row-main';
+    const desc = document.createElement('div');
+    desc.className = 'row-desc';
+    desc.textContent = t.usageEmpty;
+    main.appendChild(desc);
+    row.appendChild(main);
+    return row;
+}
+
+function usedProviderNames(providers) {
+    const used = Object.keys(providers).filter(name => {
+        const entry = providers[name];
+        return !!entry && (entry.requests > 0 || entry.inputTokens > 0 || entry.outputTokens > 0);
+    });
+    used.sort((a, b) => {
+        const rankA = USAGE_PROVIDER_ORDER.indexOf(a);
+        const rankB = USAGE_PROVIDER_ORDER.indexOf(b);
+        if (rankA === rankB) return a.localeCompare(b);
+        if (rankA < 0) return 1;
+        if (rankB < 0) return -1;
+        return rankA - rankB;
+    });
+    return used;
+}
+
+function renderUsageStats() {
+    const container = el('usageBody');
+    const since = el('usageSince');
+    if (!container || !since) return;
+    const t = currentT();
+    const lang = getUiLang();
+    const providers = (usageStats && usageStats.providers) || {};
+    const names = usedProviderNames(providers);
+    container.replaceChildren();
+    if (names.length === 0) {
+        container.appendChild(buildUsageEmptyRow(t));
+        since.textContent = '';
+        return;
+    }
+    names.forEach(name => container.appendChild(buildUsageRow(name, providers[name], t, lang)));
+    since.textContent = usageStats.since
+        ? t.usageSince.replace('{date}', formatDate(usageStats.since, lang))
+        : '';
+}
+
+function renderCacheStats() {
+    const entriesNode = el('cacheEntries');
+    const sizeNode = el('cacheSize');
+    if (!entriesNode || !sizeNode) return;
+    const lang = getUiLang();
+    entriesNode.textContent = cacheStats ? formatNumber(cacheStats.entries, lang) : '—';
+    sizeNode.textContent = cacheStats ? formatBytes(cacheStats.bytes, lang) : '—';
+}
+
+async function refreshUsageStats() {
+    try {
+        const response = await chrome.runtime.sendMessage({ action: 'usageStatsGet' });
+        usageStats = (response && response.stats) || null;
+    } catch (e) {
+        usageStats = null;
+    }
+    renderUsageStats();
+}
+
+async function refreshCacheStats() {
+    try {
+        const response = await chrome.runtime.sendMessage({ action: 'pageCacheStats' });
+        cacheStats = (response && response.stats) || null;
+    } catch (e) {
+        cacheStats = null;
+    }
+    renderCacheStats();
+}
+
+function refreshDataSection() {
+    refreshUsageStats();
+    refreshCacheStats();
+}
+
+async function resetUsageCounters() {
+    const t = currentT();
+    if (!confirm(t.usageResetConfirm)) return;
+    try {
+        const response = await chrome.runtime.sendMessage({ action: 'usageStatsReset' });
+        if (!response || response.ok !== true) throw new Error('usage reset rejected');
+        usageStats = response.stats || null;
+        renderUsageStats();
+        showSnackbar(t.usageResetDone, false);
+    } catch (e) {
+        showSnackbar(t.dataActionFailed, true);
+    }
+}
+
+async function clearPageCache() {
+    const t = currentT();
+    if (!confirm(t.dataClearConfirm)) return;
+    try {
+        const response = await chrome.runtime.sendMessage({ action: 'pageCacheClearAll' });
+        if (!response || response.cleared !== true) throw new Error('cache clear rejected');
+        cacheStats = { entries: 0, bytes: 0 };
+        renderCacheStats();
+        showSnackbar(t.dataClearDone, false);
+    } catch (e) {
+        showSnackbar(t.dataActionFailed, true);
+    }
+}
+
 function activateSection(id) {
     const target = SECTION_IDS.includes(id) ? id : SECTION_IDS[0];
     document.querySelectorAll('.nav-item').forEach(btn => {
@@ -285,6 +472,7 @@ function activateSection(id) {
         section.hidden = section.dataset.panel !== target;
     });
     try { history.replaceState(null, '', '#' + target); } catch (e) { }
+    if (target === 'data') refreshDataSection();
 }
 
 const resetHandlers = {
@@ -429,6 +617,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         el('eyeShow').hidden = reveal;
         el('eyeHide').hidden = !reveal;
     });
+
+    el('usageResetBtn').addEventListener('click', resetUsageCounters);
+    el('cacheClearBtn').addEventListener('click', clearPageCache);
 
     const siteListInputs = [
         { addBtn: 'excludeAddBtn', input: 'excludeInput', entries: () => excludeEntries, opposing: () => alwaysEntries },

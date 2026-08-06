@@ -1229,6 +1229,7 @@ function consumeSSELine(line, readChunk, acc, streamContext) {
     if (!payload || payload === '[DONE]') return;
     let chunk;
     try { chunk = JSON.parse(payload); } catch (e) { return; }
+    mergeMaxUsage(acc.usage, readUsageTokens(chunk));
     const delta = readChunk(chunk, acc) || '';
     if (!delta) return;
     acc.fullText += delta;
@@ -1236,7 +1237,7 @@ function consumeSSELine(line, readChunk, acc, streamContext) {
 }
 
 async function streamModelResponse(streamRequest) {
-    const { url, headers, body, timeout, signal, onHttpError, readChunk, finalizeStream, streamContext } = streamRequest;
+    const { url, headers, body, timeout, signal, onHttpError, readChunk, finalizeStream, streamContext, provider } = streamRequest;
     const timeoutController = new AbortController();
     const timeoutId = timeout > 0 ? setTimeout(() => timeoutController.abort(), timeout * 1000) : null;
     const combinedSignal = combineSignals(signal, timeoutController.signal);
@@ -1259,7 +1260,7 @@ async function streamModelResponse(streamRequest) {
             onHttpError(response, data);
         }
         if (!response.body) throw createTranslationError('emptyResponse');
-        const acc = { fullText: '', finishReason: '', sentKeys: new Set() };
+        const acc = { fullText: '', finishReason: '', sentKeys: new Set(), usage: createUsageTokens() };
         const reader = response.body.getReader();
         const decoder = new TextDecoder('utf-8');
         let pending = '';
@@ -1276,6 +1277,7 @@ async function streamModelResponse(streamRequest) {
             consumeSSELine(pending, readChunk, acc, streamContext);
         } finally {
             try { reader.releaseLock(); } catch (e) { }
+            recordApiUsage(provider, acc.usage);
         }
         finalizeStream(acc);
         return acc.fullText;
@@ -1397,7 +1399,8 @@ async function translateWithGemini(text, retryLimit, signal, targetLanguage = 'E
             onHttpError: handleGeminiHttpError,
             readChunk: readGeminiStreamChunk,
             finalizeStream: finalizeGeminiStream,
-            streamContext
+            streamContext,
+            provider: 'gemini'
         })), retryLimit, signal);
     }
     return performTranslation(async () => {
@@ -1409,6 +1412,7 @@ async function translateWithGemini(text, retryLimit, signal, targetLanguage = 'E
             signal
         }, actualTimeout);
         if (!response.ok) handleGeminiHttpError(response, data);
+        recordApiUsage('gemini', readUsageTokens(data));
         if (!data || !Array.isArray(data.candidates) || data.candidates.length === 0) {
             const blockReason = data?.promptFeedback?.blockReason;
             if (blockReason) throw createTranslationError('invalidRequest', ` (blocked: ${blockReason})`);
@@ -1451,6 +1455,7 @@ async function translateWithOpenAI(text, retryLimit, signal, targetLanguage = 'E
     };
     if (streamContext) {
         requestBody.stream = true;
+        requestBody.stream_options = { include_usage: true };
         return performTranslation(async () => parseTranslationResponse(await streamModelResponse({
             url: 'https://api.openai.com/v1/chat/completions',
             headers,
@@ -1460,7 +1465,8 @@ async function translateWithOpenAI(text, retryLimit, signal, targetLanguage = 'E
             onHttpError: handleOpenAIHttpError,
             readChunk: readOpenAIStreamChunk,
             finalizeStream: finalizeOpenAIStream,
-            streamContext
+            streamContext,
+            provider: 'openai'
         })), retryLimit, signal);
     }
     return performTranslation(async () => {
@@ -1471,6 +1477,7 @@ async function translateWithOpenAI(text, retryLimit, signal, targetLanguage = 'E
             signal
         }, actualTimeout);
         if (!response.ok) handleOpenAIHttpError(response, data);
+        recordApiUsage('openai', readUsageTokens(data));
         const choice = data?.choices?.[0];
         if (!choice) throw createTranslationError('unknownError', ' (no choices)');
         if (choice.finish_reason === 'length') throw createTranslationError('maxTokensError');
@@ -1507,7 +1514,8 @@ async function translateWithOpenAICompatible(text, retryLimit, signal, targetLan
             onHttpError: handleOpenAIHttpError,
             readChunk: readOpenAIStreamChunk,
             finalizeStream: finalizeOpenAIStream,
-            streamContext
+            streamContext,
+            provider: 'openai-compatible'
         })), retryLimit, signal);
     }
     return performTranslation(async () => {
@@ -1518,6 +1526,7 @@ async function translateWithOpenAICompatible(text, retryLimit, signal, targetLan
             signal
         }, actualTimeout);
         if (!response.ok) handleOpenAIHttpError(response, data);
+        recordApiUsage('openai-compatible', readUsageTokens(data));
         const choice = data?.choices?.[0];
         if (!choice) throw createTranslationError('unknownError', ' (no choices)');
         if (choice.finish_reason === 'length') throw createTranslationError('maxTokensError');
@@ -1557,7 +1566,8 @@ async function translateWithAnthropic(text, retryLimit, signal, targetLanguage =
             onHttpError: handleAnthropicHttpError,
             readChunk: readAnthropicStreamChunk,
             finalizeStream: finalizeAnthropicStream,
-            streamContext
+            streamContext,
+            provider: 'anthropic'
         })), retryLimit, signal);
     }
     return performTranslation(async () => {
@@ -1568,11 +1578,169 @@ async function translateWithAnthropic(text, retryLimit, signal, targetLanguage =
             signal
         }, actualTimeout);
         if (!response.ok) handleAnthropicHttpError(response, data);
+        recordApiUsage('anthropic', readUsageTokens(data));
         if (data?.stop_reason === 'max_tokens') throw createTranslationError('maxTokensError');
         const responseText = data?.content?.[0]?.text || '';
         if (!responseText) throw createTranslationError('emptyResponse');
         return parseTranslationResponse(responseText);
     }, retryLimit, signal);
+}
+
+const USAGE_STATS_KEY = 'usageStats';
+const USAGE_FLUSH_DELAY_MS = 1500;
+
+const pendingUsage = new Map();
+let usageFlushTimer = null;
+let usageWriteChain = Promise.resolve();
+
+function toUsageCount(value) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) && parsed > 0 ? Math.round(parsed) : 0;
+}
+
+function readUsageFromEnvelope(source) {
+    if (!source || typeof source !== 'object') return null;
+    const geminiUsage = source.usageMetadata;
+    if (geminiUsage && typeof geminiUsage === 'object') {
+        return {
+            input: toUsageCount(geminiUsage.promptTokenCount),
+            output: toUsageCount(geminiUsage.candidatesTokenCount) + toUsageCount(geminiUsage.thoughtsTokenCount)
+        };
+    }
+    const usage = source.usage;
+    if (usage && typeof usage === 'object') {
+        return {
+            input: toUsageCount(usage.prompt_tokens) + toUsageCount(usage.input_tokens),
+            output: toUsageCount(usage.completion_tokens) + toUsageCount(usage.output_tokens)
+        };
+    }
+    return null;
+}
+
+function readUsageTokens(payload) {
+    if (!payload || typeof payload !== 'object') return null;
+    return readUsageFromEnvelope(payload) || readUsageFromEnvelope(payload.message);
+}
+
+function createUsageTokens() {
+    return { input: 0, output: 0 };
+}
+
+function mergeMaxUsage(target, counts) {
+    if (!target || !counts) return;
+    if (counts.input > target.input) target.input = counts.input;
+    if (counts.output > target.output) target.output = counts.output;
+}
+
+function createProviderUsage() {
+    return { inputTokens: 0, outputTokens: 0, requests: 0 };
+}
+
+function recordApiUsage(provider, counts) {
+    const name = (provider || DEFAULTS.apiProvider).trim();
+    if (!name) return;
+    let entry = pendingUsage.get(name);
+    if (!entry) {
+        entry = createProviderUsage();
+        pendingUsage.set(name, entry);
+    }
+    entry.requests += 1;
+    if (counts) {
+        entry.inputTokens += toUsageCount(counts.input);
+        entry.outputTokens += toUsageCount(counts.output);
+    }
+    scheduleUsageFlush();
+}
+
+function scheduleUsageFlush() {
+    if (usageFlushTimer !== null) return;
+    usageFlushTimer = setTimeout(() => {
+        usageFlushTimer = null;
+        flushPendingUsage();
+    }, USAGE_FLUSH_DELAY_MS);
+}
+
+function flushPendingUsage() {
+    if (pendingUsage.size === 0) return usageWriteChain;
+    const delta = new Map(pendingUsage);
+    pendingUsage.clear();
+    usageWriteChain = usageWriteChain.then(() => storeUsageDelta(delta)).catch(() => { });
+    return usageWriteChain;
+}
+
+function createUsageStats() {
+    return { since: 0, updatedAt: 0, providers: {} };
+}
+
+function normalizeUsageStats(raw) {
+    const stats = createUsageStats();
+    if (!raw || typeof raw !== 'object') return stats;
+    stats.since = toUsageCount(raw.since);
+    stats.updatedAt = toUsageCount(raw.updatedAt);
+    if (!raw.providers || typeof raw.providers !== 'object') return stats;
+    for (const [name, entry] of Object.entries(raw.providers)) {
+        if (!entry || typeof entry !== 'object') continue;
+        stats.providers[name] = {
+            inputTokens: toUsageCount(entry.inputTokens),
+            outputTokens: toUsageCount(entry.outputTokens),
+            requests: toUsageCount(entry.requests)
+        };
+    }
+    return stats;
+}
+
+function readStoredUsageStats() {
+    return new Promise(resolve => {
+        try {
+            chrome.storage.local.get([USAGE_STATS_KEY], items => {
+                void chrome.runtime.lastError;
+                resolve(normalizeUsageStats(items && items[USAGE_STATS_KEY]));
+            });
+        } catch (e) { resolve(createUsageStats()); }
+    });
+}
+
+function writeUsageStats(stats) {
+    return new Promise(resolve => {
+        try {
+            chrome.storage.local.set({ [USAGE_STATS_KEY]: stats }, () => {
+                void chrome.runtime.lastError;
+                resolve();
+            });
+        } catch (e) { resolve(); }
+    });
+}
+
+async function storeUsageDelta(delta) {
+    const stats = await readStoredUsageStats();
+    const now = Date.now();
+    for (const [name, entry] of delta) {
+        const target = stats.providers[name] || createProviderUsage();
+        target.inputTokens += entry.inputTokens;
+        target.outputTokens += entry.outputTokens;
+        target.requests += entry.requests;
+        stats.providers[name] = target;
+    }
+    if (!stats.since) stats.since = now;
+    stats.updatedAt = now;
+    await writeUsageStats(stats);
+}
+
+async function getUsageStatsSnapshot() {
+    await flushPendingUsage();
+    return readStoredUsageStats();
+}
+
+async function resetUsageStats() {
+    if (usageFlushTimer !== null) {
+        clearTimeout(usageFlushTimer);
+        usageFlushTimer = null;
+    }
+    pendingUsage.clear();
+    const cleared = createUsageStats();
+    usageWriteChain = usageWriteChain.then(() => writeUsageStats(cleared)).catch(() => { });
+    await usageWriteChain;
+    return cleared;
 }
 
 const TOGGLE_MENU_ID = 'toggleTranslation';
@@ -1734,6 +1902,7 @@ async function selectionRequestGemini(prompt, retryLimit, signal) {
             signal
         }, actualTimeout);
         if (!response.ok) handleGeminiHttpError(response, data);
+        recordApiUsage('gemini', readUsageTokens(data));
         const candidate = data?.candidates?.[0];
         if (!candidate) {
             const blockReason = data?.promptFeedback?.blockReason;
@@ -1767,6 +1936,7 @@ async function selectionRequestOpenAI(prompt, retryLimit, signal) {
             signal
         }, actualTimeout);
         if (!response.ok) handleOpenAIHttpError(response, data);
+        recordApiUsage('openai', readUsageTokens(data));
         const choice = data?.choices?.[0];
         if (!choice) throw new Error(`${errorMessages.unknownError} (no choices)`);
         return finishSelectionText(choice.message?.content || '', choice.finish_reason === 'length');
@@ -1795,6 +1965,7 @@ async function selectionRequestCompatible(prompt, retryLimit, signal) {
             signal
         }, actualTimeout);
         if (!response.ok) handleOpenAIHttpError(response, data);
+        recordApiUsage('openai-compatible', readUsageTokens(data));
         const choice = data?.choices?.[0];
         if (!choice) throw new Error(`${errorMessages.unknownError} (no choices)`);
         return finishSelectionText(choice.message?.content || '', choice.finish_reason === 'length');
@@ -1824,6 +1995,7 @@ async function selectionRequestAnthropic(prompt, retryLimit, signal) {
             signal
         }, actualTimeout);
         if (!response.ok) handleAnthropicHttpError(response, data);
+        recordApiUsage('anthropic', readUsageTokens(data));
         const responseText = Array.isArray(data?.content)
             ? data.content.map(part => part?.type === 'text' ? (part.text || '') : '').join('')
             : '';
@@ -1995,6 +2167,102 @@ async function pageCachePrune(maxEntries) {
     } catch (e) { }
     finally { try { db.close(); } catch (e) { } }
 }
+
+const PAGE_CACHE_SAMPLE_LIMIT = 24;
+
+function measureRecordBytes(record) {
+    try {
+        return new Blob([JSON.stringify(record)]).size;
+    } catch (e) { return 0; }
+}
+
+async function pageCacheCountEntries(db) {
+    const tx = db.transaction(PAGE_CACHE_STORE, 'readonly');
+    const store = tx.objectStore(PAGE_CACHE_STORE);
+    let total = 0;
+    try { total = await reqAsPromise(store.count()) || 0; } catch (e) { total = 0; }
+    try { await awaitTransaction(tx); } catch (e) { }
+    return total;
+}
+
+function pageCacheSampleBytes(db) {
+    const tx = db.transaction(PAGE_CACHE_STORE, 'readonly');
+    const store = tx.objectStore(PAGE_CACHE_STORE);
+    return new Promise((resolve) => {
+        const sample = { records: 0, bytes: 0 };
+        let cursorReq;
+        try { cursorReq = store.openCursor(); } catch (e) { resolve(sample); return; }
+        cursorReq.onsuccess = (event) => {
+            const cursor = event.target.result;
+            if (!cursor || sample.records >= PAGE_CACHE_SAMPLE_LIMIT) { resolve(sample); return; }
+            sample.bytes += measureRecordBytes(cursor.value);
+            sample.records++;
+            cursor.continue();
+        };
+        cursorReq.onerror = (e) => { try { e.preventDefault(); } catch (err) { } resolve(sample); };
+    });
+}
+
+async function pageCacheStats() {
+    let db;
+    try { db = await openPageCacheDB(); } catch (e) { return { entries: 0, bytes: 0 }; }
+    let entries = 0;
+    let bytes = 0;
+    try {
+        entries = await pageCacheCountEntries(db);
+        if (entries > 0) {
+            const sample = await pageCacheSampleBytes(db);
+            if (sample.records > 0) bytes = Math.round(sample.bytes / sample.records * entries);
+        }
+    } catch (e) { }
+    finally { try { db.close(); } catch (e) { } }
+    return { entries, bytes };
+}
+
+async function pageCacheClearAll() {
+    let db;
+    try { db = await openPageCacheDB(); } catch (e) { return false; }
+    try {
+        const tx = db.transaction(PAGE_CACHE_STORE, 'readwrite');
+        const store = tx.objectStore(PAGE_CACHE_STORE);
+        await reqAsPromise(store.clear());
+        await awaitTransaction(tx);
+        return true;
+    } catch (e) { return false; }
+    finally { try { db.close(); } catch (e) { } }
+}
+
+chrome.runtime.onMessage.addListener(function (request, sender, sendResponse) {
+    if (request.action === "usageStatsGet") {
+        getUsageStatsSnapshot()
+            .then(stats => sendResponse({ stats }))
+            .catch(() => sendResponse({ stats: null }));
+        return true;
+    }
+
+    if (request.action === "usageStatsReset") {
+        resetUsageStats()
+            .then(stats => sendResponse({ ok: true, stats }))
+            .catch(() => sendResponse({ ok: false }));
+        return true;
+    }
+
+    if (request.action === "pageCacheStats") {
+        pageCacheStats()
+            .then(stats => sendResponse({ stats }))
+            .catch(() => sendResponse({ stats: null }));
+        return true;
+    }
+
+    if (request.action === "pageCacheClearAll") {
+        pageCacheClearAll()
+            .then(cleared => sendResponse({ cleared }))
+            .catch(() => sendResponse({ cleared: false }));
+        return true;
+    }
+
+    return false;
+});
 
 const KEYBOARD_COMMAND_ACTIONS = {
     'translate-page': 'startTranslationFromPopup',
