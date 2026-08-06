@@ -139,15 +139,17 @@ function frameKeysForTab(tabId) {
     return keys;
 }
 
-chrome.runtime.onStartup.addListener(function () {
-    withSessionLock(async () => {
-        try {
-            await chrome.storage.session.set({ sessionTabDomains: {}, sessionTranslatedDomains: [] });
-        } catch (e) { }
+try {
+    chrome.runtime.onStartup.addListener(function () {
+        withSessionLock(async () => {
+            try {
+                await chrome.storage.session.set({ sessionTabDomains: {}, sessionTranslatedDomains: [] });
+            } catch (e) { }
+        });
     });
-});
+} catch (e) { }
 
-chrome.runtime.onInstalled.addListener(function (details) {
+function handleExtensionInstalled(details) {
     if (details.reason === 'install') {
         chrome.runtime.openOptionsPage();
     }
@@ -188,7 +190,11 @@ chrome.runtime.onInstalled.addListener(function (details) {
             });
         }
     );
-});
+}
+
+try {
+    chrome.runtime.onInstalled.addListener(handleExtensionInstalled);
+} catch (e) { }
 
 chrome.runtime.onMessage.addListener(function (request, sender, sendResponse) {
     const tabId = sender.tab?.id;
@@ -389,23 +395,27 @@ try {
     });
 } catch (e) { }
 
-chrome.tabs.onRemoved.addListener(function (tabId) {
-    for (const key of frameKeysForTab(tabId)) {
-        const state = frameStates.get(key);
-        if (state && !state.abortController.signal.aborted) {
-            state.abortController.abort();
+try {
+    chrome.tabs.onRemoved.addListener(function (tabId) {
+        for (const key of frameKeysForTab(tabId)) {
+            const state = frameStates.get(key);
+            if (state && !state.abortController.signal.aborted) {
+                state.abortController.abort();
+            }
+            frameStates.delete(key);
+            globalRequestQueue.delete(key);
         }
-        frameStates.delete(key);
-        globalRequestQueue.delete(key);
-    }
-    untrackSessionTab(tabId).catch(() => { });
-});
+        untrackSessionTab(tabId).catch(() => { });
+    });
+} catch (e) { }
 
-chrome.tabs.onUpdated.addListener(function (tabId, changeInfo) {
-    if (changeInfo.url) {
-        handleTabUrlChange(tabId, changeInfo.url).catch(() => { });
-    }
-});
+try {
+    chrome.tabs.onUpdated.addListener(function (tabId, changeInfo) {
+        if (changeInfo.url) {
+            handleTabUrlChange(tabId, changeInfo.url).catch(() => { });
+        }
+    });
+} catch (e) { }
 
 function dispatchFrame(key) {
     if (processingFrames.has(key)) return;
@@ -1766,7 +1776,7 @@ function contextMenuTitle(key, langCode) {
     return CONTEXT_MENU_TITLE_FALLBACKS[key];
 }
 
-chrome.storage.onChanged.addListener(function (changes, areaName) {
+function handleContextMenuSettingsChange(changes, areaName) {
     if (areaName !== 'local') return;
     const shared = {};
     if (changes.showContextMenu !== undefined) {
@@ -1787,7 +1797,11 @@ chrome.storage.onChanged.addListener(function (changes, areaName) {
             if (updating && typeof updating.catch === 'function') updating.catch(() => { });
         } catch (e) { }
     }
-});
+}
+
+try {
+    chrome.storage.onChanged.addListener(handleContextMenuSettingsChange);
+} catch (e) { }
 
 try {
     chrome.contextMenus.onClicked.addListener(function (info, tab) {
