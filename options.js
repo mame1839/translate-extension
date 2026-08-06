@@ -57,6 +57,8 @@ let saveTimer = null;
 let snackTimer = null;
 let usageStats = null;
 let cacheStats = null;
+let cachePages = [];
+let cachePagesTotal = 0;
 
 function el(id) {
     return document.getElementById(id);
@@ -439,9 +441,101 @@ async function refreshCacheStats() {
     renderCacheStats();
 }
 
+function cachePageLabel(page) {
+    if (!page.url) return page.key;
+    try {
+        const parsed = new URL(page.url);
+        return parsed.host + parsed.pathname + parsed.search;
+    } catch (e) { return page.url; }
+}
+
+function renderCachePages() {
+    const container = el('cacheRows');
+    const moreRow = el('cacheMoreRow');
+    if (!container || !moreRow) return;
+    const t = currentT();
+    const lang = getUiLang();
+    container.replaceChildren();
+    if (cachePages.length === 0) {
+        const empty = document.createElement('div');
+        empty.className = 'empty-list';
+        empty.textContent = t.dataCacheNoPages;
+        container.appendChild(empty);
+        moreRow.hidden = true;
+        return;
+    }
+    cachePages.forEach(page => {
+        const row = document.createElement('div');
+        row.className = 'chip-row';
+        const main = document.createElement('div');
+        main.className = 'chip-main';
+        const host = document.createElement('span');
+        host.className = 'host';
+        host.textContent = cachePageLabel(page);
+        host.title = page.url || page.key;
+        const meta = document.createElement('span');
+        meta.className = 'chip-meta';
+        const parts = [];
+        if (page.savedAt) parts.push(formatDate(page.savedAt, lang));
+        if (page.lang) parts.push(languageNativeName(page.lang));
+        parts.push(t.dataCacheBlocksLabel.replace('{count}', formatNumber(page.blocks, lang)));
+        parts.forEach((part, index) => {
+            if (index > 0) meta.appendChild(document.createTextNode(' · '));
+            const piece = document.createElement('bdi');
+            piece.textContent = part;
+            meta.appendChild(piece);
+        });
+        main.appendChild(host);
+        main.appendChild(meta);
+        const removeBtn = document.createElement('button');
+        removeBtn.type = 'button';
+        removeBtn.className = 'icon-btn';
+        removeBtn.title = t.optRemove;
+        removeBtn.setAttribute('aria-label', t.optRemove);
+        removeBtn.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+        removeBtn.addEventListener('click', () => removeCachePage(page.key));
+        row.appendChild(main);
+        row.appendChild(removeBtn);
+        container.appendChild(row);
+    });
+    moreRow.hidden = cachePages.length >= cachePagesTotal;
+}
+
+async function loadCachePages(append) {
+    try {
+        const offset = append ? cachePages.length : 0;
+        const response = await chrome.runtime.sendMessage({ action: 'pageCacheList', offset });
+        const incoming = (response && Array.isArray(response.pages)) ? response.pages : [];
+        cachePagesTotal = (response && Number.isFinite(response.total)) ? response.total : incoming.length;
+        cachePages = append ? cachePages.concat(incoming) : incoming;
+    } catch (e) {
+        if (!append) {
+            cachePages = [];
+            cachePagesTotal = 0;
+        }
+    }
+    renderCachePages();
+}
+
+async function removeCachePage(key) {
+    const t = currentT();
+    try {
+        const response = await chrome.runtime.sendMessage({ action: 'pageCacheRemove', key });
+        if (!response || response.removed !== true) throw new Error('cache remove rejected');
+        cachePages = cachePages.filter(page => page.key !== key);
+        cachePagesTotal = Math.max(0, cachePagesTotal - 1);
+        renderCachePages();
+        refreshCacheStats();
+        showSnackbar(t.dataClearDone, false);
+    } catch (e) {
+        showSnackbar(t.dataActionFailed, true);
+    }
+}
+
 function refreshDataSection() {
     refreshUsageStats();
     refreshCacheStats();
+    loadCachePages(false);
 }
 
 async function resetUsageCounters() {
@@ -465,7 +559,10 @@ async function clearPageCache() {
         const response = await chrome.runtime.sendMessage({ action: 'pageCacheClearAll' });
         if (!response || response.cleared !== true) throw new Error('cache clear rejected');
         cacheStats = { entries: 0, bytes: 0 };
+        cachePages = [];
+        cachePagesTotal = 0;
         renderCacheStats();
+        renderCachePages();
         showSnackbar(t.dataClearDone, false);
     } catch (e) {
         showSnackbar(t.dataActionFailed, true);
@@ -632,6 +729,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     el('usageResetBtn').addEventListener('click', resetUsageCounters);
     el('cacheClearBtn').addEventListener('click', clearPageCache);
+    el('cacheMoreBtn').addEventListener('click', () => loadCachePages(true));
 
     const siteListInputs = [
         { addBtn: 'excludeAddBtn', input: 'excludeInput', entries: () => excludeEntries, opposing: () => alwaysEntries },
