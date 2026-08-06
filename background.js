@@ -381,11 +381,13 @@ function handleTabUrlChange(tabId, newUrl) {
     });
 }
 
-chrome.contextMenus.onClicked.addListener(function (info, tab) {
-    if (info.menuItemId === "toggleTranslation" && tab?.id) {
-        chrome.tabs.sendMessage(tab.id, { action: "toggleTranslation" }).catch(() => { });
-    }
-});
+try {
+    chrome.contextMenus.onClicked.addListener(function (info, tab) {
+        if (info.menuItemId === "toggleTranslation" && tab?.id) {
+            chrome.tabs.sendMessage(tab.id, { action: "toggleTranslation" }).catch(() => { });
+        }
+    });
+} catch (e) { }
 
 chrome.tabs.onRemoved.addListener(function (tabId) {
     for (const key of frameKeysForTab(tabId)) {
@@ -1787,14 +1789,16 @@ chrome.storage.onChanged.addListener(function (changes, areaName) {
     }
 });
 
-chrome.contextMenus.onClicked.addListener(function (info, tab) {
-    if (info.menuItemId !== SELECTION_MENU_ID) return;
-    if (!tab?.id) return;
-    const text = (info.selectionText || '').trim();
-    if (!text) return;
-    const frameId = Number.isInteger(info.frameId) ? info.frameId : 0;
-    chrome.tabs.sendMessage(tab.id, { action: "showSelectionTranslation", text }, { frameId }).catch(() => { });
-});
+try {
+    chrome.contextMenus.onClicked.addListener(function (info, tab) {
+        if (info.menuItemId !== SELECTION_MENU_ID) return;
+        if (!tab?.id) return;
+        const text = (info.selectionText || '').trim();
+        if (!text) return;
+        const frameId = Number.isInteger(info.frameId) ? info.frameId : 0;
+        chrome.tabs.sendMessage(tab.id, { action: "showSelectionTranslation", text }, { frameId }).catch(() => { });
+    });
+} catch (e) { }
 
 chrome.runtime.onMessage.addListener(function (request, sender, sendResponse) {
     const tabId = sender.tab?.id;
