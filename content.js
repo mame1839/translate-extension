@@ -1158,13 +1158,18 @@
         return primary.toUpperCase();
     }
 
+    function isolateBidi(text) {
+        return '⁨' + text + '⁩';
+    }
+
     function promptLanguagePairLabel() {
         const pageLang = getPageLanguage();
         if (!pageLang) return '';
         const source = languageNativeName(pageLang);
         const target = languageNativeName(currentUiLang);
         if (!source || !target || source === target) return '';
-        return isRtlLang(currentUiLang) ? `${source} ← ${target}` : `${source} → ${target}`;
+        const arrow = isRtlLang(currentUiLang) ? ' ← ' : ' → ';
+        return isolateBidi(source) + arrow + isolateBidi(target);
     }
 
     function createSvgIcon(size, strokeWidth, shapes) {
@@ -1831,7 +1836,7 @@
         }
         const errorCode = translationErrorCodeOf(error);
         updateProgress();
-        if (ensureStatusPanelForError()) showErrorPopup(errorMessage, lang, errorCode);
+        if (ensureStatusPanelForError()) showErrorPopup(errorMessage, errorCode);
         if (progressInterval) {
             clearInterval(progressInterval);
             progressInterval = null;
@@ -1963,7 +1968,7 @@
         return [createTextButton('btn btn-text', st.closeButton, removeStatusIndicator)];
     }
 
-    function showErrorPopup(errorMessage, lang, code) {
+    function showErrorPopup(errorMessage, code) {
         renderStatusPanel('error', { message: errorMessage, code: code || '' });
     }
 
@@ -2781,6 +2786,10 @@
         if (phase === 'progress') {
             const bar = createUiElement('div', 'progress-bar');
             bar.id = 'translationProgressBar';
+            bar.setAttribute('role', 'progressbar');
+            bar.setAttribute('aria-valuemin', '0');
+            bar.setAttribute('aria-valuemax', '100');
+            bar.setAttribute('aria-valuenow', '0');
             const fill = createUiElement('div', 'progress-fill');
             fill.id = 'translationProgressFill';
             bar.appendChild(fill);
@@ -2952,6 +2961,7 @@
             }
             if (progressBar) {
                 progressBar.style.setProperty('--stream-offset', translationProgress + '%');
+                progressBar.setAttribute('aria-valuenow', translationProgress.toFixed(0));
             }
             if (statsElem) {
                 statsElem.textContent = st.progressTemplate
@@ -3002,7 +3012,7 @@
         updateProgress();
         const errorMessage = error?.message || st.errorOccurred;
         const errorCode = translationErrorCodeOf(error);
-        if (ensureStatusPanelForError()) showErrorPopup(errorMessage, currentUiLang, errorCode);
+        if (ensureStatusPanelForError()) showErrorPopup(errorMessage, errorCode);
         chrome.runtime.sendMessage({ action: "translationError", error: errorMessage, code: errorCode }).catch(() => { });
         saveCurrentTranslationToCache().catch(() => { });
     }
