@@ -10,6 +10,7 @@ try {
 const errorMessages = {
     apiKeyNotSet: 'API key is not set. Please configure it in the options page.',
     endpointNotSet: 'Endpoint URL is not set. Please configure it in the options page.',
+    modelNotSet: 'Model ID is not set. Please configure it in the options page.',
     jsonParseFailed: 'Failed to parse JSON response from AI.',
     jsonExtractFailed: 'Could not extract JSON from AI response.',
     apiLimitReached: 'API rate limit reached. Please wait and try again.',
@@ -30,6 +31,7 @@ const FATAL_TRANSLATION_ERRORS = [
     errorMessages.apiKeyNotSet,
     errorMessages.invalidApiKey,
     errorMessages.endpointNotSet,
+    errorMessages.modelNotSet,
     errorMessages.insufficientQuota
 ];
 
@@ -1505,15 +1507,16 @@ async function translateWithOpenAICompatible(text, retryLimit, signal, targetLan
         chrome.storage.local.get(['compatibleApiKey', 'compatibleModel', 'compatibleEndpoint', 'maxToken', 'timeout'], resolve));
     if (!endpoint) throw createTranslationError('endpointNotSet');
     const actualModel = (model || '').trim();
+    if (!actualModel) throw createTranslationError('modelNotSet');
     const actualMaxToken = maxToken || DEFAULTS.maxToken;
     const actualTimeout = timeout || DEFAULTS.timeout;
     const prompt = createTranslationPrompt(text, targetLanguage, targetLanguageCode, await getPromptCustomSections());
     const requestBody = {
+        model: actualModel,
         messages: [{ role: 'user', content: prompt }],
         temperature: 0.2,
         max_tokens: actualMaxToken
     };
-    if (actualModel) requestBody.model = actualModel;
     const headers = { 'Content-Type': 'application/json' };
     if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`;
     if (streamContext) {
@@ -1967,13 +1970,14 @@ async function selectionRequestCompatible(prompt, retryLimit, signal) {
         chrome.storage.local.get(['compatibleApiKey', 'compatibleModel', 'compatibleEndpoint', 'maxToken', 'timeout'], resolve));
     if (!endpoint) throw new Error(errorMessages.endpointNotSet);
     const actualModel = (model || '').trim();
+    if (!actualModel) throw new Error(errorMessages.modelNotSet);
     const actualTimeout = timeout || DEFAULTS.timeout;
     const requestBody = {
+        model: actualModel,
         messages: [{ role: 'user', content: prompt }],
         temperature: 0.2,
         max_tokens: selectionOutputTokenLimit(maxToken)
     };
-    if (actualModel) requestBody.model = actualModel;
     const headers = { 'Content-Type': 'application/json' };
     if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`;
     return performTranslation(async () => {

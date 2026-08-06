@@ -20,9 +20,12 @@ const MODEL_PLACEHOLDERS = {
     'openai-compatible': DEFAULTS.compatibleModel
 };
 
+const ANTHROPIC_MAX_OUTPUT_TOKENS = 64000;
+
 const PROVIDER_ROW_DESCS = {
     apiKeyDesc: { base: 'optApiKeyDesc', 'openai-compatible': 'optCompatibleApiKeyDesc' },
-    aiModelDesc: { base: 'optModelDesc', 'openai-compatible': 'optCompatibleModelDesc' }
+    aiModelDesc: { base: 'optModelDesc', 'openai-compatible': 'optCompatibleModelDesc' },
+    maxTokenDesc: { base: 'optMaxTokenDesc', anthropic: 'optAnthropicMaxTokenDesc' }
 };
 
 const providerSettings = {
@@ -94,6 +97,7 @@ function applyI18n(t) {
         const key = node.dataset.i18nPlaceholder;
         if (t[key] !== undefined) node.placeholder = t[key];
     });
+    updateProviderRowDescs(currentProvider);
     renderSiteLists();
     renderUsageStats();
     renderCacheStats();
@@ -122,12 +126,15 @@ function normalizeProvider(provider) {
 
 function updateProviderRowDescs(provider) {
     const t = currentT();
+    const lang = getUiLang();
     Object.keys(PROVIDER_ROW_DESCS).forEach(id => {
         const variants = PROVIDER_ROW_DESCS[id];
         const key = variants[provider] || variants.base;
         const node = el(id);
         node.dataset.i18n = key;
-        if (t[key] !== undefined) node.textContent = t[key];
+        if (t[key] !== undefined) {
+            node.textContent = t[key].replace('{limit}', formatNumber(ANTHROPIC_MAX_OUTPUT_TOKENS, lang));
+        }
     });
 }
 
