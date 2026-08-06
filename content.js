@@ -1906,12 +1906,7 @@
         jsonExtractFailed: 'errBadResponse',
         emptyResponse: 'errBadResponse',
         invalidRequest: 'errInvalidRequest',
-        unknownError: 'errUnknown',
-        builtinUnavailable: 'builtinUnsupportedBrowser',
-        builtinEngineUnavailable: 'builtinEngineUnavailable',
-        builtinLanguageUnsupported: 'builtinErrorLanguage',
-        builtinSourceUnknown: 'builtinErrorSource',
-        builtinPrepareFailed: 'builtinPrepareFailed'
+        unknownError: 'errUnknown'
     };
 
     const ERROR_CODE_ACTIONS = {
@@ -1929,12 +1924,7 @@
         emptyResponse: 'retry',
         jsonParseFailed: 'retry',
         jsonExtractFailed: 'retry',
-        unknownError: 'close',
-        builtinUnavailable: 'settings',
-        builtinEngineUnavailable: 'settings',
-        builtinLanguageUnsupported: 'settings',
-        builtinSourceUnknown: 'settings',
-        builtinPrepareFailed: 'retry'
+        unknownError: 'close'
     };
 
     function localizedErrorCause(code) {

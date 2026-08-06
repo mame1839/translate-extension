@@ -20,17 +20,7 @@ const MODEL_PLACEHOLDERS = {
     'openai-compatible': ''
 };
 
-const BUILTIN_PROVIDER = 'chrome-builtin';
-
-const BUILTIN_PREPARE_FAILURE_KEYS = {
-    unsupportedBrowser: 'builtinUnsupportedBrowser',
-    engineUnavailable: 'builtinEngineUnavailable',
-    unsupportedLanguage: 'builtinUnsupportedLanguage',
-    prepareFailed: 'builtinPrepareFailed'
-};
-
 const providerSettings = {
-    'chrome-builtin': { apiKey: '', model: '' },
     gemini: { apiKey: '', model: DEFAULTS.geminiModel },
     openai: { apiKey: '', model: DEFAULTS.openaiModel },
     anthropic: { apiKey: '', model: DEFAULTS.anthropicModel },
@@ -65,8 +55,6 @@ let excludeEntries = [];
 let alwaysEntries = [];
 let saveTimer = null;
 let snackTimer = null;
-let builtinStatusToken = 0;
-let builtinPreparing = false;
 let usageStats = null;
 let cacheStats = null;
 
@@ -121,15 +109,15 @@ function populateLanguageSelect(selected) {
     });
 }
 
+function normalizeProvider(provider) {
+    return Object.prototype.hasOwnProperty.call(providerSettings, provider) ? provider : DEFAULTS.apiProvider;
+}
+
 function updateProviderUI(provider) {
     const settings = providerSettings[provider] || providerSettings.gemini;
-    const isBuiltin = provider === BUILTIN_PROVIDER;
     el('apiKey').value = settings.apiKey;
     el('aiModel').value = settings.model;
     el('aiModel').placeholder = MODEL_PLACEHOLDERS[provider] || '';
-    el('apiKeyGroup').hidden = isBuiltin;
-    el('modelGroup').hidden = isBuiltin;
-    el('builtinGroup').hidden = !isBuiltin;
     const endpointGroup = el('endpointGroup');
     if (provider === 'openai-compatible') {
         el('endpointUrl').value = settings.endpoint || '';
@@ -137,92 +125,11 @@ function updateProviderUI(provider) {
     } else {
         endpointGroup.style.display = 'none';
     }
-    if (isBuiltin) refreshBuiltinStatus();
 }
 
 function languageNativeName(code) {
     const entry = LANGUAGES.find(lang => lang.code === code);
     return entry ? entry.native : code;
-}
-
-function setBuiltinStatus(text, tone) {
-    const status = el('builtinStatus');
-    status.textContent = text;
-    status.classList.toggle('is-ready', tone === 'ready');
-    status.classList.toggle('is-error', tone === 'error');
-}
-
-function setBuiltinProgress(percent) {
-    const wrap = el('builtinProgress');
-    if (percent === null) {
-        wrap.hidden = true;
-        return;
-    }
-    wrap.hidden = false;
-    el('builtinProgressBar').style.inlineSize = `${clampInt(percent, 0, 100, 0)}%`;
-}
-
-function builtinMessage(key) {
-    const text = currentT()[key] || '';
-    return text.replace('{language}', languageNativeName(getUiLang()));
-}
-
-async function refreshBuiltinStatus() {
-    if (builtinPreparing) return;
-    const token = ++builtinStatusToken;
-    setBuiltinProgress(null);
-    setBuiltinStatus(builtinMessage('builtinChecking'), '');
-    el('builtinPrepareBtn').hidden = true;
-    let status = null;
-    try {
-        status = await chrome.runtime.sendMessage({ action: 'builtinTranslatorStatus', targetLanguage: getUiLang() });
-    } catch (e) { }
-    if (token !== builtinStatusToken) return;
-    if (!status || !status.supported) {
-        setBuiltinStatus(builtinMessage('builtinUnsupportedBrowser'), 'error');
-        return;
-    }
-    if (status.availability === 'available') {
-        setBuiltinStatus(builtinMessage('builtinReady'), 'ready');
-        return;
-    }
-    if (status.availability === 'downloadable' || status.availability === 'downloading') {
-        setBuiltinStatus(builtinMessage('builtinNeedsDownload'), '');
-        el('builtinPrepareBtn').hidden = false;
-        return;
-    }
-    setBuiltinStatus(builtinMessage(status.engineReachable ? 'builtinUnsupportedLanguage' : 'builtinEngineUnavailable'), 'error');
-}
-
-async function prepareBuiltinEngine() {
-    if (builtinPreparing) return;
-    builtinPreparing = true;
-    builtinStatusToken++;
-    el('builtinPrepareBtn').disabled = true;
-    setBuiltinStatus(currentT().builtinPreparing.replace('{percent}', '0'), '');
-    setBuiltinProgress(0);
-    let result = null;
-    try {
-        result = await chrome.runtime.sendMessage({ action: 'builtinTranslatorPrepare', targetLanguage: getUiLang() });
-    } catch (e) { }
-    builtinPreparing = false;
-    el('builtinPrepareBtn').disabled = false;
-    setBuiltinProgress(null);
-    if (result && result.ok) {
-        setBuiltinStatus(builtinMessage('builtinReady'), 'ready');
-        el('builtinPrepareBtn').hidden = true;
-        return;
-    }
-    const failureKey = BUILTIN_PREPARE_FAILURE_KEYS[result?.reason] || 'builtinPrepareFailed';
-    setBuiltinStatus(builtinMessage(failureKey), 'error');
-    el('builtinPrepareBtn').hidden = failureKey !== 'builtinPrepareFailed';
-}
-
-function handleBuiltinProgressMessage(message) {
-    if (!message || message.action !== 'builtinTranslatorProgress' || !builtinPreparing) return;
-    const percent = clampInt(message.percent, 0, 100, 0);
-    setBuiltinProgress(percent);
-    setBuiltinStatus(currentT().builtinPreparing.replace('{percent}', String(percent)), '');
 }
 
 function saveCurrentProviderToMemory() {
@@ -585,7 +492,6 @@ const resetHandlers = {
         el('toggleBlueBackground').checked = false;
     },
     provider: () => {
-        providerSettings[BUILTIN_PROVIDER] = { apiKey: '', model: '' };
         providerSettings.gemini = { apiKey: '', model: DEFAULTS.geminiModel };
         providerSettings.openai = { apiKey: '', model: DEFAULTS.openaiModel };
         providerSettings.anthropic = { apiKey: '', model: DEFAULTS.anthropicModel };
@@ -644,7 +550,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         providerSettings['openai-compatible'].model = items.compatibleModel || DEFAULTS.compatibleModel;
         providerSettings['openai-compatible'].endpoint = items.compatibleEndpoint || '';
 
-        currentProvider = items.apiProvider || DEFAULTS.apiProvider;
+        currentProvider = normalizeProvider(items.apiProvider || DEFAULTS.apiProvider);
+        if (items.apiProvider && items.apiProvider !== currentProvider) {
+            chrome.storage.local.set({ apiProvider: currentProvider }).catch(() => { });
+        }
         el('apiProvider').value = currentProvider;
         updateProviderUI(currentProvider);
 
@@ -685,15 +594,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         const lang = getUiLang();
         applyDir(lang);
         applyI18n(getT(lang));
-        if (currentProvider === BUILTIN_PROVIDER) refreshBuiltinStatus();
         scheduleSave();
     });
-
-    el('builtinPrepareBtn').addEventListener('click', prepareBuiltinEngine);
-
-    try {
-        chrome.runtime.onMessage.addListener(handleBuiltinProgressMessage);
-    } catch (e) { }
 
     el('apiProvider').addEventListener('change', () => {
         saveCurrentProviderToMemory();
