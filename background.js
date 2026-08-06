@@ -33,6 +33,28 @@ function isFatalTranslationErrorMessage(message) {
     return typeof message === 'string' && FATAL_TRANSLATION_ERRORS.some(m => message.includes(m));
 }
 
+function createTranslationError(code, detail) {
+    const baseMessage = errorMessages[code] || errorMessages.unknownError;
+    const error = new Error(detail ? `${baseMessage}${detail}` : baseMessage);
+    error.translationErrorCode = code;
+    return error;
+}
+
+function inferTranslationErrorCode(message) {
+    if (typeof message !== 'string' || !message) return '';
+    for (const [code, text] of Object.entries(errorMessages)) {
+        if (message.includes(text)) return code;
+    }
+    return '';
+}
+
+function resolveTranslationErrorCode(error, message) {
+    if (typeof error?.translationErrorCode === 'string' && error.translationErrorCode) {
+        return error.translationErrorCode;
+    }
+    return inferTranslationErrorCode(message);
+}
+
 const DEFAULTS = Object.freeze({
     apiProvider: 'gemini',
     geminiModel: 'gemini-3.1-flash-lite',
@@ -95,7 +117,7 @@ function cancelFrameByKey(key) {
     const entry = globalRequestQueue.get(key);
     if (entry) {
         entry.batches.forEach(({ sendResponse }) => {
-            safeSendResponse(sendResponse, { success: false, cancelled: true, error: errorMessages.translationCancelled });
+            safeSendResponse(sendResponse, { success: false, cancelled: true, code: 'translationCancelled', error: errorMessages.translationCancelled });
         });
         globalRequestQueue.delete(key);
     }
@@ -417,7 +439,7 @@ async function processFrame(entry) {
                 while (batchIndex < batches.length) {
                     const { sendResponse } = batches[batchIndex];
                     batchIndex++;
-                    safeSendResponse(sendResponse, { success: false, cancelled: true, error: errorMessages.translationCancelled });
+                    safeSendResponse(sendResponse, { success: false, cancelled: true, code: 'translationCancelled', error: errorMessages.translationCancelled });
                 }
                 if (activeRequests === 0) resolve();
                 return;
@@ -447,6 +469,7 @@ async function processFrame(entry) {
                             success: false,
                             cancelled: error?.name === 'AbortError',
                             fatal: isFatalTranslationErrorMessage(message),
+                            code: resolveTranslationErrorCode(error, message),
                             error: message
                         });
                     } finally {
@@ -471,7 +494,7 @@ function safeSendResponse(sendResponse, responseData) {
 }
 
 function createAbortError() {
-    const error = new Error(errorMessages.translationCancelled);
+    const error = createTranslationError('translationCancelled');
     error.name = 'AbortError';
     return error;
 }
@@ -509,9 +532,9 @@ async function fetchJsonWithTimeout(resource, options = {}, timeout) {
             if (externalSignal?.aborted && !controller.signal.aborted) {
                 throw createAbortError();
             }
-            throw new Error(errorMessages.requestTimeout);
+            throw createTranslationError('requestTimeout');
         }
-        throw new Error(`${errorMessages.fetchError}: ${error.message}`);
+        throw createTranslationError('fetchError', `: ${error.message}`);
     } finally {
         if (timeoutId) clearTimeout(timeoutId);
     }
@@ -582,7 +605,7 @@ function parseTranslationResponse(responseText) {
     try {
         return extractJson(responseText);
     } catch (e) {
-        throw new Error(`${errorMessages.jsonParseFailed} ${e.message}\nResponse: ${(responseText || '').substring(0, 200)}`);
+        throw createTranslationError('jsonParseFailed', ` ${e.message}\nResponse: ${(responseText || '').substring(0, 200)}`);
     }
 }
 
@@ -619,7 +642,7 @@ function extractJson(responseText) {
     const partial = extractEntriesByRegex(controlEscaped);
     if (Object.keys(partial).length > 0) return partial;
 
-    throw new Error(errorMessages.jsonExtractFailed);
+    throw createTranslationError('jsonExtractFailed');
 }
 
 function escapeControlCharsInJsonStrings(text) {
@@ -1008,20 +1031,20 @@ function handleOpenAIHttpError(response, data) {
     const message = data?.error?.message || `HTTP Error ${response.status}`;
     switch (response.status) {
         case 401:
-            throw new Error(errorMessages.invalidApiKey);
+            throw createTranslationError('invalidApiKey');
         case 403:
-            throw new Error(errorMessages.invalidApiKey);
+            throw createTranslationError('invalidApiKey');
         case 404:
-            throw new Error(errorMessages.modelNotFound);
+            throw createTranslationError('modelNotFound');
         case 429: {
             const errorType = data?.error?.type || '';
             const errorCode = data?.error?.code || '';
             if (errorType === 'insufficient_quota' || errorCode === 'insufficient_quota') {
-                throw new Error(`${errorMessages.insufficientQuota}\n${message}`);
+                throw createTranslationError('insufficientQuota', `\n${message}`);
             }
             const retryAfterMs = parseRetryAfterHeaderMs(response);
             const detail = message ? `\n${message}` : '';
-            const err = new Error(`${errorMessages.apiLimitReached}${detail}`);
+            const err = createTranslationError('apiLimitReached', detail);
             if (retryAfterMs != null) err.retryAfterMs = retryAfterMs;
             throw err;
         }
@@ -1029,9 +1052,9 @@ function handleOpenAIHttpError(response, data) {
         case 502:
         case 503:
         case 504:
-            throw new Error(`${errorMessages.serverError}\n${message}`);
+            throw createTranslationError('serverError', `\n${message}`);
         default:
-            throw new Error(`${errorMessages.unknownError}\n${message}`);
+            throw createTranslationError('unknownError', `\n${message}`);
     }
 }
 
@@ -1040,13 +1063,13 @@ function handleGeminiHttpError(response, data) {
     const status = data?.error?.status || '';
     switch (response.status) {
         case 400:
-            if (message.includes("API key not valid")) throw new Error(errorMessages.invalidApiKey);
-            throw new Error(`${errorMessages.invalidRequest}\n${message}`);
+            if (message.includes("API key not valid")) throw createTranslationError('invalidApiKey');
+            throw createTranslationError('invalidRequest', `\n${message}`);
         case 401:
         case 403:
-            throw new Error(errorMessages.invalidApiKey);
+            throw createTranslationError('invalidApiKey');
         case 404:
-            throw new Error(errorMessages.modelNotFound);
+            throw createTranslationError('modelNotFound');
         case 429: {
             let retryAfterMs = parseRetryAfterHeaderMs(response);
             if (retryAfterMs == null) retryAfterMs = extractGeminiRetryDelayMs(data);
@@ -1055,7 +1078,7 @@ function handleGeminiHttpError(response, data) {
             if (message) detailParts.push(message);
             if (retryAfterMs != null) detailParts.push(`Retry-After: ${retryAfterMs / 1000}s`);
             const detail = detailParts.length ? `\n${detailParts.join(' | ')}` : '';
-            const err = new Error(`${errorMessages.apiLimitReached}${detail}`);
+            const err = createTranslationError('apiLimitReached', detail);
             if (retryAfterMs != null) err.retryAfterMs = retryAfterMs;
             throw err;
         }
@@ -1063,9 +1086,9 @@ function handleGeminiHttpError(response, data) {
         case 502:
         case 503:
         case 504:
-            throw new Error(`${errorMessages.serverError}\n${message}`);
+            throw createTranslationError('serverError', `\n${message}`);
         default:
-            throw new Error(`${errorMessages.unknownError}\n${message}`);
+            throw createTranslationError('unknownError', `\n${message}`);
     }
 }
 
@@ -1073,15 +1096,15 @@ function handleAnthropicHttpError(response, data) {
     const message = data?.error?.message || `HTTP Error ${response.status}`;
     switch (response.status) {
         case 400:
-            throw new Error(`${errorMessages.invalidRequest}\n${message}`);
+            throw createTranslationError('invalidRequest', `\n${message}`);
         case 401:
         case 403:
-            throw new Error(errorMessages.invalidApiKey);
+            throw createTranslationError('invalidApiKey');
         case 404:
-            throw new Error(errorMessages.modelNotFound);
+            throw createTranslationError('modelNotFound');
         case 429: {
             const retryAfterMs = parseRetryAfterHeaderMs(response);
-            const err = new Error(`${errorMessages.apiLimitReached}\n${message}`);
+            const err = createTranslationError('apiLimitReached', `\n${message}`);
             if (retryAfterMs != null) err.retryAfterMs = retryAfterMs;
             throw err;
         }
@@ -1090,9 +1113,9 @@ function handleAnthropicHttpError(response, data) {
         case 503:
         case 504:
         case 529:
-            throw new Error(`${errorMessages.serverError}\n${message}`);
+            throw createTranslationError('serverError', `\n${message}`);
         default:
-            throw new Error(`${errorMessages.unknownError}\n${message}`);
+            throw createTranslationError('unknownError', `\n${message}`);
     }
 }
 
@@ -1169,10 +1192,10 @@ async function streamModelResponse(streamRequest) {
     } catch (error) {
         if (timeoutId) clearTimeout(timeoutId);
         if (error.name === 'AbortError') {
-            if (timedOut()) throw new Error(errorMessages.requestTimeout);
+            if (timedOut()) throw createTranslationError('requestTimeout');
             throw createAbortError();
         }
-        throw new Error(`${errorMessages.fetchError}: ${error.message}`);
+        throw createTranslationError('fetchError', `: ${error.message}`);
     }
     try {
         if (!response.ok) {
@@ -1180,7 +1203,7 @@ async function streamModelResponse(streamRequest) {
             try { data = await response.json(); } catch (e) { }
             onHttpError(response, data);
         }
-        if (!response.body) throw new Error(errorMessages.emptyResponse);
+        if (!response.body) throw createTranslationError('emptyResponse');
         const acc = { fullText: '', finishReason: '', sentKeys: new Set() };
         const reader = response.body.getReader();
         const decoder = new TextDecoder('utf-8');
@@ -1203,7 +1226,7 @@ async function streamModelResponse(streamRequest) {
         return acc.fullText;
     } catch (error) {
         if (error?.name === 'AbortError') {
-            if (timedOut()) throw new Error(errorMessages.requestTimeout);
+            if (timedOut()) throw createTranslationError('requestTimeout');
             throw createAbortError();
         }
         throw error;
@@ -1227,11 +1250,11 @@ function readGeminiStreamChunk(chunk, acc) {
 
 function finalizeGeminiStream(acc) {
     if (acc.finishReason === 'SAFETY' || acc.finishReason === 'BLOCKLIST' || acc.finishReason === 'PROHIBITED_CONTENT') {
-        throw new Error(`${errorMessages.invalidRequest} (content blocked: ${acc.finishReason})`);
+        throw createTranslationError('invalidRequest', ` (content blocked: ${acc.finishReason})`);
     }
     if (!acc.fullText) {
-        if (acc.finishReason === 'MAX_TOKENS') throw new Error(errorMessages.maxTokensError);
-        throw new Error(errorMessages.emptyResponse);
+        if (acc.finishReason === 'MAX_TOKENS') throw createTranslationError('maxTokensError');
+        throw createTranslationError('emptyResponse');
     }
 }
 
@@ -1243,8 +1266,8 @@ function readOpenAIStreamChunk(chunk, acc) {
 }
 
 function finalizeOpenAIStream(acc) {
-    if (acc.finishReason === 'length') throw new Error(errorMessages.maxTokensError);
-    if (!acc.fullText) throw new Error(errorMessages.emptyResponse);
+    if (acc.finishReason === 'length') throw createTranslationError('maxTokensError');
+    if (!acc.fullText) throw createTranslationError('emptyResponse');
 }
 
 function readAnthropicStreamChunk(chunk, acc) {
@@ -1252,9 +1275,9 @@ function readAnthropicStreamChunk(chunk, acc) {
         const streamErrorType = chunk.error?.type || '';
         const streamErrorMessage = chunk.error?.message || 'stream error';
         if (streamErrorType === 'overloaded_error' || streamErrorType === 'api_error') {
-            throw new Error(`${errorMessages.serverError}\n${streamErrorMessage}`);
+            throw createTranslationError('serverError', `\n${streamErrorMessage}`);
         }
-        throw new Error(`${errorMessages.unknownError}\n${streamErrorMessage}`);
+        throw createTranslationError('unknownError', `\n${streamErrorMessage}`);
     }
     if (chunk?.type === 'message_delta' && chunk.delta?.stop_reason) {
         acc.finishReason = chunk.delta.stop_reason;
@@ -1266,8 +1289,8 @@ function readAnthropicStreamChunk(chunk, acc) {
 }
 
 function finalizeAnthropicStream(acc) {
-    if (acc.finishReason === 'max_tokens') throw new Error(errorMessages.maxTokensError);
-    if (!acc.fullText) throw new Error(errorMessages.emptyResponse);
+    if (acc.finishReason === 'max_tokens') throw createTranslationError('maxTokensError');
+    if (!acc.fullText) throw createTranslationError('emptyResponse');
 }
 
 function geminiAllowsCustomTemperature(model) {
@@ -1291,7 +1314,7 @@ function extractGeminiRetryDelayMs(data) {
 async function translateWithGemini(text, retryLimit, signal, targetLanguage = 'English', targetLanguageCode, streamContext = null) {
     const { geminiApiKey: apiKey, geminiModel: model, maxToken, timeout } = await new Promise(resolve =>
         chrome.storage.local.get(['geminiApiKey', 'geminiModel', 'maxToken', 'timeout'], resolve));
-    if (!apiKey) throw new Error(errorMessages.apiKeyNotSet);
+    if (!apiKey) throw createTranslationError('apiKeyNotSet');
     const actualModel = (model || '').trim() || DEFAULTS.geminiModel;
     const actualMaxToken = maxToken || DEFAULTS.maxToken;
     const actualTimeout = timeout || DEFAULTS.timeout;
@@ -1333,22 +1356,22 @@ async function translateWithGemini(text, retryLimit, signal, targetLanguage = 'E
         if (!response.ok) handleGeminiHttpError(response, data);
         if (!data || !Array.isArray(data.candidates) || data.candidates.length === 0) {
             const blockReason = data?.promptFeedback?.blockReason;
-            if (blockReason) throw new Error(`${errorMessages.invalidRequest} (blocked: ${blockReason})`);
-            throw new Error(`${errorMessages.unknownError} (no candidates)`);
+            if (blockReason) throw createTranslationError('invalidRequest', ` (blocked: ${blockReason})`);
+            throw createTranslationError('unknownError', ' (no candidates)');
         }
         const candidate = data.candidates[0];
         if (candidate.finishReason === 'SAFETY' || candidate.finishReason === 'BLOCKLIST' || candidate.finishReason === 'PROHIBITED_CONTENT') {
-            throw new Error(`${errorMessages.invalidRequest} (content blocked: ${candidate.finishReason})`);
+            throw createTranslationError('invalidRequest', ` (content blocked: ${candidate.finishReason})`);
         }
         const parts = candidate.content?.parts;
         const responseText = Array.isArray(parts)
             ? parts.map(p => p?.text || '').join('')
             : '';
         if (candidate.finishReason === 'MAX_TOKENS') {
-            if (!responseText) throw new Error(errorMessages.maxTokensError);
+            if (!responseText) throw createTranslationError('maxTokensError');
             return parseTranslationResponse(responseText);
         }
-        if (!responseText) throw new Error(errorMessages.emptyResponse);
+        if (!responseText) throw createTranslationError('emptyResponse');
         return parseTranslationResponse(responseText);
     }, retryLimit, signal);
 }
@@ -1356,7 +1379,7 @@ async function translateWithGemini(text, retryLimit, signal, targetLanguage = 'E
 async function translateWithOpenAI(text, retryLimit, signal, targetLanguage = 'English', targetLanguageCode, streamContext = null) {
     const { openaiApiKey: apiKey, openaiModel: model, maxToken, timeout } = await new Promise(resolve =>
         chrome.storage.local.get(['openaiApiKey', 'openaiModel', 'maxToken', 'timeout'], resolve));
-    if (!apiKey) throw new Error(errorMessages.apiKeyNotSet);
+    if (!apiKey) throw createTranslationError('apiKeyNotSet');
     const actualModel = (model || '').trim() || DEFAULTS.openaiModel;
     const actualMaxToken = maxToken || DEFAULTS.maxToken;
     const actualTimeout = timeout || DEFAULTS.timeout;
@@ -1394,10 +1417,10 @@ async function translateWithOpenAI(text, retryLimit, signal, targetLanguage = 'E
         }, actualTimeout);
         if (!response.ok) handleOpenAIHttpError(response, data);
         const choice = data?.choices?.[0];
-        if (!choice) throw new Error(`${errorMessages.unknownError} (no choices)`);
-        if (choice.finish_reason === 'length') throw new Error(errorMessages.maxTokensError);
+        if (!choice) throw createTranslationError('unknownError', ' (no choices)');
+        if (choice.finish_reason === 'length') throw createTranslationError('maxTokensError');
         const responseText = choice.message?.content || '';
-        if (!responseText) throw new Error(errorMessages.emptyResponse);
+        if (!responseText) throw createTranslationError('emptyResponse');
         return parseTranslationResponse(responseText);
     }, retryLimit, signal);
 }
@@ -1405,7 +1428,7 @@ async function translateWithOpenAI(text, retryLimit, signal, targetLanguage = 'E
 async function translateWithOpenAICompatible(text, retryLimit, signal, targetLanguage = 'English', targetLanguageCode, streamContext = null) {
     const { compatibleApiKey: apiKey, compatibleModel: model, compatibleEndpoint: endpoint, maxToken, timeout } = await new Promise(resolve =>
         chrome.storage.local.get(['compatibleApiKey', 'compatibleModel', 'compatibleEndpoint', 'maxToken', 'timeout'], resolve));
-    if (!endpoint) throw new Error(errorMessages.endpointNotSet);
+    if (!endpoint) throw createTranslationError('endpointNotSet');
     const actualModel = (model || '').trim();
     const actualMaxToken = maxToken || DEFAULTS.maxToken;
     const actualTimeout = timeout || DEFAULTS.timeout;
@@ -1441,10 +1464,10 @@ async function translateWithOpenAICompatible(text, retryLimit, signal, targetLan
         }, actualTimeout);
         if (!response.ok) handleOpenAIHttpError(response, data);
         const choice = data?.choices?.[0];
-        if (!choice) throw new Error(`${errorMessages.unknownError} (no choices)`);
-        if (choice.finish_reason === 'length') throw new Error(errorMessages.maxTokensError);
+        if (!choice) throw createTranslationError('unknownError', ' (no choices)');
+        if (choice.finish_reason === 'length') throw createTranslationError('maxTokensError');
         const responseText = choice.message?.content || '';
-        if (!responseText) throw new Error(errorMessages.emptyResponse);
+        if (!responseText) throw createTranslationError('emptyResponse');
         return parseTranslationResponse(responseText);
     }, retryLimit, signal);
 }
@@ -1452,7 +1475,7 @@ async function translateWithOpenAICompatible(text, retryLimit, signal, targetLan
 async function translateWithAnthropic(text, retryLimit, signal, targetLanguage = 'English', targetLanguageCode, streamContext = null) {
     const { anthropicApiKey: apiKey, anthropicModel: model, maxToken, timeout } = await new Promise(resolve =>
         chrome.storage.local.get(['anthropicApiKey', 'anthropicModel', 'maxToken', 'timeout'], resolve));
-    if (!apiKey) throw new Error(errorMessages.apiKeyNotSet);
+    if (!apiKey) throw createTranslationError('apiKeyNotSet');
     const actualModel = (model || '').trim() || DEFAULTS.anthropicModel;
     const actualMaxToken = Math.min(maxToken || DEFAULTS.maxToken, ANTHROPIC_MAX_OUTPUT_TOKENS);
     const actualTimeout = timeout || DEFAULTS.timeout;
@@ -1490,9 +1513,9 @@ async function translateWithAnthropic(text, retryLimit, signal, targetLanguage =
             signal
         }, actualTimeout);
         if (!response.ok) handleAnthropicHttpError(response, data);
-        if (data?.stop_reason === 'max_tokens') throw new Error(errorMessages.maxTokensError);
+        if (data?.stop_reason === 'max_tokens') throw createTranslationError('maxTokensError');
         const responseText = data?.content?.[0]?.text || '';
-        if (!responseText) throw new Error(errorMessages.emptyResponse);
+        if (!responseText) throw createTranslationError('emptyResponse');
         return parseTranslationResponse(responseText);
     }, retryLimit, signal);
 }
