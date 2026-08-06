@@ -13,11 +13,24 @@
         closeButton: 'Close',
         cancelButton: 'Cancel',
         openOptions: 'Open settings',
-        reactWarning: 'This site uses a complex framework. Translation may break the UI.'
+        reactWarning: 'This site uses a complex framework. Translation may break the UI.',
+        blocksTemplate: 'Blocks {translated} / {total}',
+        streamingNote: 'Applying text as it arrives',
+        minimizeLabel: 'Minimize',
+        restoreLabel: 'Restore',
+        showOriginal: 'Show original',
+        errorTitle: 'Translation failed',
+        errorDetails: 'Technical details',
+        retryButton: 'Retry'
     };
 
+    const RTL_LANGS = new Set(['ar', 'ur', 'he', 'fa']);
+    let currentUiLang = 'en';
+
     function applyStrings(lang) {
-        const t = (typeof TRANSLATIONS !== 'undefined' && TRANSLATIONS[lang]) ? TRANSLATIONS[lang] : TRANSLATIONS['en'];
+        const hasLang = typeof TRANSLATIONS !== 'undefined' && !!TRANSLATIONS[lang];
+        const t = hasLang ? TRANSLATIONS[lang] : TRANSLATIONS['en'];
+        currentUiLang = hasLang ? lang : 'en';
         promptMessage = t.promptMessage;
         translateButtonText = { yes: t.promptYes, no: t.promptNo, never: t.promptNever };
         st = {
@@ -32,7 +45,15 @@
             closeButton: t.closeBtn,
             cancelButton: t.cancelBtn,
             openOptions: t.openOptions,
-            reactWarning: t.reactWarning
+            reactWarning: t.reactWarning,
+            blocksTemplate: t.popupBlocksTemplate,
+            streamingNote: t.panelStreamingNote,
+            minimizeLabel: t.panelMinimize,
+            restoreLabel: t.panelRestore,
+            showOriginal: t.panelShowOriginal,
+            errorTitle: t.errTitle,
+            errorDetails: t.errDetails,
+            retryButton: t.errRetry
         };
     }
 
@@ -69,387 +90,314 @@
 
     const SHARED_FONT = `-apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Inter, "Hiragino Kaku Gothic ProN", "Hiragino Sans", "Yu Gothic UI", Meiryo, sans-serif`;
 
-    const PROMPT_CSS = `
+    const UI_TOKENS_CSS = `
         :host { all: initial; }
         * { box-sizing: border-box; }
-        .prompt {
-            position: fixed !important;
-            top: 20px !important;
-            right: 20px !important;
-            z-index: 2147483647 !important;
-            width: 280px;
-            padding: 18px;
-            background: rgba(255, 255, 255, 0.96);
-            backdrop-filter: saturate(180%) blur(18px);
-            -webkit-backdrop-filter: saturate(180%) blur(18px);
-            border: 1px solid rgba(15, 23, 42, 0.08);
-            border-radius: 14px;
-            box-shadow: 0 20px 40px -16px rgba(15, 23, 42, 0.24), 0 6px 14px -4px rgba(15, 23, 42, 0.1);
-            color: #0f172a;
+        .root {
+            --primary: #1a73e8;
+            --on-primary: #ffffff;
+            --primary-soft: rgba(26, 115, 232, 0.18);
+            --primary-buffer: rgba(26, 115, 232, 0.45);
+            --primary-tint: rgba(26, 115, 232, 0.08);
+            --surface: #ffffff;
+            --surface-1: #f5f5fa;
+            --surface-2: #ededf4;
+            --outline-soft: rgba(27, 27, 33, 0.09);
+            --text: #1b1b21;
+            --text-2: #4a4952;
+            --text-3: #7b7a84;
+            --error: #ba1a1a;
+            --error-container: #ffe1de;
+            --on-error-container: #7a1210;
+            --error-tint: rgba(186, 26, 26, 0.08);
+            --success: #0d7a4d;
+            --success-soft: rgba(13, 122, 77, 0.16);
+            --warning-container: #ffefc8;
+            --on-warning-container: #6d5100;
+            --ring: rgba(26, 115, 232, 0.35);
+            --elev-3: 0 8px 24px -6px rgba(23, 23, 40, 0.22), 0 2px 8px rgba(23, 23, 40, 0.10);
+            --ease: cubic-bezier(0.2, 0, 0, 1);
             font-family: ${SHARED_FONT};
-            font-size: 13px;
+            font-size: 13.5px;
             line-height: 1.5;
+            color: var(--text);
             font-feature-settings: "kern" 1, "liga" 1, "palt" 1;
             -webkit-font-smoothing: antialiased;
-            animation: promptIn 260ms cubic-bezier(0.34, 1.56, 0.64, 1);
         }
-        @keyframes promptIn {
-            from { opacity: 0; transform: translateY(-8px) scale(0.96); }
-            to { opacity: 1; transform: translateY(0) scale(1); }
-        }
-        .prompt-header {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            margin-bottom: 12px;
-        }
-        .prompt-icon {
-            width: 30px;
-            height: 30px;
-            border-radius: 9px;
-            background: linear-gradient(135deg, #6366f1 0%, #a855f7 60%, #ec4899 100%);
-            color: #ffffff;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            flex-shrink: 0;
-            box-shadow: 0 4px 12px -2px rgba(99, 102, 241, 0.45);
-        }
-        .prompt-text {
-            font-weight: 600;
-            color: #0f172a;
-            letter-spacing: -0.005em;
-        }
-        .prompt-buttons {
-            display: flex;
-            gap: 8px;
-        }
-        .btn {
-            flex: 1;
-            padding: 9px 14px;
-            font-size: 13px;
-            font-weight: 600;
-            font-family: inherit;
-            border: 1px solid transparent;
-            border-radius: 8px;
-            cursor: pointer;
-            transition: background-color 150ms, color 150ms, border-color 150ms, transform 100ms, box-shadow 150ms;
-            letter-spacing: -0.005em;
-        }
-        .btn.primary {
-            background: #6366f1;
-            color: #ffffff;
-            box-shadow: 0 1px 2px rgba(79, 70, 229, 0.2), 0 4px 10px -2px rgba(79, 70, 229, 0.3);
-        }
-        .btn.primary:hover { background: #4f46e5; transform: translateY(-1px); }
-        .btn.primary:active { transform: translateY(0); background: #4338ca; }
-        .btn.ghost {
-            background: transparent;
-            color: #475569;
-            border-color: rgba(15, 23, 42, 0.14);
-        }
-        .btn.ghost:hover {
-            background: rgba(15, 23, 42, 0.05);
-            color: #0f172a;
-        }
-        .btn.subtle {
-            display: block;
-            width: 100%;
-            margin-top: 10px;
-            padding: 7px 10px;
-            font-size: 12px;
-            font-weight: 500;
-            color: #94a3b8;
-            background: transparent;
-            border: none;
-            cursor: pointer;
-            border-radius: 6px;
-            transition: color 150ms, background-color 150ms;
-            font-family: inherit;
-        }
-        .btn.subtle:hover { color: #64748b; background: rgba(15, 23, 42, 0.04); }
-        .prompt-warning {
-            display: flex;
-            align-items: flex-start;
-            gap: 8px;
-            margin: 0 0 12px;
-            padding: 10px 12px;
-            background: rgba(245, 158, 11, 0.14);
-            border: 1px solid rgba(245, 158, 11, 0.35);
-            border-radius: 8px;
-            font-size: 12px;
-            line-height: 1.45;
-            color: #92400e;
-        }
-        .prompt-warning-icon { flex-shrink: 0; font-size: 14px; line-height: 1; }
-        .prompt-warning-text { flex: 1; word-break: break-word; }
         @media (prefers-color-scheme: dark) {
-            .prompt {
-                background: rgba(20, 26, 40, 0.95);
-                border-color: rgba(255, 255, 255, 0.1);
-                color: #f1f5f9;
+            .root {
+                --primary: #8ab4f8;
+                --on-primary: #062e6f;
+                --primary-soft: rgba(138, 180, 248, 0.20);
+                --primary-buffer: rgba(138, 180, 248, 0.45);
+                --primary-tint: rgba(138, 180, 248, 0.12);
+                --surface: #1e1e24;
+                --surface-1: #26262d;
+                --surface-2: #2e2e36;
+                --outline-soft: rgba(232, 231, 240, 0.09);
+                --text: #e5e4ea;
+                --text-2: #b6b5bf;
+                --text-3: #85848e;
+                --error: #ffb4ab;
+                --error-container: #6e2621;
+                --on-error-container: #ffdad5;
+                --error-tint: rgba(255, 180, 171, 0.12);
+                --success: #6fd9a4;
+                --success-soft: rgba(111, 217, 164, 0.18);
+                --warning-container: #574400;
+                --on-warning-container: #ffe08d;
+                --ring: rgba(138, 180, 248, 0.4);
+                --elev-3: 0 8px 24px -6px rgba(0, 0, 0, 0.55), 0 2px 8px rgba(0, 0, 0, 0.35);
             }
-            .prompt-text { color: #f1f5f9; }
-            .btn.ghost {
-                color: #cbd5e1;
-                border-color: rgba(255, 255, 255, 0.14);
-            }
-            .btn.ghost:hover { background: rgba(255, 255, 255, 0.06); color: #f1f5f9; }
-            .btn.subtle { color: #64748b; }
-            .btn.subtle:hover { color: #94a3b8; background: rgba(255, 255, 255, 0.05); }
-            .prompt-warning {
-                background: rgba(245, 158, 11, 0.18);
-                border-color: rgba(245, 158, 11, 0.35);
-                color: #fbbf24;
-            }
-            .prompt-warning svg { color: #fbbf24; }
         }
     `;
 
-    const PANEL_CSS = `
-        :host { all: initial; }
-        * { box-sizing: border-box; }
-        .panel {
+    const UI_CARD_CSS = `
+        .card {
             position: fixed !important;
-            bottom: 16px !important;
-            right: 16px !important;
             z-index: 2147483647 !important;
-            width: 288px;
+            width: 316px;
+            max-width: calc(100vw - 32px);
             padding: 16px;
-            background: rgba(255, 255, 255, 0.96);
-            backdrop-filter: saturate(180%) blur(18px);
-            -webkit-backdrop-filter: saturate(180%) blur(18px);
-            border: 1px solid rgba(15, 23, 42, 0.08);
-            border-radius: 14px;
-            box-shadow: 0 20px 40px -16px rgba(15, 23, 42, 0.24), 0 6px 14px -4px rgba(15, 23, 42, 0.1);
-            color: #0f172a;
-            font-family: ${SHARED_FONT};
-            font-size: 13px;
-            line-height: 1.5;
-            font-feature-settings: "kern" 1, "liga" 1, "palt" 1;
-            -webkit-font-smoothing: antialiased;
-            animation: panelIn 240ms cubic-bezier(0.34, 1.56, 0.64, 1);
+            background: var(--surface);
+            border: 1px solid var(--outline-soft);
+            border-radius: 16px;
+            box-shadow: var(--elev-3);
+            animation: cardIn 220ms var(--ease);
         }
-        @keyframes panelIn {
-            from { opacity: 0; transform: translateY(8px) scale(0.98); }
-            to { opacity: 1; transform: translateY(0) scale(1); }
+        .card.top { top: 16px; right: 16px; }
+        .card.bottom { bottom: 16px; right: 16px; }
+        @keyframes cardIn {
+            from { opacity: 0; transform: translateY(-6px) scale(0.98); }
+            to { opacity: 1; transform: none; }
         }
-        .panel-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            margin-bottom: 12px;
-        }
-        .title {
-            display: flex;
-            align-items: center;
-            gap: 9px;
-            font-weight: 600;
-            font-size: 13px;
-            letter-spacing: -0.005em;
-        }
-        .dot {
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            background: #6366f1;
-            box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.22);
-            animation: pulse 1.5s ease-in-out infinite;
+        .head { display: flex; align-items: center; gap: 10px; }
+        .app-icon {
+            width: 28px; height: 28px;
+            border-radius: 8px;
+            background: var(--primary);
+            color: var(--on-primary);
+            display: grid; place-items: center;
             flex-shrink: 0;
         }
-        @keyframes pulse {
-            0%, 100% { opacity: 1; transform: scale(1); box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.22); }
-            50% { opacity: 0.7; transform: scale(1.2); box-shadow: 0 0 0 7px rgba(99, 102, 241, 0); }
-        }
-        .dot.done {
-            background: #10b981;
-            box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.22);
-            animation: none;
-        }
-        .dot.error {
-            background: #ef4444;
-            box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.22);
-            animation: none;
-        }
-        .icon-btn {
-            width: 26px;
-            height: 26px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background: transparent;
-            border: none;
-            color: #94a3b8;
-            cursor: pointer;
-            border-radius: 6px;
-            padding: 0;
-            transition: background-color 150ms, color 150ms;
-        }
-        .icon-btn:hover {
-            background: rgba(15, 23, 42, 0.06);
-            color: #0f172a;
-        }
-        .progress-bar {
-            width: 100%;
-            height: 6px;
-            background: rgba(15, 23, 42, 0.06);
+        .status-ico {
+            width: 28px; height: 28px;
             border-radius: 999px;
+            display: grid; place-items: center;
+            flex-shrink: 0;
+        }
+        .status-ico.ok { background: var(--success-soft); color: var(--success); }
+        .status-ico.err { background: var(--error-container); color: var(--on-error-container); }
+        .status-ico.neutral { background: var(--surface-1); color: var(--text-3); }
+        .head-text { flex: 1; min-width: 0; }
+        .title { font-size: 13.5px; font-weight: 600; }
+        .sub { font-size: 12px; color: var(--text-3); margin-top: 1px; }
+        .icon-btn {
+            width: 30px; height: 30px;
+            display: grid; place-items: center;
+            border: none; border-radius: 999px;
+            background: transparent;
+            color: var(--text-3);
+            cursor: pointer;
+            padding: 0;
+            flex-shrink: 0;
+            transition: background-color 150ms var(--ease), color 150ms var(--ease);
+        }
+        .icon-btn:hover { background: var(--surface-2); color: var(--text); }
+        .icon-btn:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--ring); }
+        .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+        .root[dir="rtl"] .actions { justify-content: flex-start; }
+        .btn {
+            border: none; border-radius: 999px;
+            font: inherit;
+            font-size: 13px;
+            font-weight: 600;
+            padding: 8px 18px;
+            cursor: pointer;
+            display: inline-flex; align-items: center; gap: 6px;
+            transition: background-color 150ms var(--ease), box-shadow 150ms var(--ease);
+        }
+        .btn:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--ring); }
+        .btn[disabled] { opacity: 0.5; cursor: default; }
+        .btn-filled { background: var(--primary); color: var(--on-primary); }
+        .btn-filled:not([disabled]):hover { box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2); }
+        .btn-text { background: transparent; color: var(--primary); padding: 8px 12px; }
+        .btn-text:not([disabled]):hover { background: var(--primary-tint); }
+        .btn-danger-text { background: transparent; color: var(--error); padding: 8px 12px; }
+        .btn-danger-text:not([disabled]):hover { background: var(--error-tint); }
+        @media (prefers-reduced-motion: reduce) {
+            .card { animation: none; }
+        }
+    `;
+
+    const PROMPT_CSS = UI_TOKENS_CSS + UI_CARD_CSS + `
+        .warn {
+            display: flex; align-items: flex-start; gap: 8px;
+            margin-top: 12px;
+            padding: 9px 12px;
+            background: var(--warning-container);
+            color: var(--on-warning-container);
+            border-radius: 10px;
+            font-size: 12px;
+            line-height: 1.45;
+        }
+        .warn svg { flex-shrink: 0; margin-top: 1px; }
+        .warn-text { flex: 1; min-width: 0; word-break: break-word; }
+        .never-row {
+            display: flex; align-items: center;
+            margin: 12px -16px 0;
+            padding: 10px 16px 0;
+            border-top: 1px solid var(--outline-soft);
+        }
+        .never-btn {
+            background: transparent; border: none;
+            color: var(--text-3);
+            font: inherit;
+            font-size: 12px;
+            font-weight: 500;
+            padding: 4px 8px;
+            border-radius: 8px;
+            cursor: pointer;
+            display: inline-flex; align-items: center; gap: 6px;
+        }
+        .never-btn:hover { background: var(--surface-1); color: var(--text-2); }
+        .never-btn:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--ring); }
+    `;
+
+    const PANEL_CSS = UI_TOKENS_CSS + UI_CARD_CSS + `
+        .progress-bar {
+            position: relative;
+            height: 4px;
+            margin-top: 14px;
+            border-radius: 999px;
+            background: var(--primary-soft);
             overflow: hidden;
         }
         .progress-fill {
-            height: 100%;
+            position: absolute;
+            inset-block: 0;
+            inset-inline-start: 0;
             width: 0%;
-            background: linear-gradient(90deg, #6366f1, #8b5cf6);
             border-radius: 999px;
-            transition: width 300ms cubic-bezier(0.4, 0, 0.2, 1);
-            position: relative;
-            overflow: hidden;
+            background: var(--primary);
+            transition: width 300ms var(--ease);
         }
-        .progress-fill::after {
+        .progress-bar.streaming::after {
             content: "";
             position: absolute;
-            top: 0; left: 0; right: 0; bottom: 0;
-            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.35), transparent);
-            animation: shimmer 1.6s infinite;
+            inset-block: 0;
+            inset-inline-start: var(--stream-offset, 0%);
+            width: 18%;
+            border-radius: 999px;
+            background: var(--primary-buffer);
+            animation: streamBuffer 1.4s var(--ease) infinite;
         }
-        @keyframes shimmer {
-            0% { transform: translateX(-100%); }
-            100% { transform: translateX(100%); }
+        @keyframes streamBuffer {
+            0% { transform: translateX(0); opacity: 1; }
+            100% { transform: translateX(160%); opacity: 0.2; }
         }
-        .progress-row {
+        .root[dir="rtl"] .progress-bar.streaming::after { animation-name: streamBufferRtl; }
+        @keyframes streamBufferRtl {
+            0% { transform: translateX(0); opacity: 1; }
+            100% { transform: translateX(-160%); opacity: 0.2; }
+        }
+        .caption {
             display: flex;
-            align-items: center;
             justify-content: space-between;
-            gap: 12px;
-            margin-top: 8px;
-        }
-        .progress-text {
-            font-size: 13px;
-            font-weight: 600;
-            color: #0f172a;
+            gap: 8px;
+            margin-top: 7px;
+            font-size: 11.5px;
+            color: var(--text-3);
             font-variant-numeric: tabular-nums;
-            letter-spacing: -0.005em;
         }
-        .stats {
-            font-size: 11px;
-            color: #94a3b8;
-            font-variant-numeric: tabular-nums;
-            text-align: right;
-        }
-        .action-btn {
-            width: 100%;
-            margin-top: 14px;
-            padding: 9px 14px;
-            font-size: 13px;
-            font-weight: 600;
-            font-family: inherit;
-            border: 1px solid transparent;
-            border-radius: 8px;
-            cursor: pointer;
-            transition: background-color 150ms, color 150ms, border-color 150ms;
-            letter-spacing: -0.005em;
-        }
-        .action-btn.danger {
-            background: rgba(239, 68, 68, 0.12);
-            color: #dc2626;
-        }
-        .action-btn.danger:hover { background: rgba(239, 68, 68, 0.2); }
-        .action-btn.primary {
-            background: #6366f1;
-            color: #ffffff;
-            box-shadow: 0 1px 2px rgba(79, 70, 229, 0.2);
-        }
-        .action-btn.primary:hover { background: #4f46e5; }
-        .action-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-        .error-box {
-            background: rgba(239, 68, 68, 0.08);
-            border: 1px solid rgba(239, 68, 68, 0.22);
-            border-radius: 8px;
-            padding: 10px 12px;
-            margin-top: 10px;
-            font-size: 12px;
-            color: #b91c1c;
+        .caption .pct { color: var(--text-2); font-weight: 600; font-size: 12px; flex-shrink: 0; }
+        .caption .stats { text-align: end; min-width: 0; }
+        .cause {
+            margin-top: 12px;
+            font-size: 12.5px;
             line-height: 1.5;
+            color: var(--text-2);
             word-break: break-word;
-            max-height: 180px;
-            overflow-y: auto;
-            white-space: pre-wrap;
         }
-        .error-link {
-            display: inline-block;
-            margin-top: 8px;
+        details.raw { margin-top: 10px; }
+        details.raw summary {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 3px 8px;
+            border-radius: 8px;
             font-size: 12px;
-            font-weight: 500;
-            color: #6366f1;
-            text-decoration: none;
+            color: var(--text-3);
+            cursor: pointer;
+            user-select: none;
+            list-style: none;
         }
-        .error-link:hover { text-decoration: underline; }
-        @media (prefers-color-scheme: dark) {
-            .panel {
-                background: rgba(20, 26, 40, 0.95);
-                border-color: rgba(255, 255, 255, 0.1);
-                color: #f1f5f9;
-            }
-            .title, .progress-text { color: #f1f5f9; }
-            .icon-btn { color: #94a3b8; }
-            .icon-btn:hover { background: rgba(255, 255, 255, 0.06); color: #f1f5f9; }
-            .progress-bar { background: rgba(255, 255, 255, 0.08); }
-            .stats { color: #64748b; }
-            .error-box {
-                background: rgba(248, 113, 113, 0.14);
-                border-color: rgba(248, 113, 113, 0.3);
-                color: #fca5a5;
-            }
-            .error-link { color: #a5b4fc; }
-            .action-btn.danger { background: rgba(248, 113, 113, 0.2); color: #fca5a5; }
-            .action-btn.danger:hover { background: rgba(248, 113, 113, 0.3); }
+        details.raw summary::-webkit-details-marker { display: none; }
+        details.raw summary:hover { background: var(--surface-1); }
+        details.raw summary:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--ring); }
+        details.raw summary svg { transition: transform 160ms var(--ease); }
+        details.raw[open] summary svg { transform: rotate(90deg); }
+        .root[dir="rtl"] details.raw summary svg { transform: scaleX(-1); }
+        .root[dir="rtl"] details.raw[open] summary svg { transform: scaleX(-1) rotate(-90deg); }
+        details.raw pre {
+            margin: 8px 0 0;
+            padding: 9px 11px;
+            background: var(--surface-1);
+            border: 1px solid var(--outline-soft);
+            border-radius: 8px;
+            font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+            font-size: 11px;
+            line-height: 1.5;
+            color: var(--text-2);
+            white-space: pre-wrap;
+            word-break: break-word;
+            max-height: 130px;
+            overflow-y: auto;
+            direction: ltr;
+            text-align: left;
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .progress-bar.streaming::after { animation: none; }
         }
     `;
 
-    const MINI_CSS = `
-        :host { all: initial; }
-        * { box-sizing: border-box; }
-        .minimized {
+    const MINI_CSS = UI_TOKENS_CSS + `
+        .mini {
             position: fixed !important;
             bottom: 16px !important;
             right: 16px !important;
             z-index: 2147483647 !important;
-            width: 52px;
-            height: 52px;
-            border-radius: 50%;
-            background: rgba(255, 255, 255, 0.96);
-            backdrop-filter: saturate(180%) blur(16px);
-            -webkit-backdrop-filter: saturate(180%) blur(16px);
-            border: 1px solid rgba(15, 23, 42, 0.08);
-            box-shadow: 0 12px 28px -10px rgba(15, 23, 42, 0.24), 0 4px 10px -3px rgba(15, 23, 42, 0.1);
-            display: flex;
-            align-items: center;
-            justify-content: center;
+            width: 48px;
+            height: 48px;
+            padding: 0;
+            border: 1px solid var(--outline-soft);
+            border-radius: 999px;
+            background: var(--surface);
+            box-shadow: var(--elev-3);
+            display: grid;
+            place-items: center;
             cursor: pointer;
-            color: #6366f1;
-            font-family: ${SHARED_FONT};
-            font-size: 12px;
-            font-weight: 700;
-            font-variant-numeric: tabular-nums;
-            letter-spacing: -0.01em;
-            -webkit-font-smoothing: antialiased;
-            transition: transform 150ms cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 150ms;
-            animation: miniIn 260ms cubic-bezier(0.34, 1.56, 0.64, 1);
+            animation: miniIn 220ms var(--ease);
+            transition: transform 150ms var(--ease);
         }
+        .mini:hover { transform: scale(1.06); }
+        .mini:focus-visible { outline: none; box-shadow: var(--elev-3), 0 0 0 3px var(--ring); }
         @keyframes miniIn {
-            from { opacity: 0; transform: scale(0.6); }
+            from { opacity: 0; transform: scale(0.7); }
             to { opacity: 1; transform: scale(1); }
         }
-        .minimized:hover {
-            transform: scale(1.08);
-            box-shadow: 0 16px 32px -8px rgba(15, 23, 42, 0.28), 0 6px 12px -3px rgba(15, 23, 42, 0.14);
+        .mini .ring { position: absolute; inset: 4px; }
+        .mini .ring .track { stroke: var(--primary-soft); }
+        .mini .ring .value { stroke: var(--primary); transition: stroke-dashoffset 300ms var(--ease); }
+        .pct-label {
+            font-size: 11px;
+            font-weight: 700;
+            color: var(--text-2);
+            font-variant-numeric: tabular-nums;
+            letter-spacing: -0.02em;
         }
-        @media (prefers-color-scheme: dark) {
-            .minimized {
-                background: rgba(20, 26, 40, 0.95);
-                border-color: rgba(255, 255, 255, 0.1);
-                color: #a5b4fc;
-            }
+        @media (prefers-reduced-motion: reduce) {
+            .mini { animation: none; }
         }
     `;
 
@@ -494,6 +442,8 @@
     let pendingStartIsUserInitiated = false;
     let streamingBatchRegistry = new Map();
     let streamingBatchCounter = 0;
+    let streamingEnabled = false;
+    let streamingActive = false;
     const streamingBatchSeed = Math.random().toString(36).slice(2, 10);
     let pendingRetranslation = false;
     let cacheRestoreMap = null;
@@ -513,12 +463,21 @@
         attributeFilter: ['style', 'class', 'hidden', 'aria-hidden']
     };
 
+    function matchesSiteList(list, currentUrl, siteOrigin) {
+        if (!Array.isArray(list)) return false;
+        return list.some(prefix => typeof prefix === 'string' && prefix.length > 0 && (currentUrl.startsWith(prefix) || siteOrigin === prefix));
+    }
+
+    function getCurrentSiteOrigin() {
+        try { return new URL(window.location.href).origin; } catch (e) { return ''; }
+    }
+
     function initTranslation() {
         try {
             postFinishScanCount = 0;
             const reloaded = isPageReloaded();
             chrome.storage.local.get(
-                ['targetLanguage', 'realTimeTranslation', 'excludeList', 'hidePromptAllSites', 'autoRetranslateDomain', 'toggleBlueBackground'],
+                ['targetLanguage', 'realTimeTranslation', 'excludeList', 'alwaysTranslateList', 'hidePromptAllSites', 'autoRetranslateDomain', 'toggleBlueBackground'],
                 async function (items) {
                     try { watchForNewContent(); } catch (e) { }
                     try { watchUserInteractions(); } catch (e) { }
@@ -531,15 +490,14 @@
 
                     const isReactSpa = isLikelyReactApp();
                     const currentUrl = window.location.href;
-                    const excludeList = items.excludeList || [];
-                    let siteOrigin = '';
-                    try { siteOrigin = new URL(currentUrl).origin; } catch (e) { }
-                    const isExcluded = excludeList.some(prefix => currentUrl.startsWith(prefix) || siteOrigin === prefix);
+                    const siteOrigin = getCurrentSiteOrigin();
+                    const isExcluded = matchesSiteList(items.excludeList, currentUrl, siteOrigin);
+                    const isAlwaysTranslate = !isExcluded && matchesSiteList(items.alwaysTranslateList, currentUrl, siteOrigin);
                     if (reloaded) {
                         cacheRestoreMap = null;
                         cacheRestoreActive = false;
                         await clearPageCache();
-                    } else if (!isReactSpa && !isExcluded && items.autoRetranslateDomain !== false) {
+                    } else if (!isReactSpa && !isExcluded && (items.autoRetranslateDomain !== false || isAlwaysTranslate)) {
                         const restored = await tryRestoreFromCache(chosenLang);
                         if (restored || cacheRestoreActive) {
                             translationStarted = true;
@@ -579,6 +537,11 @@
                         return;
                     }
 
+                    if (isAlwaysTranslate && !isReactSpa) {
+                        beginAutoTranslation();
+                        return;
+                    }
+
                     if (autoRetranslateEnabled && !isExcluded && !isReactSpa) {
                         querySessionDomainKnown((known) => {
                             if (known) {
@@ -594,6 +557,7 @@
 
                     function showPromptIfNeeded() {
                         if (!IS_TOP_FRAME) return;
+                        if (isExcluded) return;
                         if (!languageDecision.pageIsTargetLanguage) {
                             if (items.hidePromptAllSites !== true) {
                                 createTranslationPrompt(false);
@@ -1120,6 +1084,108 @@
 
     const SVG_NS = 'http://www.w3.org/2000/svg';
 
+    const ICON_LOGO = [
+        ['path', { d: 'm5 8 6 6' }],
+        ['path', { d: 'm4 14 6-6 2-3' }],
+        ['path', { d: 'M2 5h12' }],
+        ['path', { d: 'M7 2h1' }],
+        ['path', { d: 'm22 22-5-10-5 10' }],
+        ['path', { d: 'M14 18h6' }]
+    ];
+    const ICON_CLOSE = [
+        ['path', { d: 'M18 6 6 18' }],
+        ['path', { d: 'm6 6 12 12' }]
+    ];
+    const ICON_MINIMIZE = [['path', { d: 'M5 12h14' }]];
+    const ICON_WARNING = [
+        ['path', { d: 'M12 9v4' }],
+        ['path', { d: 'M12 17h.01' }],
+        ['path', { d: 'm10.3 3.9-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.7-3.1l-8-14a2 2 0 0 0-3.4 0z' }]
+    ];
+    const ICON_BLOCKED = [
+        ['path', { d: 'M4.9 4.9 19 19' }],
+        ['path', { d: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z' }]
+    ];
+    const ICON_CHECK = [['path', { d: 'M20 6 9 17l-5-5' }]];
+    const ICON_ALERT = [
+        ['path', { d: 'M12 8v4.5' }],
+        ['path', { d: 'M12 16h.01' }]
+    ];
+    const ICON_CHEVRON = [['path', { d: 'm9 18 6-6-6-6' }]];
+
+    function isRtlLang(lang) {
+        return RTL_LANGS.has((lang || '').split('-')[0].toLowerCase());
+    }
+
+    function createUiRoot() {
+        const root = document.createElement('div');
+        root.className = 'root';
+        root.dir = isRtlLang(currentUiLang) ? 'rtl' : 'ltr';
+        return root;
+    }
+
+    function createUiElement(tag, className, text) {
+        const element = document.createElement(tag);
+        if (className) element.className = className;
+        if (text !== undefined && text !== null) element.textContent = text;
+        return element;
+    }
+
+    function createIconButton(shapes, label, elementId) {
+        const button = document.createElement('button');
+        button.className = 'icon-btn';
+        button.type = 'button';
+        if (elementId) button.id = elementId;
+        if (label) {
+            button.title = label;
+            button.setAttribute('aria-label', label);
+        }
+        button.appendChild(createSvgIcon('15', '2.2', shapes));
+        return button;
+    }
+
+    function createTextButton(className, label, onClick, elementId) {
+        const button = createUiElement('button', className, label);
+        button.type = 'button';
+        if (elementId) button.id = elementId;
+        if (onClick) button.addEventListener('click', onClick);
+        return button;
+    }
+
+    function createActionsRow(buttons) {
+        const actions = createUiElement('div', 'actions');
+        for (const button of buttons) actions.appendChild(button);
+        return actions;
+    }
+
+    function languageNativeName(code) {
+        if (!code) return '';
+        const primary = code.split('-')[0].toLowerCase();
+        try {
+            if (typeof LANGUAGES !== 'undefined' && Array.isArray(LANGUAGES)) {
+                const exact = LANGUAGES.find(entry => entry.code.toLowerCase() === code.toLowerCase());
+                if (exact) return exact.native;
+                const loose = LANGUAGES.find(entry => entry.code.split('-')[0].toLowerCase() === primary);
+                if (loose) return loose.native;
+            }
+        } catch (e) { }
+        return primary.toUpperCase();
+    }
+
+    function isolateBidi(text) {
+        return '⁨' + text + '⁩';
+    }
+
+    function promptLanguagePairLabel() {
+        const pageLang = getPageLanguage();
+        if (!pageLang) return '';
+        const source = languageNativeName(pageLang);
+        const target = languageNativeName(currentUiLang);
+        if (!source || !target || source === target) return '';
+        const arrow = isRtlLang(currentUiLang) ? ' ← ' : ' → ';
+        return isolateBidi(source) + arrow + isolateBidi(target);
+    }
+
     function createSvgIcon(size, strokeWidth, shapes) {
         const svg = document.createElementNS(SVG_NS, 'svg');
         svg.setAttribute('width', size);
@@ -1153,64 +1219,46 @@
         style.textContent = PROMPT_CSS;
         promptShadowRoot.appendChild(style);
 
-        const promptDiv = document.createElement('div');
-        promptDiv.className = 'prompt';
+        const root = createUiRoot();
+        const card = createUiElement('div', 'card top');
 
-        const header = document.createElement('div');
-        header.className = 'prompt-header';
-        const iconWrap = document.createElement('div');
-        iconWrap.className = 'prompt-icon';
-        iconWrap.appendChild(createSvgIcon('16', '2.25', [
-            ['path', { d: 'm5 8 6 6' }],
-            ['path', { d: 'm4 14 6-6 2-3' }],
-            ['path', { d: 'M2 5h12' }],
-            ['path', { d: 'M7 2h1' }],
-            ['path', { d: 'm22 22-5-10-5 10' }],
-            ['path', { d: 'M14 18h6' }]
-        ]));
-        const textDiv = document.createElement('div');
-        textDiv.className = 'prompt-text';
-        textDiv.textContent = promptMessage;
-        header.appendChild(iconWrap);
-        header.appendChild(textDiv);
+        const head = createUiElement('div', 'head');
+        const brand = createUiElement('div', 'app-icon');
+        brand.appendChild(createSvgIcon('15', '2.25', ICON_LOGO));
+        const headText = createUiElement('div', 'head-text');
+        headText.appendChild(createUiElement('div', 'title', promptMessage));
+        const pairLabel = promptLanguagePairLabel();
+        if (pairLabel) headText.appendChild(createUiElement('div', 'sub', pairLabel));
+        const dismissButton = createIconButton(ICON_CLOSE, st.closeButton);
+        head.appendChild(brand);
+        head.appendChild(headText);
+        head.appendChild(dismissButton);
+        card.appendChild(head);
 
-        const buttonsDiv = document.createElement('div');
-        buttonsDiv.className = 'prompt-buttons';
-        const yesButton = document.createElement('button');
-        yesButton.className = 'btn primary';
-        yesButton.type = 'button';
-        yesButton.textContent = translateButtonText.yes;
-        const noButton = document.createElement('button');
-        noButton.className = 'btn ghost';
-        noButton.type = 'button';
-        noButton.textContent = translateButtonText.no;
-        buttonsDiv.appendChild(yesButton);
-        buttonsDiv.appendChild(noButton);
-
-        const neverButton = document.createElement('button');
-        neverButton.className = 'btn subtle';
-        neverButton.type = 'button';
-        neverButton.textContent = translateButtonText.never;
-
-        promptDiv.appendChild(header);
         if (showWarning) {
-            const warnDiv = document.createElement('div');
-            warnDiv.className = 'prompt-warning';
-            const warnIcon = document.createElement('span');
-            warnIcon.className = 'prompt-warning-icon';
-            warnIcon.textContent = '⚠️';
-            const warnText = document.createElement('span');
-            warnText.className = 'prompt-warning-text';
-            warnText.textContent = st.reactWarning || 'This site uses a complex framework. Translation may break the UI.';
-            warnDiv.appendChild(warnIcon);
-            warnDiv.appendChild(warnText);
-            promptDiv.appendChild(warnDiv);
+            const warnDiv = createUiElement('div', 'warn');
+            warnDiv.appendChild(createSvgIcon('14', '2', ICON_WARNING));
+            warnDiv.appendChild(createUiElement('span', 'warn-text', st.reactWarning));
+            card.appendChild(warnDiv);
         }
-        promptDiv.appendChild(buttonsDiv);
-        promptDiv.appendChild(neverButton);
-        promptShadowRoot.appendChild(promptDiv);
+
+        const noButton = createTextButton('btn btn-text', translateButtonText.no);
+        const yesButton = createTextButton('btn btn-filled', translateButtonText.yes);
+        card.appendChild(createActionsRow([noButton, yesButton]));
+
+        const neverRow = createUiElement('div', 'never-row');
+        const neverButton = createUiElement('button', 'never-btn');
+        neverButton.type = 'button';
+        neverButton.appendChild(createSvgIcon('12', '2', ICON_BLOCKED));
+        neverButton.appendChild(document.createTextNode(translateButtonText.never));
+        neverRow.appendChild(neverButton);
+        card.appendChild(neverRow);
+
+        root.appendChild(card);
+        promptShadowRoot.appendChild(root);
         document.body.appendChild(promptContainer);
 
+        dismissButton.addEventListener('click', function () { removePrompt(); });
         yesButton.addEventListener('click', function () {
             removePrompt();
             translationStarted = true;
@@ -1557,16 +1605,18 @@
         translationProgress = 0;
         domUpdateQueue = [];
         streamingBatchRegistry.clear();
+        streamingActive = false;
         if (cacheRestoreActive) {
             try { applyCacheRestore(); } catch (e) { }
         }
         let lang = 'en';
         try {
             const config = await new Promise(resolve => {
-                chrome.storage.local.get(['targetLanguage', 'showProgressPopup', 'batchSize', 'maxToken', 'toggleBlueBackground'], resolve);
+                chrome.storage.local.get(['targetLanguage', 'showProgressPopup', 'batchSize', 'maxToken', 'toggleBlueBackground', 'streamingTranslation'], resolve);
             });
             lang = config.targetLanguage || 'en';
             highlightTranslated = config.toggleBlueBackground === true;
+            streamingEnabled = config.streamingTranslation === true;
             applyStrings(lang);
 
             const allTus = collectTranslationUnits();
@@ -1753,6 +1803,7 @@
             translations.push({ id: tuId, translatedTemplate: update.translatedTemplate });
         }
         if (translations.length === 0) return;
+        markStreamingActive();
         domUpdateQueue.push({ generation: registryEntry.generation, translations });
         applyQueuedUpdates();
     }
@@ -1797,14 +1848,19 @@
         } else if (error) {
             errorMessage = `${st.errorOccurred}: ${JSON.stringify(error)}`;
         }
+        const errorCode = translationErrorCodeOf(error);
         updateProgress();
-        if (statusShadowRoot) showErrorPopup(errorMessage, lang);
+        if (ensureStatusPanelForError()) showErrorPopup(errorMessage, errorCode);
         if (progressInterval) {
             clearInterval(progressInterval);
             progressInterval = null;
         }
         cleanupProcessingMarkers();
-        chrome.runtime.sendMessage({ action: "translationError", error: errorMessage }).catch(() => { });
+        chrome.runtime.sendMessage({ action: "translationError", error: errorMessage, code: errorCode }).catch(() => { });
+    }
+
+    function translationErrorCodeOf(error) {
+        return typeof error?.translationErrorCode === 'string' ? error.translationErrorCode : '';
     }
 
     function cleanupProcessingMarkers() {
@@ -1826,48 +1882,116 @@
         }
     }
 
-    function showErrorPopup(errorMessage, lang) {
-        if (!statusShadowRoot) return;
-        const panel = statusShadowRoot.querySelector('.panel');
-        if (!panel) return;
-        while (panel.firstChild) panel.removeChild(panel.firstChild);
+    const ERROR_CODE_MESSAGE_KEYS = {
+        apiKeyNotSet: 'errApiKeyNotSet',
+        invalidApiKey: 'errInvalidApiKey',
+        endpointNotSet: 'errEndpointNotSet',
+        insufficientQuota: 'errInsufficientQuota',
+        modelNotFound: 'errModelNotFound',
+        apiLimitReached: 'errRateLimited',
+        requestTimeout: 'errTimeout',
+        serverError: 'errServerError',
+        fetchError: 'errNetwork',
+        maxTokensError: 'errMaxTokens',
+        jsonParseFailed: 'errBadResponse',
+        jsonExtractFailed: 'errBadResponse',
+        emptyResponse: 'errBadResponse',
+        invalidRequest: 'errInvalidRequest',
+        unknownError: 'errUnknown',
+        builtinUnavailable: 'builtinUnsupportedBrowser',
+        builtinLanguageUnsupported: 'builtinErrorLanguage',
+        builtinSourceUnknown: 'builtinErrorSource',
+        builtinPrepareFailed: 'builtinPrepareFailed'
+    };
 
-        const header = document.createElement('div');
-        header.className = 'panel-header';
-        const title = document.createElement('div');
-        title.className = 'title';
-        const dot = document.createElement('span');
-        dot.className = 'dot error';
-        const headerText = document.createElement('span');
-        headerText.textContent = st.errorOccurred;
-        title.appendChild(dot);
-        title.appendChild(headerText);
-        header.appendChild(title);
-        panel.appendChild(header);
+    const ERROR_CODE_ACTIONS = {
+        apiKeyNotSet: 'settings',
+        invalidApiKey: 'settings',
+        endpointNotSet: 'settings',
+        insufficientQuota: 'settings',
+        modelNotFound: 'settings',
+        invalidRequest: 'settings',
+        maxTokensError: 'settings',
+        apiLimitReached: 'retry',
+        requestTimeout: 'retry',
+        serverError: 'retry',
+        fetchError: 'retry',
+        emptyResponse: 'retry',
+        jsonParseFailed: 'retry',
+        jsonExtractFailed: 'retry',
+        unknownError: 'close',
+        builtinUnavailable: 'settings',
+        builtinLanguageUnsupported: 'settings',
+        builtinSourceUnknown: 'settings',
+        builtinPrepareFailed: 'retry'
+    };
 
-        const errorBox = document.createElement('div');
-        errorBox.className = 'error-box';
-        errorBox.id = 'errorText';
-        errorBox.textContent = errorMessage;
-        panel.appendChild(errorBox);
+    function localizedErrorCause(code) {
+        const messageKey = ERROR_CODE_MESSAGE_KEYS[code];
+        if (!messageKey) return '';
+        if (typeof TRANSLATIONS === 'undefined') return '';
+        const table = TRANSLATIONS[currentUiLang] || TRANSLATIONS['en'];
+        return (table && table[messageKey]) || '';
+    }
 
-        if (errorMessage.includes('options page') || errorMessage.includes('オプションページ')) {
-            const optionsLink = document.createElement('button');
-            optionsLink.className = 'error-link';
-            optionsLink.type = 'button';
-            optionsLink.textContent = st.openOptions;
-            optionsLink.addEventListener('click', () => {
-                try { chrome.runtime.sendMessage({ action: 'openOptionsPage' }).catch(() => { }); } catch (e) { }
-            });
-            panel.appendChild(optionsLink);
+    function errorActionFor(code, errorMessage) {
+        if (ERROR_CODE_ACTIONS[code]) return ERROR_CODE_ACTIONS[code];
+        if (code) return 'close';
+        const mentionsOptions = errorMessage.includes('options page') || errorMessage.includes('オプションページ');
+        return mentionsOptions ? 'legacySettings' : 'close';
+    }
+
+    function openExtensionOptions() {
+        try { chrome.runtime.sendMessage({ action: 'openOptionsPage' }).catch(() => { }); } catch (e) { }
+    }
+
+    function retryTranslationFromPanel() {
+        removeStatusIndicator();
+        translationStarted = true;
+        translationHasError = false;
+        translationCancelled = false;
+        startTranslation(true);
+    }
+
+    function createTechnicalDetails(errorMessage) {
+        const details = document.createElement('details');
+        details.className = 'raw';
+        const summary = document.createElement('summary');
+        summary.appendChild(createSvgIcon('11', '2.4', ICON_CHEVRON));
+        summary.appendChild(document.createTextNode(st.errorDetails));
+        details.appendChild(summary);
+        const raw = document.createElement('pre');
+        raw.id = 'errorText';
+        raw.textContent = errorMessage;
+        details.appendChild(raw);
+        return details;
+    }
+
+    function createErrorActionButtons(code, errorMessage) {
+        const action = errorActionFor(code, errorMessage);
+        if (action === 'settings') {
+            return [
+                createTextButton('btn btn-text', st.retryButton, retryTranslationFromPanel),
+                createTextButton('btn btn-filled', st.openOptions, openExtensionOptions)
+            ];
         }
+        if (action === 'retry') {
+            return [
+                createTextButton('btn btn-text', st.openOptions, openExtensionOptions),
+                createTextButton('btn btn-filled', st.retryButton, retryTranslationFromPanel)
+            ];
+        }
+        if (action === 'legacySettings') {
+            return [
+                createTextButton('btn btn-text', st.closeButton, removeStatusIndicator),
+                createTextButton('btn btn-filled', st.openOptions, openExtensionOptions)
+            ];
+        }
+        return [createTextButton('btn btn-text', st.closeButton, removeStatusIndicator)];
+    }
 
-        const closeButton = document.createElement('button');
-        closeButton.className = 'action-btn primary';
-        closeButton.type = 'button';
-        closeButton.textContent = st.closeButton;
-        closeButton.addEventListener('click', removeStatusIndicator);
-        panel.appendChild(closeButton);
+    function showErrorPopup(errorMessage, code) {
+        renderStatusPanel('error', { message: errorMessage, code: code || '' });
     }
 
     function handleCancellation(lang) {
@@ -1877,32 +2001,7 @@
             progressInterval = null;
         }
         updateProgress();
-        if (statusShadowRoot) {
-            const panel = statusShadowRoot.querySelector('.panel');
-            const headerElem = statusShadowRoot.querySelector('#translationHeaderText');
-            const progressBar = statusShadowRoot.querySelector('.progress-bar');
-            const progressRow = statusShadowRoot.querySelector('.progress-row');
-            const cancelButton = statusShadowRoot.querySelector('#cancelTranslationBtn');
-            const minimizeButton = statusShadowRoot.querySelector('#minimizeStatusBtn');
-            const dot = statusShadowRoot.querySelector('#translationDot');
-            if (headerElem) headerElem.textContent = st.translationCancelled;
-            if (dot) { dot.classList.remove('done'); dot.classList.add('error'); }
-            if (progressBar) progressBar.style.display = 'none';
-            if (progressRow) progressRow.style.display = 'none';
-            if (cancelButton) cancelButton.remove();
-            if (minimizeButton) minimizeButton.style.display = 'none';
-            let closeButton = panel?.querySelector('.action-btn.primary');
-            if (panel && !closeButton) {
-                closeButton = document.createElement('button');
-                closeButton.className = 'action-btn primary';
-                closeButton.type = 'button';
-                closeButton.textContent = st.closeButton;
-                closeButton.addEventListener('click', removeStatusIndicator);
-                panel.appendChild(closeButton);
-            } else if (closeButton) {
-                closeButton.style.display = 'block';
-            }
-        }
+        renderStatusPanel('cancelled');
         cleanupProcessingMarkers();
         chrome.runtime.sendMessage({ action: "translationCancelled" }).catch(() => { });
     }
@@ -2223,6 +2322,7 @@
                 const error = new Error(response.error || 'Translation failed');
                 if (response.cancelled === true) error.translationCancelled = true;
                 if (response.fatal === true) error.translationFatal = true;
+                if (typeof response.code === 'string' && response.code) error.translationErrorCode = response.code;
                 reject(error);
             });
         });
@@ -2577,42 +2677,11 @@
 
     function createOrShowProgressPopup(lang) {
         if (!statusContainer) {
-            createStatusIndicator();
+            createStatusIndicator(lang);
         } else {
             statusContainer.style.display = 'block';
-            if (minimizedDiv) minimizedDiv.remove();
-            const cancelButton = statusShadowRoot?.querySelector('#cancelTranslationBtn');
-            const progressBar = statusShadowRoot?.querySelector('.progress-bar');
-            const progressRow = statusShadowRoot?.querySelector('.progress-row');
-            const headerElem = statusShadowRoot?.querySelector('#translationHeaderText');
-            const dot = statusShadowRoot?.querySelector('#translationDot');
-            const closeButton = statusShadowRoot?.querySelector('.action-btn.primary');
-            const minimizeButton = statusShadowRoot?.querySelector('#minimizeStatusBtn');
-            if (headerElem) headerElem.textContent = st.translating;
-            if (dot) { dot.classList.remove('done', 'error'); }
-            if (progressBar) progressBar.style.display = 'block';
-            if (progressRow) progressRow.style.display = 'flex';
-            if (closeButton) closeButton.remove();
-            if (minimizeButton) minimizeButton.style.display = 'flex';
-            if (cancelButton) {
-                cancelButton.disabled = false;
-                cancelButton.textContent = st.cancelButton;
-                cancelButton.style.display = 'block';
-                const newCancelButton = cancelButton.cloneNode(true);
-                cancelButton.parentNode.replaceChild(newCancelButton, cancelButton);
-                newCancelButton.addEventListener('click', () => handleCancelButtonClick(lang));
-            } else {
-                const panel = statusShadowRoot?.querySelector('.panel');
-                if (panel) {
-                    const newCancelButton = document.createElement('button');
-                    newCancelButton.id = 'cancelTranslationBtn';
-                    newCancelButton.className = 'action-btn danger';
-                    newCancelButton.type = 'button';
-                    newCancelButton.textContent = st.cancelButton;
-                    newCancelButton.addEventListener('click', () => handleCancelButtonClick(lang));
-                    panel.appendChild(newCancelButton);
-                }
-            }
+            removeMinimizedIndicator();
+            renderStatusPanel('progress', { lang });
         }
         updateProgress();
     }
@@ -2635,7 +2704,7 @@
         }
     }
 
-    function createStatusIndicator() {
+    function createStatusIndicator(lang) {
         removeStatusIndicator();
         statusContainer = document.createElement('div');
         statusContainer.id = 'gemini-translator-status-container';
@@ -2647,75 +2716,166 @@
         style.textContent = PANEL_CSS;
         statusShadowRoot.appendChild(style);
 
-        const panel = document.createElement('div');
-        panel.className = 'panel';
-        panel.id = 'translationStatus';
-
-        const header = document.createElement('div');
-        header.className = 'panel-header';
-        header.id = 'translationStatusHeader';
-
-        const title = document.createElement('div');
-        title.className = 'title';
-        const dot = document.createElement('span');
-        dot.className = 'dot';
-        dot.id = 'translationDot';
-        const headerText = document.createElement('span');
-        headerText.id = 'translationHeaderText';
-        headerText.textContent = st.translating;
-        title.appendChild(dot);
-        title.appendChild(headerText);
-
-        const minimizeBtn = document.createElement('button');
-        minimizeBtn.className = 'icon-btn';
-        minimizeBtn.id = 'minimizeStatusBtn';
-        minimizeBtn.type = 'button';
-        minimizeBtn.title = 'Minimize';
-        minimizeBtn.appendChild(createSvgIcon('14', '2.5', [
-            ['line', { x1: '5', y1: '12', x2: '19', y2: '12' }]
-        ]));
-
-        header.appendChild(title);
-        header.appendChild(minimizeBtn);
-
-        const progressBar = document.createElement('div');
-        progressBar.className = 'progress-bar';
-        const progressFill = document.createElement('div');
-        progressFill.className = 'progress-fill';
-        progressFill.id = 'translationProgressFill';
-        progressBar.appendChild(progressFill);
-
-        const progressRow = document.createElement('div');
-        progressRow.className = 'progress-row';
-        const progressText = document.createElement('div');
-        progressText.className = 'progress-text';
-        progressText.id = 'translationProgressText';
-        progressText.textContent = '0%';
-        const stats = document.createElement('div');
-        stats.className = 'stats';
-        stats.id = 'translationStats';
-        stats.textContent = '';
-        progressRow.appendChild(progressText);
-        progressRow.appendChild(stats);
-
-        const cancelButton = document.createElement('button');
-        cancelButton.className = 'action-btn danger';
-        cancelButton.id = 'cancelTranslationBtn';
-        cancelButton.type = 'button';
-        cancelButton.textContent = st.cancelButton;
-        cancelButton.addEventListener('click', () => handleCancelButtonClick());
-
-        panel.appendChild(header);
-        panel.appendChild(progressBar);
-        panel.appendChild(progressRow);
-        panel.appendChild(cancelButton);
-        statusShadowRoot.appendChild(panel);
+        const root = createUiRoot();
+        const card = createUiElement('div', 'card bottom');
+        card.id = 'translationStatus';
+        root.appendChild(card);
+        statusShadowRoot.appendChild(root);
         document.body.appendChild(statusContainer);
 
-        minimizeBtn.addEventListener('click', function (e) {
-            e.stopPropagation();
-            minimizeStatusIndicator();
-        });
+        renderStatusPanel('progress', { lang });
+    }
+
+    function ensureStatusPanelForError() {
+        if (!IS_TOP_FRAME) return false;
+        if (!statusContainer || !statusShadowRoot) {
+            createStatusIndicator();
+        } else {
+            statusContainer.style.display = 'block';
+        }
+        removeMinimizedIndicator();
+        return !!statusShadowRoot;
+    }
+
+    function getStatusCard() {
+        return statusShadowRoot ? statusShadowRoot.querySelector('#translationStatus') : null;
+    }
+
+    function statusPanelTitle(phase) {
+        if (phase === 'done') return st.translationCompleted;
+        if (phase === 'cancelled') return st.translationCancelled;
+        if (phase === 'error') return st.errorTitle || st.errorOccurred;
+        return st.translating;
+    }
+
+    function createStatusLeadIcon(phase) {
+        if (phase === 'progress') {
+            const brand = createUiElement('div', 'app-icon');
+            brand.appendChild(createSvgIcon('15', '2.25', ICON_LOGO));
+            return brand;
+        }
+        if (phase === 'done') {
+            const done = createUiElement('div', 'status-ico ok');
+            done.appendChild(createSvgIcon('15', '2.6', ICON_CHECK));
+            return done;
+        }
+        if (phase === 'error') {
+            const failed = createUiElement('div', 'status-ico err');
+            failed.appendChild(createSvgIcon('15', '2.4', ICON_ALERT));
+            return failed;
+        }
+        const stopped = createUiElement('div', 'status-ico neutral');
+        stopped.appendChild(createSvgIcon('15', '2', ICON_BLOCKED));
+        return stopped;
+    }
+
+    function translatedBlocksLabel() {
+        if (!st.blocksTemplate) return '';
+        return st.blocksTemplate
+            .replace('{translated}', translatedUnitsCount)
+            .replace('{total}', expectedTotalUnits);
+    }
+
+    function renderStatusPanel(phase, detail) {
+        const card = getStatusCard();
+        if (!card) return;
+        const options = detail || {};
+        while (card.firstChild) card.removeChild(card.firstChild);
+
+        const head = createUiElement('div', 'head');
+        head.appendChild(createStatusLeadIcon(phase));
+
+        const headText = createUiElement('div', 'head-text');
+        const title = createUiElement('div', 'title', statusPanelTitle(phase));
+        title.id = 'translationHeaderText';
+        headText.appendChild(title);
+        if (phase === 'progress') {
+            const note = createUiElement('div', 'sub', st.streamingNote);
+            note.id = 'translationStreamNote';
+            note.hidden = true;
+            headText.appendChild(note);
+        } else if (phase === 'done') {
+            const blocks = translatedBlocksLabel();
+            if (blocks) headText.appendChild(createUiElement('div', 'sub', blocks));
+        }
+        head.appendChild(headText);
+
+        head.appendChild(phase === 'progress'
+            ? createIconButton(ICON_MINIMIZE, st.minimizeLabel, 'minimizeStatusBtn')
+            : createIconButton(ICON_CLOSE, st.closeButton, 'closeStatusBtn'));
+        card.appendChild(head);
+
+        if (phase === 'progress') {
+            const bar = createUiElement('div', 'progress-bar');
+            bar.id = 'translationProgressBar';
+            bar.setAttribute('role', 'progressbar');
+            bar.setAttribute('aria-valuemin', '0');
+            bar.setAttribute('aria-valuemax', '100');
+            bar.setAttribute('aria-valuenow', '0');
+            const fill = createUiElement('div', 'progress-fill');
+            fill.id = 'translationProgressFill';
+            bar.appendChild(fill);
+            card.appendChild(bar);
+
+            const caption = createUiElement('div', 'caption');
+            const percent = createUiElement('span', 'pct', '0%');
+            percent.id = 'translationProgressText';
+            const stats = createUiElement('span', 'stats');
+            stats.id = 'translationStats';
+            caption.appendChild(percent);
+            caption.appendChild(stats);
+            card.appendChild(caption);
+
+            const cancelButton = createTextButton('btn btn-danger-text', st.cancelButton, () => handleCancelButtonClick(options.lang), 'cancelTranslationBtn');
+            card.appendChild(createActionsRow([cancelButton]));
+        } else if (phase === 'done') {
+            card.appendChild(createActionsRow([
+                createTextButton('btn btn-text', st.showOriginal, toggleAllTranslations)
+            ]));
+        } else if (phase === 'error') {
+            const rawMessage = options.message || st.errorOccurred;
+            const cause = localizedErrorCause(options.code);
+            card.appendChild(createUiElement('div', 'cause', cause || rawMessage));
+            if (cause && rawMessage && rawMessage !== cause) {
+                card.appendChild(createTechnicalDetails(rawMessage));
+            }
+            card.appendChild(createActionsRow(createErrorActionButtons(options.code, rawMessage)));
+        }
+
+        const closeStatusBtn = card.querySelector('#closeStatusBtn');
+        if (closeStatusBtn) closeStatusBtn.addEventListener('click', removeStatusIndicator);
+        const minimizeButton = card.querySelector('#minimizeStatusBtn');
+        if (minimizeButton) {
+            minimizeButton.addEventListener('click', function (e) {
+                e.stopPropagation();
+                minimizeStatusIndicator();
+            });
+        }
+        if (phase === 'progress' && streamingActive) applyStreamingIndicator();
+    }
+
+    function applyStreamingIndicator() {
+        if (!statusShadowRoot) return;
+        const bar = statusShadowRoot.querySelector('#translationProgressBar');
+        if (bar) bar.classList.add('streaming');
+        const note = statusShadowRoot.querySelector('#translationStreamNote');
+        if (note) {
+            note.textContent = st.streamingNote;
+            note.hidden = false;
+        }
+    }
+
+    function markStreamingActive() {
+        if (!streamingEnabled || streamingActive) return;
+        streamingActive = true;
+        applyStreamingIndicator();
+    }
+
+    function removeMinimizedIndicator() {
+        if (minimizedDiv && minimizedDiv.parentNode) {
+            minimizedDiv.parentNode.removeChild(minimizedDiv);
+        }
+        minimizedDiv = null;
     }
 
     function removeStatusIndicator() {
@@ -2724,13 +2884,51 @@
             statusContainer = null;
             statusShadowRoot = null;
         }
-        if (minimizedDiv && minimizedDiv.parentNode) {
-            minimizedDiv.parentNode.removeChild(minimizedDiv);
-            minimizedDiv = null;
-        }
+        removeMinimizedIndicator();
         if (progressInterval) {
             clearInterval(progressInterval);
             progressInterval = null;
+        }
+    }
+
+    const MINI_RING_RADIUS = 17;
+
+    function createMiniProgressRing() {
+        const ring = document.createElementNS(SVG_NS, 'svg');
+        ring.setAttribute('class', 'ring');
+        ring.setAttribute('viewBox', '0 0 40 40');
+        ring.setAttribute('fill', 'none');
+        ring.setAttribute('aria-hidden', 'true');
+        const circumference = 2 * Math.PI * MINI_RING_RADIUS;
+        for (const role of ['track', 'value']) {
+            const circle = document.createElementNS(SVG_NS, 'circle');
+            circle.setAttribute('class', role);
+            circle.setAttribute('cx', '20');
+            circle.setAttribute('cy', '20');
+            circle.setAttribute('r', String(MINI_RING_RADIUS));
+            circle.setAttribute('fill', 'none');
+            circle.setAttribute('stroke-width', '3');
+            if (role === 'value') {
+                circle.id = 'minimizedProgressRing';
+                circle.setAttribute('stroke-linecap', 'round');
+                circle.setAttribute('stroke-dasharray', circumference.toFixed(1));
+                circle.setAttribute('stroke-dashoffset', circumference.toFixed(1));
+                circle.setAttribute('transform', 'rotate(-90 20 20)');
+            }
+            ring.appendChild(circle);
+        }
+        return ring;
+    }
+
+    function renderMiniProgress(percent) {
+        if (!minimizedDiv || !minimizedDiv.shadowRoot) return;
+        const label = minimizedDiv.shadowRoot.getElementById('minimizedProgressText');
+        if (label) label.textContent = percent.toFixed(0) + '%';
+        const ring = minimizedDiv.shadowRoot.getElementById('minimizedProgressRing');
+        if (ring) {
+            const circumference = 2 * Math.PI * MINI_RING_RADIUS;
+            const clamped = Math.max(0, Math.min(100, percent));
+            ring.setAttribute('stroke-dashoffset', (circumference * (1 - clamped / 100)).toFixed(1));
         }
     }
 
@@ -2745,32 +2943,25 @@
             const shadowRoot = minimizedDiv.attachShadow({ mode: 'open' });
             const style = document.createElement('style');
             style.textContent = MINI_CSS;
-            const circleDiv = document.createElement('div');
-            circleDiv.className = 'minimized';
-            circleDiv.id = 'minimizedProgressText';
-            circleDiv.title = 'Click to restore';
-            circleDiv.setAttribute('role', 'button');
-            circleDiv.setAttribute('tabindex', '0');
+            const root = createUiRoot();
+            const miniButton = createUiElement('button', 'mini');
+            miniButton.type = 'button';
+            miniButton.title = st.restoreLabel;
+            miniButton.setAttribute('aria-label', st.restoreLabel);
+            miniButton.appendChild(createMiniProgressRing());
+            const label = createUiElement('span', 'pct-label', '0%');
+            label.id = 'minimizedProgressText';
+            miniButton.appendChild(label);
+            root.appendChild(miniButton);
             shadowRoot.appendChild(style);
-            shadowRoot.appendChild(circleDiv);
+            shadowRoot.appendChild(root);
             document.body.appendChild(minimizedDiv);
-            circleDiv.addEventListener('click', function () {
+            miniButton.addEventListener('click', function () {
                 if (statusContainer) statusContainer.style.display = 'block';
-                if (minimizedDiv && minimizedDiv.parentNode) {
-                    minimizedDiv.parentNode.removeChild(minimizedDiv);
-                }
-                minimizedDiv = null;
+                removeMinimizedIndicator();
             });
         }
-        const minimizedTextElem = minimizedDiv?.shadowRoot?.getElementById('minimizedProgressText');
-        if (minimizedTextElem) {
-            let progText = "0%";
-            if (statusShadowRoot) {
-                const txt = statusShadowRoot.querySelector('#translationProgressText');
-                if (txt) progText = txt.textContent;
-            }
-            minimizedTextElem.textContent = progText;
-        }
+        renderMiniProgress(translationProgress);
     }
 
     function updateProgress(forcePercent = null) {
@@ -2782,12 +2973,17 @@
                 : (translationCancelled || !isTranslating ? 100 : 0);
         }
         if (statusShadowRoot) {
+            const progressBar = statusShadowRoot.querySelector('#translationProgressBar');
             const progressFill = statusShadowRoot.querySelector('#translationProgressFill');
             const progressText = statusShadowRoot.querySelector('#translationProgressText');
             const statsElem = statusShadowRoot.querySelector('#translationStats');
             if (progressFill && progressText) {
                 progressFill.style.width = translationProgress + '%';
                 progressText.textContent = translationProgress.toFixed(1) + '%';
+            }
+            if (progressBar) {
+                progressBar.style.setProperty('--stream-offset', translationProgress + '%');
+                progressBar.setAttribute('aria-valuenow', translationProgress.toFixed(0));
             }
             if (statsElem) {
                 statsElem.textContent = st.progressTemplate
@@ -2797,10 +2993,7 @@
                     .replace('{totalUnits}', expectedTotalUnits);
             }
         }
-        if (minimizedDiv && minimizedDiv.shadowRoot) {
-            const circleDiv = minimizedDiv.shadowRoot.querySelector('#minimizedProgressText');
-            if (circleDiv) circleDiv.textContent = translationProgress.toFixed(0) + '%';
-        }
+        renderMiniProgress(translationProgress);
         chrome.runtime.sendMessage({
             action: "updateProgress",
             progress: translationProgress,
@@ -2824,28 +3017,7 @@
         cacheRestoreMap = null;
         cacheRestoreActive = false;
         updateProgress(100);
-        if (statusShadowRoot) {
-            const headerElem = statusShadowRoot.querySelector('#translationHeaderText');
-            const dot = statusShadowRoot.querySelector('#translationDot');
-            const cancelButton = statusShadowRoot.querySelector('#cancelTranslationBtn');
-            const panel = statusShadowRoot.querySelector('.panel');
-            const minimizeButton = statusShadowRoot.querySelector('#minimizeStatusBtn');
-            if (headerElem) headerElem.textContent = st.translationCompleted;
-            if (dot) { dot.classList.remove('error'); dot.classList.add('done'); }
-            if (cancelButton) cancelButton.remove();
-            if (minimizeButton) minimizeButton.style.display = 'none';
-            let closeButton = panel?.querySelector('.action-btn.primary');
-            if (panel && !closeButton) {
-                closeButton = document.createElement('button');
-                closeButton.className = 'action-btn primary';
-                closeButton.type = 'button';
-                closeButton.textContent = st.closeButton;
-                closeButton.addEventListener('click', removeStatusIndicator);
-                panel.appendChild(closeButton);
-            } else if (closeButton) {
-                closeButton.style.display = 'block';
-            }
-        }
+        renderStatusPanel('done');
         chrome.runtime.sendMessage({ action: "translationComplete", message: st.translationCompleted }).catch(() => { });
         saveCurrentTranslationToCache().catch(() => { });
         setTimeout(() => { if (!isTranslating) removeStatusIndicator(); }, 3000);
@@ -2861,8 +3033,9 @@
         cacheRestoreActive = false;
         updateProgress();
         const errorMessage = error?.message || st.errorOccurred;
-        if (statusShadowRoot) showErrorPopup(errorMessage);
-        chrome.runtime.sendMessage({ action: "translationError", error: errorMessage }).catch(() => { });
+        const errorCode = translationErrorCodeOf(error);
+        if (ensureStatusPanelForError()) showErrorPopup(errorMessage, errorCode);
+        chrome.runtime.sendMessage({ action: "translationError", error: errorMessage, code: errorCode }).catch(() => { });
         saveCurrentTranslationToCache().catch(() => { });
     }
 
@@ -2911,20 +3084,561 @@
     function respondPopupPageState(sendResponse) {
         const pageState = collectPopupPageState();
         try {
-            chrome.storage.local.get(['excludeList'], function (items) {
-                const list = Array.isArray(items.excludeList) ? items.excludeList : [];
+            chrome.storage.local.get(['excludeList', 'alwaysTranslateList'], function (items) {
                 const currentUrl = window.location.href;
-                let siteOrigin = '';
-                try { siteOrigin = new URL(currentUrl).origin; } catch (e) { }
-                pageState.excluded = list.some(prefix => currentUrl.startsWith(prefix) || siteOrigin === prefix);
+                const siteOrigin = getCurrentSiteOrigin();
+                pageState.excluded = matchesSiteList(items.excludeList, currentUrl, siteOrigin);
+                pageState.alwaysTranslate = matchesSiteList(items.alwaysTranslateList, currentUrl, siteOrigin);
                 sendResponse(pageState);
             });
             return true;
         } catch (e) {
             pageState.excluded = false;
+            pageState.alwaysTranslate = false;
             sendResponse(pageState);
             return false;
         }
+    }
+
+    const SELECTION_CONTAINER_ID = 'gemini-translator-selection-container';
+    const SELECTION_MAX_CHARS = 5000;
+    const SELECTION_RTL_LANGS = new Set(['ar', 'ur', 'he', 'fa']);
+    const SELECTION_FONT = `-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, "Hiragino Kaku Gothic ProN", "Yu Gothic UI", Meiryo, sans-serif`;
+    const SELECTION_EASE = 'cubic-bezier(0.2, 0, 0, 1)';
+
+    const SELECTION_CSS = `
+        :host { all: initial; }
+        * { box-sizing: border-box; }
+        .sel-card {
+            width: 340px;
+            max-width: calc(100vw - 24px);
+            padding: 12px 14px 14px;
+            background: #ffffff;
+            border: 1px solid rgba(27, 27, 33, 0.09);
+            border-radius: 16px;
+            box-shadow: 0 2px 6px 2px rgba(23, 23, 40, 0.08), 0 1px 2px rgba(23, 23, 40, 0.10);
+            color: #1b1b21;
+            font-family: ${SELECTION_FONT};
+            font-size: 13.5px;
+            line-height: 1.5;
+            -webkit-font-smoothing: antialiased;
+            animation: selCardIn 160ms ${SELECTION_EASE};
+        }
+        @keyframes selCardIn {
+            from { opacity: 0; transform: translateY(-4px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .sel-head {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+        .sel-badge {
+            width: 24px;
+            height: 24px;
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 999px;
+            background: #d3e3fd;
+            color: #041e49;
+        }
+        .sel-title {
+            flex: 1;
+            min-width: 0;
+            font-size: 12px;
+            font-weight: 600;
+            letter-spacing: 0.04em;
+            color: #1a73e8;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .sel-title.error { color: #ba1a1a; }
+        .sel-icon-btn {
+            width: 28px;
+            height: 28px;
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0;
+            border: none;
+            border-radius: 999px;
+            background: transparent;
+            color: #4a4952;
+            cursor: pointer;
+            transition: background-color 150ms ${SELECTION_EASE};
+        }
+        .sel-icon-btn:hover { background: #f5f5fa; }
+        .sel-icon-btn:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.35); }
+        .sel-loading {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 2px 0 4px;
+            color: #4a4952;
+        }
+        .sel-spinner {
+            width: 16px;
+            height: 16px;
+            flex-shrink: 0;
+            border-radius: 50%;
+            border: 2px solid rgba(26, 115, 232, 0.25);
+            border-top-color: #1a73e8;
+            animation: selSpin 800ms linear infinite;
+        }
+        @keyframes selSpin { to { transform: rotate(360deg); } }
+        .sel-text {
+            margin: 0;
+            max-height: 260px;
+            overflow-y: auto;
+            overflow-wrap: anywhere;
+            white-space: pre-wrap;
+            font-size: 14px;
+            color: #1b1b21;
+        }
+        .sel-error {
+            margin: 0;
+            max-height: 220px;
+            overflow-y: auto;
+            overflow-wrap: anywhere;
+            white-space: pre-wrap;
+            padding: 10px 12px;
+            border-radius: 12px;
+            background: #ffe1de;
+            color: #7a1210;
+            font-size: 12.5px;
+        }
+        .sel-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+            margin-top: 12px;
+        }
+        .sel-btn {
+            min-height: 36px;
+            padding: 0 16px;
+            border: none;
+            border-radius: 999px;
+            background: #d3e3fd;
+            color: #041e49;
+            font-family: inherit;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 150ms ${SELECTION_EASE}, box-shadow 150ms ${SELECTION_EASE};
+        }
+        .sel-btn:hover { box-shadow: 0 1px 2px rgba(23, 23, 40, 0.10), 0 1px 3px 1px rgba(23, 23, 40, 0.06); }
+        .sel-btn:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.35); }
+        @media (prefers-color-scheme: dark) {
+            .sel-card {
+                background: #1a1a20;
+                border-color: rgba(232, 231, 240, 0.09);
+                color: #e5e4ea;
+                box-shadow: 0 2px 6px 2px rgba(0, 0, 0, 0.32), 0 1px 2px rgba(0, 0, 0, 0.4);
+            }
+            .sel-badge { background: #0842a0; color: #d3e3fd; }
+            .sel-title { color: #8ab4f8; }
+            .sel-title.error { color: #ffb4ab; }
+            .sel-icon-btn { color: #b6b5bf; }
+            .sel-icon-btn:hover { background: #1e1e24; }
+            .sel-icon-btn:focus-visible { box-shadow: 0 0 0 3px rgba(138, 180, 248, 0.4); }
+            .sel-loading { color: #b6b5bf; }
+            .sel-spinner { border-color: rgba(138, 180, 248, 0.25); border-top-color: #8ab4f8; }
+            .sel-text { color: #e5e4ea; }
+            .sel-error { background: #6e2621; color: #ffdad5; }
+            .sel-btn { background: #0842a0; color: #d3e3fd; }
+            .sel-btn:hover { box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 1px 3px 1px rgba(0, 0, 0, 0.25); }
+            .sel-btn:focus-visible { box-shadow: 0 0 0 3px rgba(138, 180, 248, 0.4); }
+        }
+    `;
+
+    let selectionContainer = null;
+    let selectionShadowRoot = null;
+    let selectionAnchorRange = null;
+    let selectionAnchorPoint = null;
+    let selectionCopyTimer = null;
+    let selectionStrings = null;
+    let selectionIsRtl = false;
+    let selectionRequestId = 0;
+    let selectionListenersAttached = false;
+
+    function watchSelectionPointer() {
+        try {
+            document.addEventListener('contextmenu', function (event) {
+                selectionAnchorPoint = { x: event.clientX, y: event.clientY };
+            }, true);
+        } catch (e) { }
+    }
+
+    function selectionLabel(key, fallback) {
+        const value = selectionStrings ? selectionStrings[key] : null;
+        return (typeof value === 'string' && value) ? value : fallback;
+    }
+
+    function createSelectionIcon(size, shapes) {
+        const ns = 'http://www.w3.org/2000/svg';
+        const svg = document.createElementNS(ns, 'svg');
+        svg.setAttribute('width', size);
+        svg.setAttribute('height', size);
+        svg.setAttribute('viewBox', '0 0 24 24');
+        svg.setAttribute('fill', 'none');
+        svg.setAttribute('stroke', 'currentColor');
+        svg.setAttribute('stroke-width', '2.25');
+        svg.setAttribute('stroke-linecap', 'round');
+        svg.setAttribute('stroke-linejoin', 'round');
+        svg.setAttribute('aria-hidden', 'true');
+        for (const [shapeTag, shapeAttrs] of shapes) {
+            const shape = document.createElementNS(ns, shapeTag);
+            for (const [attrName, attrValue] of Object.entries(shapeAttrs)) {
+                shape.setAttribute(attrName, attrValue);
+            }
+            svg.appendChild(shape);
+        }
+        return svg;
+    }
+
+    function showSelectionTranslation(rawText) {
+        const text = typeof rawText === 'string' ? rawText.trim() : '';
+        if (!text) return;
+        captureSelectionAnchor();
+        chrome.storage.local.get(['targetLanguage'], function (items) {
+            const lang = (items && items.targetLanguage) || 'en';
+            selectionStrings = (typeof getT === 'function') ? getT(lang) : null;
+            selectionIsRtl = SELECTION_RTL_LANGS.has(String(lang).split('-')[0]);
+            openSelectionPopup();
+            if (!selectionShadowRoot) return;
+            if (text.length > SELECTION_MAX_CHARS) {
+                const template = selectionLabel('selTooLong', 'Selection is too long (up to {max} characters).');
+                renderSelectionError(template.replace('{max}', String(SELECTION_MAX_CHARS)));
+                return;
+            }
+            renderSelectionLoading();
+            requestSelectionTranslation(text);
+        });
+    }
+
+    function captureSelectionAnchor() {
+        selectionAnchorRange = null;
+        try {
+            const selection = window.getSelection();
+            if (selection && selection.rangeCount > 0 && !selection.isCollapsed) {
+                selectionAnchorRange = selection.getRangeAt(0).cloneRange();
+            }
+        } catch (e) { }
+    }
+
+    function requestSelectionTranslation(text) {
+        const requestId = ++selectionRequestId;
+        const genericError = selectionLabel('error', 'An error occurred');
+        const handleFailure = (message) => {
+            if (requestId !== selectionRequestId) return;
+            renderSelectionError(message || genericError);
+        };
+        try {
+            chrome.runtime.sendMessage({ action: 'translateSelection', text }).then(function (response) {
+                if (requestId !== selectionRequestId) return;
+                if (!response) { handleFailure(genericError); return; }
+                if (response.cancelled) { closeSelectionPopup(); return; }
+                if (response.success) {
+                    renderSelectionResult(typeof response.translation === 'string' ? response.translation : '');
+                    return;
+                }
+                handleFailure(response.error);
+            }).catch(function (error) {
+                handleFailure(error?.message);
+            });
+        } catch (error) {
+            handleFailure(error?.message);
+        }
+    }
+
+    function openSelectionPopup() {
+        closeSelectionPopup();
+        const host = document.body || document.documentElement;
+        if (!host) return;
+        selectionContainer = document.createElement('div');
+        selectionContainer.id = SELECTION_CONTAINER_ID;
+        selectionContainer.dataset.geminiIgnore = 'true';
+        selectionContainer.style.cssText = 'position:fixed!important;top:0!important;left:0!important;margin:0!important;padding:0!important;border:none!important;display:block!important;z-index:2147483647!important;';
+        selectionShadowRoot = selectionContainer.attachShadow({ mode: 'open' });
+
+        const style = document.createElement('style');
+        style.textContent = SELECTION_CSS;
+        selectionShadowRoot.appendChild(style);
+
+        const card = document.createElement('div');
+        card.className = 'sel-card';
+        card.setAttribute('dir', selectionIsRtl ? 'rtl' : 'ltr');
+
+        const head = document.createElement('div');
+        head.className = 'sel-head';
+
+        const badge = document.createElement('span');
+        badge.className = 'sel-badge';
+        badge.appendChild(createSelectionIcon('14', [
+            ['path', { d: 'm5 8 6 6' }],
+            ['path', { d: 'm4 14 6-6 2-3' }],
+            ['path', { d: 'M2 5h12' }],
+            ['path', { d: 'M7 2h1' }],
+            ['path', { d: 'm22 22-5-10-5 10' }],
+            ['path', { d: 'M14 18h6' }]
+        ]));
+
+        const title = document.createElement('span');
+        title.className = 'sel-title';
+        title.id = 'selPanelTitle';
+        title.textContent = selectionLabel('selTitle', 'Translation');
+
+        const closeLabel = selectionLabel('selClose', 'Close');
+        const closeBtn = document.createElement('button');
+        closeBtn.className = 'sel-icon-btn';
+        closeBtn.type = 'button';
+        closeBtn.title = closeLabel;
+        closeBtn.setAttribute('aria-label', closeLabel);
+        closeBtn.appendChild(createSelectionIcon('14', [
+            ['line', { x1: '6', y1: '6', x2: '18', y2: '18' }],
+            ['line', { x1: '18', y1: '6', x2: '6', y2: '18' }]
+        ]));
+        closeBtn.addEventListener('click', function () { closeSelectionPopup(); });
+
+        head.appendChild(badge);
+        head.appendChild(title);
+        head.appendChild(closeBtn);
+
+        const body = document.createElement('div');
+        body.id = 'selPanelBody';
+
+        card.appendChild(head);
+        card.appendChild(body);
+        selectionShadowRoot.appendChild(card);
+        host.appendChild(selectionContainer);
+        attachSelectionListeners();
+        positionSelectionPopup();
+    }
+
+    function setSelectionBody(node) {
+        if (!selectionShadowRoot) return;
+        const body = selectionShadowRoot.getElementById('selPanelBody');
+        if (!body) return;
+        while (body.firstChild) body.removeChild(body.firstChild);
+        if (node) body.appendChild(node);
+    }
+
+    function setSelectionTitle(text, isError) {
+        if (!selectionShadowRoot) return;
+        const title = selectionShadowRoot.getElementById('selPanelTitle');
+        if (!title) return;
+        title.textContent = text;
+        title.classList.toggle('error', isError === true);
+    }
+
+    function clearSelectionActions() {
+        if (!selectionShadowRoot) return;
+        const actions = selectionShadowRoot.querySelector('.sel-actions');
+        if (actions && actions.parentNode) actions.parentNode.removeChild(actions);
+    }
+
+    function renderSelectionLoading() {
+        if (!selectionShadowRoot) return;
+        clearSelectionActions();
+        setSelectionTitle(selectionLabel('selTitle', 'Translation'), false);
+        const wrap = document.createElement('div');
+        wrap.className = 'sel-loading';
+        const spinner = document.createElement('span');
+        spinner.className = 'sel-spinner';
+        const label = document.createElement('span');
+        label.textContent = selectionLabel('selLoading', 'Translating…');
+        wrap.appendChild(spinner);
+        wrap.appendChild(label);
+        setSelectionBody(wrap);
+        positionSelectionPopup();
+    }
+
+    function renderSelectionResult(translation) {
+        if (!selectionShadowRoot) return;
+        clearSelectionActions();
+        setSelectionTitle(selectionLabel('selTitle', 'Translation'), false);
+        const paragraph = document.createElement('p');
+        paragraph.className = 'sel-text';
+        paragraph.setAttribute('dir', 'auto');
+        paragraph.textContent = translation;
+        setSelectionBody(paragraph);
+
+        const actions = document.createElement('div');
+        actions.className = 'sel-actions';
+        const copyBtn = document.createElement('button');
+        copyBtn.className = 'sel-btn';
+        copyBtn.type = 'button';
+        copyBtn.textContent = selectionLabel('selCopy', 'Copy');
+        copyBtn.addEventListener('click', function () { copySelectionTranslation(translation, copyBtn); });
+        actions.appendChild(copyBtn);
+        const card = selectionShadowRoot.querySelector('.sel-card');
+        if (card) card.appendChild(actions);
+        positionSelectionPopup();
+    }
+
+    function renderSelectionError(message) {
+        if (!selectionShadowRoot) return;
+        clearSelectionActions();
+        setSelectionTitle(selectionLabel('error', 'An error occurred'), true);
+        const box = document.createElement('div');
+        box.className = 'sel-error';
+        box.setAttribute('dir', 'auto');
+        box.textContent = message;
+        setSelectionBody(box);
+        positionSelectionPopup();
+    }
+
+    function copySelectionTranslation(translation, button) {
+        const finish = (copied) => {
+            if (selectionCopyTimer) clearTimeout(selectionCopyTimer);
+            button.textContent = copied
+                ? selectionLabel('selCopied', 'Copied')
+                : selectionLabel('selCopyFailed', 'Copy failed');
+            selectionCopyTimer = setTimeout(function () {
+                selectionCopyTimer = null;
+                try { button.textContent = selectionLabel('selCopy', 'Copy'); } catch (e) { }
+            }, 1600);
+        };
+        try {
+            const writing = navigator.clipboard?.writeText(translation);
+            if (writing && typeof writing.then === 'function') {
+                writing.then(() => finish(true)).catch(() => finish(copySelectionFallback(translation)));
+                return;
+            }
+        } catch (e) { }
+        finish(copySelectionFallback(translation));
+    }
+
+    function copySelectionFallback(translation) {
+        let holder = null;
+        try {
+            holder = document.createElement('textarea');
+            holder.value = translation;
+            holder.setAttribute('readonly', '');
+            holder.dataset.geminiIgnore = 'true';
+            holder.style.cssText = 'position:fixed;top:0;left:-9999px;opacity:0;';
+            (document.body || document.documentElement).appendChild(holder);
+            holder.select();
+            return document.execCommand('copy');
+        } catch (e) {
+            return false;
+        } finally {
+            if (holder && holder.parentNode) holder.parentNode.removeChild(holder);
+        }
+    }
+
+    function selectionAnchorRect() {
+        if (selectionAnchorRange) {
+            try {
+                const rect = selectionAnchorRange.getBoundingClientRect();
+                if (rect && (rect.width > 0 || rect.height > 0)) return rect;
+            } catch (e) { }
+        }
+        if (selectionAnchorPoint) {
+            return {
+                top: selectionAnchorPoint.y,
+                bottom: selectionAnchorPoint.y,
+                left: selectionAnchorPoint.x,
+                width: 0,
+                height: 0
+            };
+        }
+        return null;
+    }
+
+    function positionSelectionPopup() {
+        if (!selectionContainer || !selectionShadowRoot) return;
+        const card = selectionShadowRoot.querySelector('.sel-card');
+        if (!card) return;
+        const margin = 12;
+        const gap = 10;
+        const viewportWidth = document.documentElement?.clientWidth || window.innerWidth || 0;
+        const viewportHeight = document.documentElement?.clientHeight || window.innerHeight || 0;
+        const cardRect = card.getBoundingClientRect();
+        const width = cardRect.width || 340;
+        const height = cardRect.height || 120;
+        const anchor = selectionAnchorRect();
+        let left;
+        let top;
+        if (anchor) {
+            left = anchor.left + (anchor.width / 2) - (width / 2);
+            top = anchor.bottom + gap;
+            if (top + height > viewportHeight - margin) {
+                const above = anchor.top - height - gap;
+                top = above >= margin ? above : Math.max(margin, viewportHeight - height - margin);
+            }
+        } else {
+            left = (viewportWidth - width) / 2;
+            top = margin;
+        }
+        const maxLeft = Math.max(margin, viewportWidth - width - margin);
+        const maxTop = Math.max(margin, viewportHeight - height - margin);
+        left = Math.min(Math.max(margin, left), maxLeft);
+        top = Math.min(Math.max(margin, top), maxTop);
+        selectionContainer.style.left = `${Math.round(left)}px`;
+        selectionContainer.style.top = `${Math.round(top)}px`;
+    }
+
+    function closeSelectionPopup() {
+        detachSelectionListeners();
+        if (selectionCopyTimer) {
+            clearTimeout(selectionCopyTimer);
+            selectionCopyTimer = null;
+        }
+        const hadRequest = selectionRequestId > 0;
+        selectionRequestId++;
+        if (hadRequest) {
+            try { chrome.runtime.sendMessage({ action: 'cancelSelectionTranslation' }).catch(() => { }); } catch (e) { }
+        }
+        if (selectionContainer && selectionContainer.parentNode) {
+            selectionContainer.parentNode.removeChild(selectionContainer);
+        }
+        selectionContainer = null;
+        selectionShadowRoot = null;
+        selectionAnchorRange = null;
+    }
+
+    function attachSelectionListeners() {
+        if (selectionListenersAttached) return;
+        selectionListenersAttached = true;
+        try {
+            document.addEventListener('keydown', onSelectionKeyDown, true);
+            document.addEventListener('pointerdown', onSelectionPointerDown, true);
+            window.addEventListener('scroll', onSelectionViewportChange, true);
+            window.addEventListener('resize', onSelectionViewportChange, true);
+        } catch (e) { }
+    }
+
+    function detachSelectionListeners() {
+        if (!selectionListenersAttached) return;
+        selectionListenersAttached = false;
+        try {
+            document.removeEventListener('keydown', onSelectionKeyDown, true);
+            document.removeEventListener('pointerdown', onSelectionPointerDown, true);
+            window.removeEventListener('scroll', onSelectionViewportChange, true);
+            window.removeEventListener('resize', onSelectionViewportChange, true);
+        } catch (e) { }
+    }
+
+    function onSelectionKeyDown(event) {
+        if (event.key === 'Escape' || event.key === 'Esc') closeSelectionPopup();
+    }
+
+    function onSelectionPointerDown(event) {
+        if (!selectionContainer) return;
+        const target = event.target;
+        if (target === selectionContainer) return;
+        if (target instanceof Node && selectionContainer.contains(target)) return;
+        closeSelectionPopup();
+    }
+
+    function onSelectionViewportChange() {
+        positionSelectionPopup();
     }
 
     if (document.readyState === "loading") {
@@ -2932,6 +3646,8 @@
     } else {
         setTimeout(initTranslation, 100);
     }
+
+    watchSelectionPointer();
 
     try {
         chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
@@ -2981,6 +3697,10 @@
                         return false;
                     case "streamingTranslationUpdate":
                         handleStreamingUpdate(request.batchId, request.translations);
+                        return false;
+                    case "showSelectionTranslation":
+                        showSelectionTranslation(request.text);
+                        sendResponse({ status: "showing" });
                         return false;
                     default:
                         return false;
