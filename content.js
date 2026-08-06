@@ -18,7 +18,6 @@
         streamingNote: 'Applying text as it arrives',
         minimizeLabel: 'Minimize',
         restoreLabel: 'Restore',
-        showOriginal: 'Show original',
         errorTitle: 'Translation failed',
         errorDetails: 'Technical details',
         retryButton: 'Retry'
@@ -26,6 +25,7 @@
 
     const RTL_LANGS = new Set(['ar', 'ur', 'he', 'fa']);
     let currentUiLang = 'en';
+    let detectedPageLanguage = '';
 
     function applyStrings(lang) {
         const hasLang = typeof TRANSLATIONS !== 'undefined' && !!TRANSLATIONS[lang];
@@ -50,7 +50,6 @@
             streamingNote: t.panelStreamingNote,
             minimizeLabel: t.panelMinimize,
             restoreLabel: t.panelRestore,
-            showOriginal: t.panelShowOriginal,
             errorTitle: t.errTitle,
             errorDetails: t.errDetails,
             retryButton: t.errRetry
@@ -507,6 +506,7 @@
                         }
                     }
                     const languageDecision = resolvePageLanguageDecision(await detectContentLanguage(), pageLang, chosenLang);
+                    detectedPageLanguage = languageDecision.detectedSourceLanguage;
 
                     const translationStarter = () => {
                         if (isTranslating) return;
@@ -1054,6 +1054,14 @@
         } catch (e) { return null; }
     }
 
+    function detectedLanguageTag(detected) {
+        const primary = detected.lang.split('-')[0].toLowerCase();
+        if (primary === 'zh' && detected.chineseScript) {
+            return detected.chineseScript === 'Hant' ? 'zh-Hant' : 'zh';
+        }
+        return detected.lang;
+    }
+
     function resolvePageLanguageDecision(detected, pageLang, chosenLang) {
         const pageLangPrimary = pageLang ? pageLang.split('-')[0].toLowerCase() : null;
         const chosenLangPrimary = chosenLang.split('-')[0].toLowerCase();
@@ -1065,7 +1073,8 @@
         const skipAutoTranslation = !!(detected
             && detected.confidence >= LANGUAGE_DETECTION_AUTO_SKIP_CONFIDENCE
             && detectedLanguageMatchesTarget(detected, chosenLang));
-        return { pageIsTargetLanguage, skipAutoTranslation };
+        const detectedSourceLanguage = detectionUsable ? detectedLanguageTag(detected) : '';
+        return { pageIsTargetLanguage, skipAutoTranslation, detectedSourceLanguage };
     }
 
     const SVG_NS = 'http://www.w3.org/2000/svg';
@@ -1163,7 +1172,7 @@
     }
 
     function promptLanguagePairLabel() {
-        const pageLang = getPageLanguage();
+        const pageLang = detectedPageLanguage || getPageLanguage();
         if (!pageLang) return '';
         const source = languageNativeName(pageLang);
         const target = languageNativeName(currentUiLang);
@@ -2806,10 +2815,6 @@
 
             const cancelButton = createTextButton('btn btn-danger-text', st.cancelButton, () => handleCancelButtonClick(options.lang), 'cancelTranslationBtn');
             card.appendChild(createActionsRow([cancelButton]));
-        } else if (phase === 'done') {
-            card.appendChild(createActionsRow([
-                createTextButton('btn btn-text', st.showOriginal, toggleAllTranslations)
-            ]));
         } else if (phase === 'error') {
             const rawMessage = options.message || st.errorOccurred;
             const cause = localizedErrorCause(options.code);
