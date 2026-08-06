@@ -447,6 +447,9 @@
     let pendingRetranslation = false;
     let cacheRestoreMap = null;
     let cacheRestoreActive = false;
+    const sessionTranslationMemo = new Map();
+    let sessionTranslationMemoLang = '';
+    const SESSION_MEMO_MAX_ENTRIES = 2000;
     let postNavigationCooldownUntil = 0;
     let highlightTranslated = false;
     let lastFinishTime = 0;
@@ -496,7 +499,7 @@
                         cacheRestoreMap = null;
                         cacheRestoreActive = false;
                         await clearPageCache();
-                    } else if (!isReactSpa && !isExcluded && (items.autoRetranslateDomain !== false || isAlwaysTranslate)) {
+                    } else if (!isReactSpa && !isExcluded) {
                         const restored = await tryRestoreFromCache(chosenLang);
                         if (restored || cacheRestoreActive) {
                             translationStarted = true;
@@ -586,6 +589,7 @@
 
     const PAGE_CACHE_PREFIX = 'pageCache_';
     const PAGE_CACHE_MAX_ENTRIES = 500;
+    const PAGE_CACHE_MAX_BLOCKS = 1500;
 
     function computeStringHash(s) {
         let hash = 0x811c9dc5;
@@ -702,20 +706,42 @@
         return textKey + '|' + (tagName || '');
     }
 
+    function useSessionMemoForLanguage(targetLanguage) {
+        if (!targetLanguage || sessionTranslationMemoLang === targetLanguage) return;
+        sessionTranslationMemoLang = targetLanguage;
+        sessionTranslationMemo.clear();
+    }
+
+    function rememberTranslatedTemplate(template, translatedTemplate) {
+        if (typeof template !== 'string' || !template) return;
+        if (typeof translatedTemplate !== 'string' || !translatedTemplate) return;
+        if (sessionTranslationMemo.has(template)) sessionTranslationMemo.delete(template);
+        sessionTranslationMemo.set(template, translatedTemplate);
+        while (sessionTranslationMemo.size > SESSION_MEMO_MAX_ENTRIES) {
+            const oldest = sessionTranslationMemo.keys().next();
+            if (oldest.done) break;
+            sessionTranslationMemo.delete(oldest.value);
+        }
+    }
+
+    function recallTranslatedTemplate(template) {
+        const remembered = sessionTranslationMemo.get(template);
+        return (typeof remembered === 'string' && remembered) ? remembered : null;
+    }
+
     async function tryRestoreFromCache(targetLanguage) {
         if (!cacheRestoreMap) {
             if (!targetLanguage) return false;
             const cache = await getPageCache();
             if (!cache || !Array.isArray(cache.blocks)) return false;
-            if (cache.lang !== targetLanguage) {
-                await clearPageCache();
-                return false;
-            }
+            if (cache.lang !== targetLanguage) return false;
+            useSessionMemoForLanguage(targetLanguage);
             const map = new Map();
             for (const entry of cache.blocks) {
                 if (entry && entry.textKey && entry.tagName) {
                     map.set(compositeBlockKey(entry.textKey, entry.tagName), entry);
                 }
+                if (entry) rememberTranslatedTemplate(entry.template, entry.translatedTemplate);
             }
             if (map.size === 0) return false;
             cacheRestoreMap = map;
@@ -821,6 +847,23 @@
         });
     }
 
+    function mergeWithPreviousEntries(previous, entries, lang) {
+        if (entries.length >= PAGE_CACHE_MAX_BLOCKS) return entries.slice(0, PAGE_CACHE_MAX_BLOCKS);
+        if (!previous || previous.lang !== lang || !Array.isArray(previous.blocks)) return entries;
+        const merged = entries.slice();
+        const seen = new Set(entries.map(entry => compositeBlockKey(entry.textKey, entry.tagName)));
+        for (const entry of previous.blocks) {
+            if (merged.length >= PAGE_CACHE_MAX_BLOCKS) break;
+            if (!entry || !entry.textKey || !entry.tagName) continue;
+            if (!entry.template || !entry.translatedTemplate) continue;
+            const composite = compositeBlockKey(entry.textKey, entry.tagName);
+            if (seen.has(composite)) continue;
+            seen.add(composite);
+            merged.push(entry);
+        }
+        return merged;
+    }
+
     async function saveCurrentTranslationToCache() {
         const blocks = collectCacheableBlocks();
         if (blocks.length === 0) return;
@@ -851,12 +894,13 @@
         if (entries.length === 0) return;
         const lang = await getStoredTargetLanguage();
         if (!lang) return;
+        const previous = await getPageCache();
         let pageUrl = '';
         try { pageUrl = window.location.href; } catch (e) { }
         const saved = await savePageCache({
             url: pageUrl,
             lang,
-            blocks: entries,
+            blocks: mergeWithPreviousEntries(previous, entries, lang),
             savedAt: Date.now()
         });
         if (saved) pruneOldCaches().catch(() => { });
@@ -1626,6 +1670,7 @@
             lang = config.targetLanguage || 'en';
             highlightTranslated = config.toggleBlueBackground === true;
             streamingEnabled = config.streamingTranslation === true;
+            useSessionMemoForLanguage(lang);
             applyStrings(lang);
 
             const allTus = collectTranslationUnits();
@@ -1644,7 +1689,15 @@
             }
             expectedTotalUnits = tus.length;
 
-            const batches = createBatches(tus, config.batchSize || DEFAULTS.batchSize, maxBatchLength);
+            const rememberedTranslations = [];
+            const unresolvedTus = [];
+            for (const tu of tus) {
+                const remembered = recallTranslatedTemplate(tu.template);
+                if (remembered) rememberedTranslations.push({ id: tu.id, translatedTemplate: remembered });
+                else unresolvedTus.push(tu);
+            }
+
+            const batches = createBatches(unresolvedTus, config.batchSize || DEFAULTS.batchSize, maxBatchLength);
             totalBatches = batches.length;
 
             for (const tu of tus) {
@@ -1652,6 +1705,11 @@
                     tu.block.dataset.translationStatus = 'processing';
                     try { tu.block.dataset.tuTemplate = tu.template; } catch (e) { }
                 }
+            }
+
+            if (rememberedTranslations.length > 0) {
+                domUpdateQueue.push({ generation: runGeneration, translations: rememberedTranslations });
+                applyQueuedUpdates();
             }
 
             if (config.showProgressPopup !== false && IS_TOP_FRAME) {
@@ -2363,8 +2421,15 @@
         if (!tu || !tu.block || !tu.block.isConnected) return;
         if (shouldUseTextOnlyApply(tu.block)) {
             applyTranslationInPlace(tu, translatedTemplate, fromCacheRestore);
-            return;
+        } else {
+            applyTranslationByReplacement(tu, translatedTemplate, fromCacheRestore);
         }
+        if (tu.block.dataset?.translationStatus === 'translated') {
+            rememberTranslatedTemplate(tu.template, translatedTemplate);
+        }
+    }
+
+    function applyTranslationByReplacement(tu, translatedTemplate, fromCacheRestore) {
         try {
             try { tu.block.dataset.tuTranslatedTemplate = translatedTemplate; } catch (e) { }
             try { tu.block.dataset.tuTemplate = tu.template; } catch (e) { }
