@@ -22,6 +22,17 @@ const errorMessages = {
     emptyResponse: 'Empty response received from AI.'
 };
 
+const FATAL_TRANSLATION_ERRORS = [
+    errorMessages.apiKeyNotSet,
+    errorMessages.invalidApiKey,
+    errorMessages.endpointNotSet,
+    errorMessages.insufficientQuota
+];
+
+function isFatalTranslationErrorMessage(message) {
+    return typeof message === 'string' && FATAL_TRANSLATION_ERRORS.some(m => message.includes(m));
+}
+
 const DEFAULTS = Object.freeze({
     apiProvider: 'gemini',
     geminiModel: 'gemini-3.1-flash-lite',
@@ -53,24 +64,53 @@ const LANGUAGE_LIST = [
     { code: 'vi', name: 'Vietnamese' },     { code: 'ko', name: 'Korean' },
 ];
 
-const tabStates = new Map();
+const frameStates = new Map();
 const globalRequestQueue = new Map();
-let isProcessing = false;
-const activeTranslationTabs = new Set();
+const processingFrames = new Set();
 
-function getTabState(tabId) {
-    if (!tabStates.has(tabId)) {
-        tabStates.set(tabId, {
-            abortController: new AbortController(),
-            translationCancelled: false
-        });
+function toFrameKey(tabId, frameId) {
+    return `${tabId}:${Number.isInteger(frameId) ? frameId : 0}`;
+}
+
+function getFrameState(tabId, frameId) {
+    const key = toFrameKey(tabId, frameId);
+    const existing = frameStates.get(key);
+    if (existing && !existing.translationCancelled && !existing.abortController.signal.aborted) {
+        return existing;
     }
-    const state = tabStates.get(tabId);
-    if (state.abortController.signal.aborted) {
-        state.abortController = new AbortController();
-        state.translationCancelled = false;
-    }
+    const state = {
+        abortController: new AbortController(),
+        translationCancelled: false
+    };
+    frameStates.set(key, state);
     return state;
+}
+
+function cancelFrameByKey(key) {
+    const state = frameStates.get(key);
+    if (state) {
+        state.translationCancelled = true;
+        state.abortController.abort();
+    }
+    const entry = globalRequestQueue.get(key);
+    if (entry) {
+        entry.batches.forEach(({ sendResponse }) => {
+            safeSendResponse(sendResponse, { success: false, cancelled: true, error: errorMessages.translationCancelled });
+        });
+        globalRequestQueue.delete(key);
+    }
+}
+
+function frameKeysForTab(tabId) {
+    const prefix = `${tabId}:`;
+    const keys = new Set();
+    for (const key of frameStates.keys()) {
+        if (key.startsWith(prefix)) keys.add(key);
+    }
+    for (const key of globalRequestQueue.keys()) {
+        if (key.startsWith(prefix)) keys.add(key);
+    }
+    return keys;
 }
 
 chrome.runtime.onStartup.addListener(function () {
@@ -123,17 +163,20 @@ chrome.runtime.onMessage.addListener(function (request, sender, sendResponse) {
     if (!tabId) return false;
 
     if (request.action === "translateBatch") {
-        activeTranslationTabs.add(tabId);
-        if (!globalRequestQueue.has(tabId)) {
-            globalRequestQueue.set(tabId, {
+        const frameId = Number.isInteger(sender.frameId) ? sender.frameId : 0;
+        const key = toFrameKey(tabId, frameId);
+        let entry = globalRequestQueue.get(key);
+        if (!entry) {
+            entry = {
+                tabId,
+                frameId,
                 batches: [],
-                state: getTabState(tabId)
-            });
+                state: getFrameState(tabId, frameId)
+            };
+            globalRequestQueue.set(key, entry);
         }
-        globalRequestQueue.get(tabId).batches.push({ request, sendResponse, frameId: sender.frameId });
-        if (!isProcessing) {
-            processQueue();
-        }
+        entry.batches.push({ request, sendResponse });
+        dispatchFrame(key);
         return true;
     }
 
@@ -143,25 +186,17 @@ chrome.runtime.onMessage.addListener(function (request, sender, sendResponse) {
     }
 
     if (request.action === "cancelTranslation") {
-        const state = getTabState(tabId);
-        state.translationCancelled = true;
-        state.abortController.abort();
-        if (globalRequestQueue.has(tabId)) {
-            const tabData = globalRequestQueue.get(tabId);
-            tabData.batches.forEach(({ sendResponse: sr }) => {
-                safeSendResponse(sr, { success: false, error: errorMessages.translationCancelled });
+        const frameId = Number.isInteger(sender.frameId) ? sender.frameId : 0;
+        if (request.allFrames === true) {
+            for (const key of frameKeysForTab(tabId)) cancelFrameByKey(key);
+            chrome.tabs.sendMessage(tabId, { action: "translationCancelled" }).catch(() => { });
+        } else {
+            const key = toFrameKey(tabId, frameId);
+            cancelFrameByKey(key);
+            chrome.tabs.sendMessage(tabId, { action: "translationCancelled" }, { frameId }).catch(() => {
+                frameStates.delete(key);
             });
-            globalRequestQueue.delete(tabId);
         }
-        activeTranslationTabs.delete(tabId);
-        chrome.tabs.sendMessage(tabId, { action: "translationCancelled" }).catch(() => {
-            if (tabStates.has(tabId)) tabStates.delete(tabId);
-        });
-        return false;
-    }
-
-    if (request.action === "translationCancelled" || request.action === "translationComplete" || request.action === "translationError") {
-        activeTranslationTabs.delete(tabId);
         return false;
     }
 
@@ -329,15 +364,14 @@ chrome.storage.onChanged.addListener(function (changes) {
 });
 
 chrome.tabs.onRemoved.addListener(function (tabId) {
-    if (tabStates.has(tabId)) {
-        const state = tabStates.get(tabId);
-        if (!state.abortController.signal.aborted) {
+    for (const key of frameKeysForTab(tabId)) {
+        const state = frameStates.get(key);
+        if (state && !state.abortController.signal.aborted) {
             state.abortController.abort();
         }
-        tabStates.delete(tabId);
+        frameStates.delete(key);
+        globalRequestQueue.delete(key);
     }
-    globalRequestQueue.delete(tabId);
-    activeTranslationTabs.delete(tabId);
     untrackSessionTab(tabId).catch(() => { });
 });
 
@@ -347,28 +381,24 @@ chrome.tabs.onUpdated.addListener(function (tabId, changeInfo) {
     }
 });
 
-async function processQueue() {
-    if (isProcessing || globalRequestQueue.size === 0) return;
-    isProcessing = true;
-    try {
-        while (globalRequestQueue.size > 0) {
-            const tabIds = Array.from(globalRequestQueue.keys());
-            const tasks = tabIds.map(tabId => {
-                const tabData = globalRequestQueue.get(tabId);
-                globalRequestQueue.delete(tabId);
-                return processTab(tabId, tabData).catch(error => {
-                    console.error(`Error processing tab ${tabId}:`, error);
-                });
-            });
-            await Promise.all(tasks);
-        }
-    } finally {
-        isProcessing = false;
-    }
+function dispatchFrame(key) {
+    if (processingFrames.has(key)) return;
+    const entry = globalRequestQueue.get(key);
+    if (!entry) return;
+    globalRequestQueue.delete(key);
+    processingFrames.add(key);
+    processFrame(entry)
+        .catch(error => {
+            console.error(`Error processing frame ${key}:`, error);
+        })
+        .finally(() => {
+            processingFrames.delete(key);
+            dispatchFrame(key);
+        });
 }
 
-async function processTab(tabId, tabData) {
-    const { batches, state } = tabData;
+async function processFrame(entry) {
+    const { tabId, frameId, batches, state } = entry;
     const { concurrencyLimit, delayBetweenRequests, streamingTranslation } = await new Promise(resolve =>
         chrome.storage.local.get(['concurrencyLimit', 'delayBetweenRequests', 'streamingTranslation'], resolve));
     const concLimit = Math.max(1, concurrencyLimit || DEFAULTS.concurrencyLimit);
@@ -387,13 +417,13 @@ async function processTab(tabId, tabData) {
                 while (batchIndex < batches.length) {
                     const { sendResponse } = batches[batchIndex];
                     batchIndex++;
-                    safeSendResponse(sendResponse, { success: false, error: errorMessages.translationCancelled });
+                    safeSendResponse(sendResponse, { success: false, cancelled: true, error: errorMessages.translationCancelled });
                 }
                 if (activeRequests === 0) resolve();
                 return;
             }
             while (batchIndex < batches.length && activeRequests < concLimit) {
-                const { request, sendResponse, frameId } = batches[batchIndex];
+                const { request, sendResponse } = batches[batchIndex];
                 batchIndex++;
                 activeRequests++;
                 const myFireTime = Math.max(Date.now(), nextFireTime);
@@ -412,9 +442,12 @@ async function processTab(tabId, tabData) {
                         if (error?.retryAfterMs && Number.isFinite(error.retryAfterMs)) {
                             nextFireTime = Math.max(nextFireTime, Date.now() + error.retryAfterMs);
                         }
+                        const message = error?.message || errorMessages.unknownError;
                         safeSendResponse(sendResponse, {
                             success: false,
-                            error: error?.message || errorMessages.unknownError
+                            cancelled: error?.name === 'AbortError',
+                            fatal: isFatalTranslationErrorMessage(message),
+                            error: message
                         });
                     } finally {
                         activeRequests--;
@@ -456,23 +489,31 @@ function sleep(ms, signal) {
     });
 }
 
-async function fetchWithTimeout(resource, options = {}, timeout) {
+async function fetchJsonWithTimeout(resource, options = {}, timeout) {
     const controller = new AbortController();
     const timeoutId = timeout > 0 ? setTimeout(() => controller.abort(), timeout * 1000) : null;
-    options.signal = combineSignals(options.signal, controller.signal);
+    const externalSignal = options.signal;
+    options.signal = combineSignals(externalSignal, controller.signal);
     try {
         const response = await fetch(resource, options);
-        if (timeoutId) clearTimeout(timeoutId);
-        return response;
+        let data = null;
+        try {
+            data = await response.json();
+        } catch (error) {
+            if (error?.name === 'AbortError') throw error;
+            data = null;
+        }
+        return { response, data };
     } catch (error) {
-        if (timeoutId) clearTimeout(timeoutId);
         if (error.name === 'AbortError') {
-            if (options.signal?.aborted && !controller.signal.aborted) {
+            if (externalSignal?.aborted && !controller.signal.aborted) {
                 throw createAbortError();
             }
             throw new Error(errorMessages.requestTimeout);
         }
         throw new Error(`${errorMessages.fetchError}: ${error.message}`);
+    } finally {
+        if (timeoutId) clearTimeout(timeoutId);
     }
 }
 
@@ -515,22 +556,15 @@ async function translateTextBatch(fragmentBatch, signal, streamContext = null) {
     const langEntry = LANGUAGE_LIST.find(l => l.code === langCode);
     const langName = langEntry ? langEntry.name : 'English';
 
-    let translatedJSONString;
-    if (provider === 'openai') {
-        translatedJSONString = await translateWithOpenAI(jsonText, retryLimit, signal, langName, langCode, streamContext);
-    } else if (provider === 'anthropic') {
-        translatedJSONString = await translateWithAnthropic(jsonText, retryLimit, signal, langName, langCode, streamContext);
-    } else if (provider === 'openai-compatible') {
-        translatedJSONString = await translateWithOpenAICompatible(jsonText, retryLimit, signal, langName, langCode, streamContext);
-    } else {
-        translatedJSONString = await translateWithGemini(jsonText, retryLimit, signal, langName, langCode, streamContext);
-    }
-
     let translatedData;
-    try {
-        translatedData = extractJson(translatedJSONString);
-    } catch (e) {
-        throw new Error(`${errorMessages.jsonParseFailed} ${e.message}\nResponse: ${translatedJSONString.substring(0, 200)}`);
+    if (provider === 'openai') {
+        translatedData = await translateWithOpenAI(jsonText, retryLimit, signal, langName, langCode, streamContext);
+    } else if (provider === 'anthropic') {
+        translatedData = await translateWithAnthropic(jsonText, retryLimit, signal, langName, langCode, streamContext);
+    } else if (provider === 'openai-compatible') {
+        translatedData = await translateWithOpenAICompatible(jsonText, retryLimit, signal, langName, langCode, streamContext);
+    } else {
+        translatedData = await translateWithGemini(jsonText, retryLimit, signal, langName, langCode, streamContext);
     }
 
     const translations = [];
@@ -542,6 +576,14 @@ async function translateTextBatch(fragmentBatch, signal, streamContext = null) {
         }
     });
     return translations;
+}
+
+function parseTranslationResponse(responseText) {
+    try {
+        return extractJson(responseText);
+    } catch (e) {
+        throw new Error(`${errorMessages.jsonParseFailed} ${e.message}\nResponse: ${(responseText || '').substring(0, 200)}`);
+    }
 }
 
 function extractJson(responseText) {
@@ -1268,7 +1310,7 @@ async function translateWithGemini(text, retryLimit, signal, targetLanguage = 'E
         'x-goog-api-key': apiKey
     };
     if (streamContext) {
-        return performTranslation(() => streamModelResponse({
+        return performTranslation(async () => parseTranslationResponse(await streamModelResponse({
             url: `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(actualModel)}:streamGenerateContent?alt=sse`,
             headers,
             body: JSON.stringify(requestBody),
@@ -1278,22 +1320,16 @@ async function translateWithGemini(text, retryLimit, signal, targetLanguage = 'E
             readChunk: readGeminiStreamChunk,
             finalizeStream: finalizeGeminiStream,
             streamContext
-        }), retryLimit, signal);
+        })), retryLimit, signal);
     }
     return performTranslation(async () => {
         const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(actualModel)}:generateContent`;
-        const response = await fetchWithTimeout(url, {
+        const { response, data } = await fetchJsonWithTimeout(url, {
             method: 'POST',
             headers,
             body: JSON.stringify(requestBody),
             signal
         }, actualTimeout);
-        let data;
-        try {
-            data = await response.json();
-        } catch (e) {
-            data = null;
-        }
         if (!response.ok) handleGeminiHttpError(response, data);
         if (!data || !Array.isArray(data.candidates) || data.candidates.length === 0) {
             const blockReason = data?.promptFeedback?.blockReason;
@@ -1310,10 +1346,10 @@ async function translateWithGemini(text, retryLimit, signal, targetLanguage = 'E
             : '';
         if (candidate.finishReason === 'MAX_TOKENS') {
             if (!responseText) throw new Error(errorMessages.maxTokensError);
-            return responseText;
+            return parseTranslationResponse(responseText);
         }
         if (!responseText) throw new Error(errorMessages.emptyResponse);
-        return responseText;
+        return parseTranslationResponse(responseText);
     }, retryLimit, signal);
 }
 
@@ -1337,7 +1373,7 @@ async function translateWithOpenAI(text, retryLimit, signal, targetLanguage = 'E
     };
     if (streamContext) {
         requestBody.stream = true;
-        return performTranslation(() => streamModelResponse({
+        return performTranslation(async () => parseTranslationResponse(await streamModelResponse({
             url: 'https://api.openai.com/v1/chat/completions',
             headers,
             body: JSON.stringify(requestBody),
@@ -1347,28 +1383,22 @@ async function translateWithOpenAI(text, retryLimit, signal, targetLanguage = 'E
             readChunk: readOpenAIStreamChunk,
             finalizeStream: finalizeOpenAIStream,
             streamContext
-        }), retryLimit, signal);
+        })), retryLimit, signal);
     }
     return performTranslation(async () => {
-        const response = await fetchWithTimeout('https://api.openai.com/v1/chat/completions', {
+        const { response, data } = await fetchJsonWithTimeout('https://api.openai.com/v1/chat/completions', {
             method: 'POST',
             headers,
             body: JSON.stringify(requestBody),
             signal
         }, actualTimeout);
-        let data;
-        try {
-            data = await response.json();
-        } catch (e) {
-            data = null;
-        }
         if (!response.ok) handleOpenAIHttpError(response, data);
         const choice = data?.choices?.[0];
         if (!choice) throw new Error(`${errorMessages.unknownError} (no choices)`);
         if (choice.finish_reason === 'length') throw new Error(errorMessages.maxTokensError);
         const responseText = choice.message?.content || '';
         if (!responseText) throw new Error(errorMessages.emptyResponse);
-        return responseText;
+        return parseTranslationResponse(responseText);
     }, retryLimit, signal);
 }
 
@@ -1390,7 +1420,7 @@ async function translateWithOpenAICompatible(text, retryLimit, signal, targetLan
     if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`;
     if (streamContext) {
         requestBody.stream = true;
-        return performTranslation(() => streamModelResponse({
+        return performTranslation(async () => parseTranslationResponse(await streamModelResponse({
             url: endpoint.trim(),
             headers,
             body: JSON.stringify(requestBody),
@@ -1400,28 +1430,22 @@ async function translateWithOpenAICompatible(text, retryLimit, signal, targetLan
             readChunk: readOpenAIStreamChunk,
             finalizeStream: finalizeOpenAIStream,
             streamContext
-        }), retryLimit, signal);
+        })), retryLimit, signal);
     }
     return performTranslation(async () => {
-        const response = await fetchWithTimeout(endpoint.trim(), {
+        const { response, data } = await fetchJsonWithTimeout(endpoint.trim(), {
             method: 'POST',
             headers,
             body: JSON.stringify(requestBody),
             signal
         }, actualTimeout);
-        let data;
-        try {
-            data = await response.json();
-        } catch (e) {
-            data = null;
-        }
         if (!response.ok) handleOpenAIHttpError(response, data);
         const choice = data?.choices?.[0];
         if (!choice) throw new Error(`${errorMessages.unknownError} (no choices)`);
         if (choice.finish_reason === 'length') throw new Error(errorMessages.maxTokensError);
         const responseText = choice.message?.content || '';
         if (!responseText) throw new Error(errorMessages.emptyResponse);
-        return responseText;
+        return parseTranslationResponse(responseText);
     }, retryLimit, signal);
 }
 
@@ -1446,7 +1470,7 @@ async function translateWithAnthropic(text, retryLimit, signal, targetLanguage =
     };
     if (streamContext) {
         requestBody.stream = true;
-        return performTranslation(() => streamModelResponse({
+        return performTranslation(async () => parseTranslationResponse(await streamModelResponse({
             url: 'https://api.anthropic.com/v1/messages',
             headers,
             body: JSON.stringify(requestBody),
@@ -1456,26 +1480,20 @@ async function translateWithAnthropic(text, retryLimit, signal, targetLanguage =
             readChunk: readAnthropicStreamChunk,
             finalizeStream: finalizeAnthropicStream,
             streamContext
-        }), retryLimit, signal);
+        })), retryLimit, signal);
     }
     return performTranslation(async () => {
-        const response = await fetchWithTimeout('https://api.anthropic.com/v1/messages', {
+        const { response, data } = await fetchJsonWithTimeout('https://api.anthropic.com/v1/messages', {
             method: 'POST',
             headers,
             body: JSON.stringify(requestBody),
             signal
         }, actualTimeout);
-        let data;
-        try {
-            data = await response.json();
-        } catch (e) {
-            data = null;
-        }
         if (!response.ok) handleAnthropicHttpError(response, data);
         if (data?.stop_reason === 'max_tokens') throw new Error(errorMessages.maxTokensError);
         const responseText = data?.content?.[0]?.text || '';
         if (!responseText) throw new Error(errorMessages.emptyResponse);
-        return responseText;
+        return parseTranslationResponse(responseText);
     }, retryLimit, signal);
 }
 
