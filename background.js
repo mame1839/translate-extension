@@ -10,6 +10,10 @@ try {
 const errorMessages = {
     apiKeyNotSet: 'API key is not set. Please configure it in the options page.',
     endpointNotSet: 'Endpoint URL is not set. Please configure it in the options page.',
+    builtinUnavailable: 'Chrome built-in translation is not available in this browser. Use desktop Chrome 138 or later, or choose another provider in the options page.',
+    builtinLanguageUnsupported: 'Chrome built-in translation does not support this language pair. Please choose another provider in the options page.',
+    builtinSourceUnknown: 'Could not detect the language of this page. Please choose another provider in the options page.',
+    builtinPrepareFailed: 'Failed to prepare the built-in translation engine. Check your network and free disk space, then try again.',
     jsonParseFailed: 'Failed to parse JSON response from AI.',
     jsonExtractFailed: 'Could not extract JSON from AI response.',
     apiLimitReached: 'API rate limit reached. Please wait and try again.',
@@ -30,7 +34,10 @@ const FATAL_TRANSLATION_ERRORS = [
     errorMessages.apiKeyNotSet,
     errorMessages.invalidApiKey,
     errorMessages.endpointNotSet,
-    errorMessages.insufficientQuota
+    errorMessages.insufficientQuota,
+    errorMessages.builtinUnavailable,
+    errorMessages.builtinLanguageUnsupported,
+    errorMessages.builtinSourceUnknown
 ];
 
 function isFatalTranslationErrorMessage(message) {
@@ -75,6 +82,14 @@ const DEFAULTS = Object.freeze({
 });
 
 const ANTHROPIC_MAX_OUTPUT_TOKENS = 64000;
+
+const BUILTIN_PROVIDER = 'chrome-builtin';
+const BUILTIN_TRANSLATOR_CACHE_LIMIT = 4;
+const BUILTIN_LANGUAGE_SAMPLE_LIMIT = 4000;
+const BUILTIN_SOURCE_MIN_PERCENTAGE = 30;
+const BUILTIN_MAX_CONSECUTIVE_FAILURES = 3;
+const BUILTIN_STRICT_TAG_SOURCE = '<(\\/?)([atbs])(\\d+)>';
+const BUILTIN_LOOSE_TAG_SOURCE = '<\\s*(\\/?)\\s*([atbsATBS])(\\d+)\\s*\\/?\\s*>';
 
 const LANGUAGE_LIST = [
     { code: 'en', name: 'English' },       { code: 'zh', name: 'Chinese (Simplified)' },
@@ -191,6 +206,20 @@ chrome.runtime.onInstalled.addListener(function (details) {
 });
 
 chrome.runtime.onMessage.addListener(function (request, sender, sendResponse) {
+    if (request.action === "builtinTranslatorStatus") {
+        getBuiltinTranslatorStatus(request.targetLanguage)
+            .then(sendResponse)
+            .catch(() => sendResponse({ supported: false, availability: 'unsupported' }));
+        return true;
+    }
+
+    if (request.action === "builtinTranslatorPrepare") {
+        prepareBuiltinTranslator(request.targetLanguage)
+            .then(sendResponse)
+            .catch(() => sendResponse({ ok: false, availability: 'unavailable' }));
+        return true;
+    }
+
     const tabId = sender.tab?.id;
     if (!tabId) return false;
 
@@ -575,11 +604,16 @@ async function translateTextBatch(fragmentBatch, signal, streamContext = null) {
     if (streamContext) streamContext.keys = new Set(idByKey.keys());
 
     const provider = (apiProvider || DEFAULTS.apiProvider).trim();
-    const jsonText = JSON.stringify(payload, null, 2);
     const retryLimit = maxRetries ?? DEFAULTS.maxRetries;
     const langCode = (targetLanguage || 'en').trim();
     const langEntry = LANGUAGE_LIST.find(l => l.code === langCode);
     const langName = langEntry ? langEntry.name : 'English';
+
+    if (provider === BUILTIN_PROVIDER) {
+        return translateBatchWithChromeBuiltin(fragmentBatch, retryLimit, signal, langCode, streamContext);
+    }
+
+    const jsonText = JSON.stringify(payload, null, 2);
 
     let translatedData;
     if (provider === 'openai') {
@@ -746,7 +780,10 @@ async function performTranslation(apiCall, retryLimit, signal) {
                 errorMessages.invalidRequest,
                 errorMessages.maxTokensError,
                 errorMessages.insufficientQuota,
-                errorMessages.translationCancelled
+                errorMessages.translationCancelled,
+                errorMessages.builtinUnavailable,
+                errorMessages.builtinLanguageUnsupported,
+                errorMessages.builtinSourceUnknown
             ];
             const msg = error?.message || '';
             if (noRetryErrors.some(m => msg.includes(m))) break;
@@ -766,6 +803,396 @@ async function performTranslation(apiCall, retryLimit, signal) {
         }
     }
     throw lastError;
+}
+
+const builtinTranslators = new Map();
+
+function builtinTranslatorSupported() {
+    return typeof Translator !== 'undefined'
+        && typeof Translator.create === 'function'
+        && typeof Translator.availability === 'function';
+}
+
+function normalizeBuiltinLanguageTag(tag) {
+    const raw = String(tag || '').trim();
+    if (!raw) return 'en';
+    const parts = raw.split('-');
+    const primary = parts[0].toLowerCase();
+    if (primary !== 'zh') return primary;
+    const traditional = parts.slice(1)
+        .map(part => part.toLowerCase())
+        .some(part => part === 'hant' || part === 'tw' || part === 'hk' || part === 'mo');
+    return traditional ? 'zh-Hant' : 'zh';
+}
+
+function builtinPairKey(sourceLanguage, targetLanguage) {
+    return `${sourceLanguage}>${targetLanguage}`;
+}
+
+function emitBuiltinDownloadProgress(loaded) {
+    const ratio = Number(loaded);
+    const percent = Math.max(0, Math.min(100, Math.round((Number.isFinite(ratio) ? ratio : 0) * 100)));
+    try {
+        const sending = chrome.runtime.sendMessage({ action: 'builtinTranslatorProgress', percent });
+        if (sending && typeof sending.catch === 'function') sending.catch(() => { });
+    } catch (e) { }
+}
+
+function forgetBuiltinTranslator(sourceLanguage, targetLanguage) {
+    builtinTranslators.delete(builtinPairKey(sourceLanguage, targetLanguage));
+}
+
+function acquireBuiltinTranslator(sourceLanguage, targetLanguage) {
+    const key = builtinPairKey(sourceLanguage, targetLanguage);
+    const cached = builtinTranslators.get(key);
+    if (cached) return cached;
+    while (builtinTranslators.size >= BUILTIN_TRANSLATOR_CACHE_LIMIT) {
+        builtinTranslators.delete(builtinTranslators.keys().next().value);
+    }
+    const created = Translator.create({
+        sourceLanguage,
+        targetLanguage,
+        monitor(monitor) {
+            try {
+                monitor.addEventListener('downloadprogress', event => emitBuiltinDownloadProgress(event?.loaded));
+            } catch (e) { }
+        }
+    }).catch(error => {
+        builtinTranslators.delete(key);
+        throw error;
+    });
+    builtinTranslators.set(key, created);
+    return created;
+}
+
+async function getBuiltinAvailability(sourceLanguage, targetLanguage) {
+    if (!builtinTranslatorSupported()) return 'unsupported';
+    try {
+        const availability = await Translator.availability({ sourceLanguage, targetLanguage });
+        return typeof availability === 'string' ? availability : 'unavailable';
+    } catch (e) {
+        return 'unavailable';
+    }
+}
+
+function abortableBuiltinPromise(promise, signal) {
+    if (!signal) return promise;
+    return new Promise((resolve, reject) => {
+        if (signal.aborted) return reject(createAbortError());
+        const onAbort = () => reject(createAbortError());
+        signal.addEventListener('abort', onAbort, { once: true });
+        promise.then(resolve, reject).finally(() => {
+            try { signal.removeEventListener('abort', onAbort); } catch (e) { }
+        });
+    });
+}
+
+function escapeBuiltinText(text) {
+    return String(text)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+function decodeBuiltinText(text) {
+    return String(text)
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&quot;/g, '"')
+        .replace(/&#0*39;/g, "'")
+        .replace(/&apos;/g, "'")
+        .replace(/&amp;/g, '&');
+}
+
+function parseBuiltinTemplate(template) {
+    const root = { children: [] };
+    const stack = [root];
+    const re = new RegExp(BUILTIN_STRICT_TAG_SOURCE, 'g');
+    let last = 0;
+    let match;
+    while ((match = re.exec(template)) !== null) {
+        if (match.index > last) {
+            stack[stack.length - 1].children.push({ text: template.slice(last, match.index) });
+        }
+        const name = match[2] + match[3];
+        if (match[1] === '/') {
+            if (stack.length < 2 || stack[stack.length - 1].name !== name) return null;
+            stack.pop();
+        } else {
+            const node = { name, children: [] };
+            stack[stack.length - 1].children.push(node);
+            stack.push(node);
+        }
+        last = re.lastIndex;
+    }
+    if (last < template.length) {
+        stack[stack.length - 1].children.push({ text: template.slice(last) });
+    }
+    return stack.length === 1 ? root : null;
+}
+
+function collectBuiltinWrapperChains(node, chain, wrappers) {
+    const elementChildren = node.children.filter(child => child.name !== undefined);
+    if (node.children.length === 1 && elementChildren.length === 1) {
+        node.collapsed = true;
+        collectBuiltinWrapperChains(elementChildren[0], chain.concat(node.name), wrappers);
+        return;
+    }
+    if (chain.length > 0) wrappers.set(node.name, chain);
+    for (const child of elementChildren) collectBuiltinWrapperChains(child, [], wrappers);
+}
+
+function buildBuiltinWireForm(template) {
+    const root = parseBuiltinTemplate(template);
+    if (!root) return null;
+    const wrappers = new Map();
+    for (const child of root.children) {
+        if (child.name !== undefined) collectBuiltinWrapperChains(child, [], wrappers);
+    }
+    const emptyNames = new Set();
+    const containerNames = new Set();
+    let textLooksLikePlaceholder = false;
+    let wire = '';
+    const serialize = node => {
+        for (const child of node.children) {
+            if (child.name === undefined) {
+                const decoded = decodeBuiltinText(child.text);
+                if (new RegExp(BUILTIN_LOOSE_TAG_SOURCE).test(decoded)) textLooksLikePlaceholder = true;
+                wire += decoded;
+                continue;
+            }
+            if (child.collapsed) {
+                serialize(child);
+                continue;
+            }
+            if (child.children.length === 0) {
+                emptyNames.add(child.name);
+                wire += `<${child.name}>`;
+                continue;
+            }
+            containerNames.add(child.name);
+            wire += `<${child.name}>`;
+            serialize(child);
+            wire += `</${child.name}>`;
+        }
+    };
+    serialize(root);
+    if (textLooksLikePlaceholder) return null;
+    return { wire, emptyNames, containerNames, wrappers };
+}
+
+function tokenizeBuiltinOutput(output) {
+    const tokens = [];
+    const re = new RegExp(BUILTIN_LOOSE_TAG_SOURCE, 'g');
+    let last = 0;
+    let match;
+    while ((match = re.exec(output)) !== null) {
+        if (match.index > last) tokens.push({ text: output.slice(last, match.index) });
+        tokens.push({ name: match[2].toLowerCase() + match[3], closing: match[1] === '/' });
+        last = re.lastIndex;
+    }
+    if (last < output.length) tokens.push({ text: output.slice(last) });
+    return tokens;
+}
+
+function builtinPlaceholdersSurvived(tokens, form) {
+    const openCounts = new Map();
+    const closeCounts = new Map();
+    for (const token of tokens) {
+        if (token.name === undefined) continue;
+        if (!form.emptyNames.has(token.name) && !form.containerNames.has(token.name)) return false;
+        const counts = token.closing ? closeCounts : openCounts;
+        counts.set(token.name, (counts.get(token.name) || 0) + 1);
+    }
+    for (const name of form.emptyNames) {
+        if ((openCounts.get(name) || 0) !== 1) return false;
+        if ((closeCounts.get(name) || 0) !== 0) return false;
+    }
+    for (const name of form.containerNames) {
+        if ((openCounts.get(name) || 0) !== 1) return false;
+        if ((closeCounts.get(name) || 0) !== 1) return false;
+    }
+    return true;
+}
+
+function restoreBuiltinTemplate(output, form) {
+    const tokens = tokenizeBuiltinOutput(output);
+    if (!builtinPlaceholdersSurvived(tokens, form)) return null;
+    const stack = [];
+    let restored = '';
+    for (const token of tokens) {
+        if (token.name === undefined) {
+            restored += escapeBuiltinText(token.text);
+            continue;
+        }
+        const chain = form.wrappers.get(token.name) || [];
+        const openWrappers = chain.map(name => `<${name}>`).join('');
+        const closeWrappers = chain.slice().reverse().map(name => `</${name}>`).join('');
+        if (form.emptyNames.has(token.name)) {
+            restored += `${openWrappers}<${token.name}></${token.name}>${closeWrappers}`;
+            continue;
+        }
+        if (token.closing) {
+            if (stack.pop() !== token.name) return null;
+            restored += `</${token.name}>${closeWrappers}`;
+            continue;
+        }
+        stack.push(token.name);
+        restored += `${openWrappers}<${token.name}>`;
+    }
+    return stack.length === 0 ? restored : null;
+}
+
+async function runBuiltinTranslate(translator, text, signal) {
+    try {
+        return await abortableBuiltinPromise(translator.translate(text), signal);
+    } catch (error) {
+        if (error?.name === 'AbortError') throw error;
+        if (error?.name === 'QuotaExceededError' || error?.name === 'NotReadableError') {
+            throw createTranslationError('maxTokensError');
+        }
+        throw createTranslationError('unknownError', `\n${error?.message || ''}`);
+    }
+}
+
+async function translateTemplateWithBuiltin(translator, template, retryLimit, signal) {
+    const form = buildBuiltinWireForm(template);
+    if (!form || !form.wire.trim()) return null;
+    const output = await performTranslation(() => runBuiltinTranslate(translator, form.wire, signal), retryLimit, signal);
+    if (typeof output !== 'string' || !output.trim()) return null;
+    return restoreBuiltinTemplate(output, form);
+}
+
+function buildBuiltinLanguageSample(fragmentBatch) {
+    let sample = '';
+    for (const tu of fragmentBatch) {
+        const stripped = String(tu.template || '').replace(new RegExp(BUILTIN_STRICT_TAG_SOURCE, 'g'), ' ');
+        sample += decodeBuiltinText(stripped).replace(/\s+/g, ' ').trim() + ' ';
+        if (sample.length >= BUILTIN_LANGUAGE_SAMPLE_LIMIT) break;
+    }
+    return sample.trim().slice(0, BUILTIN_LANGUAGE_SAMPLE_LIMIT);
+}
+
+function detectLanguageOfSample(sample) {
+    return new Promise(resolve => {
+        try {
+            const pending = chrome.i18n.detectLanguage(sample, result => resolve(result || null));
+            if (pending && typeof pending.then === 'function') pending.then(resolve, () => resolve(null));
+        } catch (e) {
+            resolve(null);
+        }
+    });
+}
+
+async function detectBuiltinSourceLanguage(sample) {
+    if (!sample) return null;
+    const result = await detectLanguageOfSample(sample);
+    const candidates = result && Array.isArray(result.languages) ? result.languages : [];
+    let best = null;
+    for (const candidate of candidates) {
+        if (!candidate || typeof candidate.language !== 'string') continue;
+        if (candidate.language === 'und') continue;
+        if (!best || candidate.percentage > best.percentage) best = candidate;
+    }
+    if (!best || best.percentage < BUILTIN_SOURCE_MIN_PERCENTAGE) return null;
+    return normalizeBuiltinLanguageTag(best.language);
+}
+
+function emitBuiltinStreamingUpdate(streamContext, key, translatedTemplate) {
+    if (!streamContext || !streamContext.keys || !streamContext.keys.has(key)) return;
+    const message = {
+        action: 'streamingTranslationUpdate',
+        batchId: streamContext.batchId,
+        translations: [{ key, translatedTemplate }]
+    };
+    try {
+        const sending = Number.isInteger(streamContext.frameId)
+            ? chrome.tabs.sendMessage(streamContext.tabId, message, { frameId: streamContext.frameId })
+            : chrome.tabs.sendMessage(streamContext.tabId, message);
+        if (sending && typeof sending.catch === 'function') sending.catch(() => { });
+    } catch (e) { }
+}
+
+async function translateBatchWithChromeBuiltin(fragmentBatch, retryLimit, signal, targetLanguageCode, streamContext) {
+    if (!builtinTranslatorSupported()) throw createTranslationError('builtinUnavailable');
+
+    const targetLanguage = normalizeBuiltinLanguageTag(targetLanguageCode);
+    const sourceLanguage = await detectBuiltinSourceLanguage(buildBuiltinLanguageSample(fragmentBatch));
+    if (!sourceLanguage) throw createTranslationError('builtinSourceUnknown');
+    if (sourceLanguage === targetLanguage) {
+        return fragmentBatch.map(tu => ({ id: tu.id, translatedTemplate: tu.template }));
+    }
+
+    const availability = await getBuiltinAvailability(sourceLanguage, targetLanguage);
+    if (availability === 'unsupported') throw createTranslationError('builtinUnavailable');
+    if (availability !== 'available' && availability !== 'downloadable' && availability !== 'downloading') {
+        throw createTranslationError('builtinLanguageUnsupported');
+    }
+
+    let translator;
+    try {
+        translator = await abortableBuiltinPromise(acquireBuiltinTranslator(sourceLanguage, targetLanguage), signal);
+    } catch (error) {
+        if (error?.name === 'AbortError') throw error;
+        throw createTranslationError('builtinPrepareFailed');
+    }
+
+    const translations = [];
+    let lastError = null;
+    let failureCount = 0;
+    let consecutiveFailures = 0;
+    for (let index = 0; index < fragmentBatch.length; index++) {
+        if (signal?.aborted) throw createAbortError();
+        const tu = fragmentBatch[index];
+        let translatedTemplate = null;
+        try {
+            translatedTemplate = await translateTemplateWithBuiltin(translator, tu.template, retryLimit, signal);
+        } catch (error) {
+            if (error?.name === 'AbortError') throw error;
+            lastError = error;
+            failureCount++;
+            consecutiveFailures++;
+            if (consecutiveFailures >= BUILTIN_MAX_CONSECUTIVE_FAILURES) {
+                forgetBuiltinTranslator(sourceLanguage, targetLanguage);
+                throw error;
+            }
+            continue;
+        }
+        consecutiveFailures = 0;
+        if (typeof translatedTemplate !== 'string') continue;
+        translations.push({ id: tu.id, translatedTemplate });
+        emitBuiltinStreamingUpdate(streamContext, `TU_${index}`, translatedTemplate);
+    }
+
+    if (failureCount > 0) forgetBuiltinTranslator(sourceLanguage, targetLanguage);
+    if (translations.length === 0 && lastError) throw lastError;
+    return translations;
+}
+
+async function getBuiltinTranslatorStatus(targetLanguageCode) {
+    if (!builtinTranslatorSupported()) return { supported: false, availability: 'unsupported' };
+    const targetLanguage = normalizeBuiltinLanguageTag(targetLanguageCode);
+    const probeSource = targetLanguage === 'en' ? 'ja' : 'en';
+    const availability = await getBuiltinAvailability(probeSource, targetLanguage);
+    return { supported: true, availability, targetLanguage };
+}
+
+async function prepareBuiltinTranslator(targetLanguageCode) {
+    const status = await getBuiltinTranslatorStatus(targetLanguageCode);
+    if (!status.supported) return { ok: false, availability: 'unsupported' };
+    if (status.availability !== 'available' && status.availability !== 'downloadable' && status.availability !== 'downloading') {
+        return { ok: false, availability: 'unavailable' };
+    }
+    const probeSource = status.targetLanguage === 'en' ? 'ja' : 'en';
+    try {
+        await acquireBuiltinTranslator(probeSource, status.targetLanguage);
+    } catch (error) {
+        forgetBuiltinTranslator(probeSource, status.targetLanguage);
+        return { ok: false, availability: 'downloadable' };
+    }
+    return { ok: true, availability: 'available' };
 }
 
 const PROMPT_EXAMPLE_OUTPUTS = {

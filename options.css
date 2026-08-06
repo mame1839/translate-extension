@@ -515,6 +515,12 @@ input[type="number"] {
   box-shadow: 0 0 0 3px var(--ring);
 }
 
+.btn-tonal:disabled {
+  opacity: 0.5;
+  cursor: default;
+  box-shadow: none;
+}
+
 .btn-danger-tonal {
   background: var(--error-container);
   color: var(--on-error-container);
@@ -626,6 +632,44 @@ input[type="number"] {
   font-size: 14px;
   font-weight: 500;
   unicode-bidi: isolate;
+}
+
+.builtin-control {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+}
+
+.builtin-control .btn-tonal {
+  align-self: flex-start;
+}
+
+.builtin-status {
+  font-size: 13px;
+  color: var(--text-2);
+}
+
+.builtin-status.is-ready {
+  color: var(--success);
+}
+
+.builtin-status.is-error {
+  color: var(--error);
+}
+
+.builtin-progress {
+  block-size: 4px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  overflow: hidden;
+}
+
+.builtin-progress span {
+  display: block;
+  block-size: 100%;
+  inline-size: 0;
+  background: var(--primary);
+  transition: inline-size 150ms var(--ease);
 }
 
 [hidden] {
