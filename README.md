@@ -67,6 +67,12 @@ Google Gemini・OpenAI・Anthropic などの AI API を使ってウェブペー�
 | タイムアウト | 180 秒 | API タイムアウト |
 | リトライ回数 | 3 | エラー時の最大再試行回数 |
 
+### ライセンス
+
+本ソフトウェアは [GNU General Public License v3.0](LICENSE) のもとで配布されています。改変版・再配布版も同じライセンスで公開する必要があります。
+
+Copyright (C) 2026 mame1839
+
 ---
 
 ## English
@@ -127,6 +133,12 @@ English / Japanese / Chinese (Simplified & Traditional) / Korean / Spanish / Fre
 | Concurrency limit | 10 | Maximum simultaneous requests |
 | API timeout | 180 s | Request timeout |
 | Max retries | 3 | Retry attempts on error |
+
+### License
+
+Released under the [GNU General Public License v3.0](LICENSE). Modified or redistributed versions must also be released under the same license.
+
+Copyright (C) 2026 mame1839
 
 ---
 
@@ -189,6 +201,12 @@ English / Japanese / Chinese (Simplified & Traditional) / Korean / Spanish / Fre
 | 超时时间 | 180 秒 | API 请求超时时间 |
 | 最大重试次数 | 3 | 出错时的最大重试次数 |
 
+### 许可证
+
+本软件基于 [GNU General Public License v3.0](LICENSE) 发布。修改版和再分发版也必须以相同的许可证发布。
+
+Copyright (C) 2026 mame1839
+
 ---
 
 ## 한국어
@@ -250,6 +268,12 @@ Google Gemini, OpenAI, Anthropic 또는 OpenAI 호환 엔드포인트 등의 AI 
 | 타임아웃 | 180 초 | API 요청 타임아웃 |
 | 최대 재시도 횟수 | 3 | 오류 시 최대 재시도 횟수 |
 
+### 라이선스
+
+본 소프트웨어는 [GNU General Public License v3.0](LICENSE)에 따라 배포됩니다. 수정판이나 재배포판도 동일한 라이선스로 공개해야 합니다.
+
+Copyright (C) 2026 mame1839
+
 ---
 
 ## Русский
@@ -310,3 +334,9 @@ Google Gemini, OpenAI, Anthropic 또는 OpenAI 호환 엔드포인트 등의 AI 
 | Лимит параллельных запросов | 10 | Максимальное число одновременных запросов |
 | Тайм-аут API | 180 с | Время ожидания ответа API |
 | Макс. повторных попыток | 3 | Число повторных попыток при ошибке |
+
+### Лицензия
+
+Программа распространяется по лицензии [GNU General Public License v3.0](LICENSE). Изменённые версии и повторные распространения также должны выпускаться под этой лицензией.
+
+Copyright (C) 2026 mame1839
