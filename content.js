@@ -591,7 +591,7 @@
     }
 
     const PAGE_CACHE_PREFIX = 'pageCache_';
-    const PAGE_CACHE_MAX_ENTRIES = 500;
+    const PAGE_CACHE_MAX_ENTRIES = 1000;
     const PAGE_CACHE_MAX_BLOCKS = 1500;
 
     function computeStringHash(s) {
@@ -603,11 +603,17 @@
         return hash.toString(36);
     }
 
-    function getCurrentPageKey() {
+    function getPageKeyWithoutLanguage() {
         try {
             const url = new URL(window.location.href);
             return PAGE_CACHE_PREFIX + computeStringHash(url.origin + url.pathname + url.search);
         } catch (e) { return null; }
+    }
+
+    function getCurrentPageKey(targetLanguage) {
+        const base = getPageKeyWithoutLanguage();
+        if (!base || !targetLanguage) return null;
+        return base + '_' + targetLanguage;
     }
 
     function collectCacheableBlocks() {
@@ -646,10 +652,9 @@
         return computeStringHash(text);
     }
 
-    function getPageCache() {
+    function readPageCacheByKey(key) {
         return new Promise(resolve => {
             try {
-                const key = getCurrentPageKey();
                 if (!key) { resolve(null); return; }
                 chrome.runtime.sendMessage({ action: 'pageCacheGet', key }, (response) => {
                     if (chrome.runtime.lastError || !response) { resolve(null); return; }
@@ -659,10 +664,18 @@
         });
     }
 
-    function savePageCache(cache) {
+    function getPageCache(targetLanguage) {
+        return readPageCacheByKey(getCurrentPageKey(targetLanguage));
+    }
+
+    function getPageCacheWithoutLanguage() {
+        return readPageCacheByKey(getPageKeyWithoutLanguage());
+    }
+
+    function savePageCache(targetLanguage, cache) {
         return new Promise(resolve => {
             try {
-                const key = getCurrentPageKey();
+                const key = getCurrentPageKey(targetLanguage);
                 if (!key) { resolve(false); return; }
                 chrome.runtime.sendMessage({ action: 'pageCacheSet', key, cache }, (response) => {
                     if (chrome.runtime.lastError || !response) { resolve(false); return; }
@@ -672,10 +685,10 @@
         });
     }
 
-    function clearPageCache() {
+    function clearPageCache(targetLanguage) {
         return new Promise(resolve => {
             try {
-                const key = getCurrentPageKey();
+                const key = getCurrentPageKey(targetLanguage);
                 if (!key) { resolve(); return; }
                 chrome.runtime.sendMessage({ action: 'pageCacheDelete', key }, () => {
                     void chrome.runtime.lastError;
@@ -723,10 +736,20 @@
         return (typeof remembered === 'string' && remembered) ? remembered : null;
     }
 
+    async function resolveCacheForLanguage(targetLanguage) {
+        const current = await getPageCache(targetLanguage);
+        if (current && Array.isArray(current.blocks) && current.lang === targetLanguage) return current;
+        const withoutLanguage = await getPageCacheWithoutLanguage();
+        if (!withoutLanguage || !Array.isArray(withoutLanguage.blocks)) return null;
+        if (withoutLanguage.lang !== targetLanguage) return null;
+        savePageCache(targetLanguage, withoutLanguage).catch(() => { });
+        return withoutLanguage;
+    }
+
     async function tryRestoreFromCache(targetLanguage) {
         if (!cacheRestoreMap) {
             if (!targetLanguage) return false;
-            const cache = await getPageCache();
+            const cache = await resolveCacheForLanguage(targetLanguage);
             if (!cache || !Array.isArray(cache.blocks)) return false;
             if (cache.lang !== targetLanguage) return false;
             useSessionMemoForLanguage(targetLanguage);
@@ -888,10 +911,10 @@
         if (entries.length === 0) return;
         const lang = await getStoredTargetLanguage();
         if (!lang) return;
-        const previous = await getPageCache();
+        const previous = await resolveCacheForLanguage(lang);
         let pageUrl = '';
         try { pageUrl = window.location.href; } catch (e) { }
-        const saved = await savePageCache({
+        const saved = await savePageCache(lang, {
             url: pageUrl,
             lang,
             blocks: mergeWithPreviousEntries(previous, entries, lang),
@@ -2039,7 +2062,7 @@
     async function clearPageCacheAndRetranslate() {
         if (isTranslating) return false;
         removeCacheRestoreNotice();
-        await clearPageCache();
+        await clearPageCache(await getStoredTargetLanguage());
         resetPageTranslationState();
         translationStarted = true;
         translationCancelled = false;

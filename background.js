@@ -20,7 +20,7 @@ let usageWriteChain = Promise.resolve();
 const PAGE_CACHE_DB_NAME = 'translationCache';
 const PAGE_CACHE_DB_VERSION = 1;
 const PAGE_CACHE_STORE = 'pages';
-const PAGE_CACHE_QUOTA_PRUNE_TARGET = 250;
+const PAGE_CACHE_QUOTA_PRUNE_TARGET = 500;
 const PAGE_CACHE_SAMPLE_LIMIT = 24;
 const PAGE_CACHE_LIST_PAGE_SIZE = 25;
 
