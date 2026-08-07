@@ -370,7 +370,7 @@ async function applySiteListChange(listKey, opposingKey, enabled) {
     let origin = '';
     try { origin = new URL(activeTab.url).origin; } catch (e) { return false; }
     const tabUrl = activeTab.url || '';
-    const matches = entry => tabUrl.startsWith(entry) || entry === origin;
+    const matches = entry => siteEntryMatchesUrl(entry, tabUrl);
     const items = await chrome.storage.local.get([listKey, opposingKey]);
     let list = normalizeSiteList(items[listKey]);
     let opposing = normalizeSiteList(items[opposingKey]);

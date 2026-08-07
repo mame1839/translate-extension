@@ -24,6 +24,7 @@
       "all_frames": true,
       "js": [
         "translations.js",
+        "sitematch.js",
         "content.js"
       ],
       "css": [

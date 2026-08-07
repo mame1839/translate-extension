@@ -205,6 +205,7 @@ const TRANSLATIONS = {
         optAutoTranslateNewContentDesc: 'Translate content that appears later, such as infinite scroll or lazy loading. This calls the API and costs money, so it is off by default. Even when on, automatic passes stop after a few rounds per page.',
         translateRestButton: 'Translate the rest',
         newContentTitle: 'New content is not translated yet',
+        blocksTooLong: '{count} blocks are longer than the output token limit and were left untranslated. Raise the max output tokens in settings.',
     },
     zh: {
         popupName: 'AI 翻译', popupSub: 'AI Website Translator',
@@ -388,6 +389,7 @@ const TRANSLATIONS = {
         optAutoTranslateNewContentDesc: '翻译之后才出现的内容，例如无限滚动或延迟加载。此功能会调用 API 并产生费用，因此默认关闭。即使开启，每个页面的自动翻译也会在数轮后停止。',
         translateRestButton: '翻译其余部分',
         newContentTitle: '新内容尚未翻译',
+        blocksTooLong: '有 {count} 个文本块超过输出令牌上限，未被翻译。请在设置中提高最大输出令牌数。',
     },
     'zh-Hant': {
         popupName: 'AI 翻譯', popupSub: 'AI Website Translator',
@@ -571,6 +573,7 @@ const TRANSLATIONS = {
         optAutoTranslateNewContentDesc: '翻譯之後才出現的內容，例如無限捲動或延遲載入。此功能會呼叫 API 並產生費用，因此預設關閉。即使開啟，每個頁面的自動翻譯也會在數輪後停止。',
         translateRestButton: '翻譯其餘部分',
         newContentTitle: '新內容尚未翻譯',
+        blocksTooLong: '有 {count} 個文字區塊超過輸出權杖上限，未被翻譯。請在設定中提高最大輸出權杖數。',
     },
     hi: {
         popupName: 'AI अनुवादक', popupSub: 'AI Website Translator',
@@ -754,6 +757,7 @@ const TRANSLATIONS = {
         optAutoTranslateNewContentDesc: 'बाद में दिखने वाली सामग्री का अनुवाद करें, जैसे अनंत स्क्रॉल या लेज़ी लोडिंग। यह API को कॉल करता है और शुल्क लगता है, इसलिए यह डिफ़ॉल्ट रूप से बंद है। चालू होने पर भी, प्रति पेज कुछ चक्रों के बाद स्वतः अनुवाद रुक जाता है।',
         translateRestButton: 'बाकी का अनुवाद करें',
         newContentTitle: 'नई सामग्री का अनुवाद अभी नहीं हुआ है',
+        blocksTooLong: '{count} ब्लॉक आउटपुट टोकन सीमा से बड़े हैं, इसलिए उनका अनुवाद नहीं हुआ। सेटिंग में अधिकतम आउटपुट टोकन बढ़ाएँ।',
     },
     es: {
         popupName: 'Traductor AI', popupSub: 'AI Website Translator',
@@ -937,6 +941,7 @@ const TRANSLATIONS = {
         optAutoTranslateNewContentDesc: 'Traduce el contenido que aparece después, como el desplazamiento infinito o la carga diferida. Llama a la API y genera costes, por lo que está desactivado de forma predeterminada. Aunque esté activado, las pasadas automáticas se detienen tras unas rondas por página.',
         translateRestButton: 'Traducir el resto',
         newContentTitle: 'El contenido nuevo aún no está traducido',
+        blocksTooLong: '{count} bloques superan el límite de tokens de salida y quedaron sin traducir. Aumenta los tokens de salida máximos en los ajustes.',
     },
     fr: {
         popupName: 'Traducteur IA', popupSub: 'AI Website Translator',
@@ -1120,6 +1125,7 @@ const TRANSLATIONS = {
         optAutoTranslateNewContentDesc: 'Traduit le contenu qui apparaît plus tard, comme le défilement infini ou le chargement différé. Cela appelle l’API et engendre des frais, donc c’est désactivé par défaut. Même activé, les passes automatiques s’arrêtent après quelques tours par page.',
         translateRestButton: 'Traduire le reste',
         newContentTitle: 'Le nouveau contenu n’est pas encore traduit',
+        blocksTooLong: '{count} blocs dépassent la limite de jetons de sortie et n\'ont pas été traduits. Augmentez les jetons de sortie maximum dans les paramètres.',
     },
     ar: {
         popupName: 'مترجم AI', popupSub: 'AI Website Translator',
@@ -1303,6 +1309,7 @@ const TRANSLATIONS = {
         optAutoTranslateNewContentDesc: 'يترجم المحتوى الذي يظهر لاحقًا، مثل التمرير اللانهائي أو التحميل المؤجل. يستدعي ذلك واجهة برمجة التطبيقات ويترتب عليه تكلفة، لذا فهو معطّل افتراضيًا. وحتى عند تفعيله، تتوقف الجولات التلقائية بعد بضع مرات في كل صفحة.',
         translateRestButton: 'ترجمة الباقي',
         newContentTitle: 'المحتوى الجديد لم يُترجم بعد',
+        blocksTooLong: '{count} من الكتل تتجاوز حد رموز الإخراج ولم تُترجم. ارفع الحد الأقصى لرموز الإخراج في الإعدادات.',
     },
     bn: {
         popupName: 'AI অনুবাদক', popupSub: 'AI Website Translator',
@@ -1486,6 +1493,7 @@ const TRANSLATIONS = {
         optAutoTranslateNewContentDesc: 'পরে আসা কনটেন্ট অনুবাদ করে, যেমন অসীম স্ক্রল বা লেজি লোডিং। এটি API কল করে এবং খরচ হয়, তাই ডিফল্টে বন্ধ। চালু থাকলেও প্রতি পেজে কয়েক দফার পর স্বয়ংক্রিয় অনুবাদ থেমে যায়।',
         translateRestButton: 'বাকিটা অনুবাদ করুন',
         newContentTitle: 'নতুন কনটেন্ট এখনও অনুবাদ হয়নি',
+        blocksTooLong: '{count}টি ব্লক আউটপুট টোকেন সীমার চেয়ে বড় হওয়ায় অনূদিত হয়নি। সেটিংসে সর্বোচ্চ আউটপুট টোকেন বাড়ান।',
     },
     ru: {
         popupName: 'AI Переводчик', popupSub: 'AI Website Translator',
@@ -1669,6 +1677,7 @@ const TRANSLATIONS = {
         optAutoTranslateNewContentDesc: 'Переводит содержимое, появляющееся позже, например при бесконечной прокрутке или отложенной загрузке. Это обращается к API и стоит денег, поэтому по умолчанию выключено. Даже когда включено, автоматические проходы останавливаются после нескольких раз на страницу.',
         translateRestButton: 'Перевести остальное',
         newContentTitle: 'Новое содержимое ещё не переведено',
+        blocksTooLong: '{count} блоков превышают лимит токенов вывода и остались без перевода. Увеличьте максимум токенов на вывод в настройках.',
     },
     pt: {
         popupName: 'Tradutor AI', popupSub: 'AI Website Translator',
@@ -1852,6 +1861,7 @@ const TRANSLATIONS = {
         optAutoTranslateNewContentDesc: 'Traduz o conteúdo que aparece depois, como rolagem infinita ou carregamento adiado. Isto chama a API e gera custos, por isso está desativado por predefinição. Mesmo ativado, as passagens automáticas param após algumas rondas por página.',
         translateRestButton: 'Traduzir o resto',
         newContentTitle: 'O conteúdo novo ainda não foi traduzido',
+        blocksTooLong: '{count} blocos excedem o limite de tokens de saída e não foram traduzidos. Aumente os tokens de saída máximos nas configurações.',
     },
     ur: {
         popupName: 'AI مترجم', popupSub: 'AI Website Translator',
@@ -2035,6 +2045,7 @@ const TRANSLATIONS = {
         optAutoTranslateNewContentDesc: 'بعد میں ظاہر ہونے والے مواد کا ترجمہ کرتا ہے، جیسے لامحدود اسکرول یا تاخیری لوڈنگ۔ یہ API کو کال کرتا ہے اور اس پر لاگت آتی ہے، اس لیے یہ بطور طے شدہ بند ہے۔ آن ہونے پر بھی، ہر صفحے پر چند چکروں کے بعد خودکار ترجمہ رک جاتا ہے۔',
         translateRestButton: 'باقی کا ترجمہ کریں',
         newContentTitle: 'نئے مواد کا ابھی ترجمہ نہیں ہوا',
+        blocksTooLong: '{count} بلاکس آؤٹ پٹ ٹوکن کی حد سے بڑے ہیں، اس لیے ان کا ترجمہ نہیں ہوا۔ ترتیبات میں زیادہ سے زیادہ آؤٹ پٹ ٹوکن بڑھائیں۔',
     },
     id: {
         popupName: 'Penerjemah AI', popupSub: 'AI Website Translator',
@@ -2218,6 +2229,7 @@ const TRANSLATIONS = {
         optAutoTranslateNewContentDesc: 'Menerjemahkan konten yang muncul kemudian, seperti gulir tanpa batas atau pemuatan tertunda. Ini memanggil API dan menimbulkan biaya, jadi nonaktif secara bawaan. Meski aktif, proses otomatis berhenti setelah beberapa putaran per halaman.',
         translateRestButton: 'Terjemahkan sisanya',
         newContentTitle: 'Konten baru belum diterjemahkan',
+        blocksTooLong: '{count} blok melebihi batas token keluaran sehingga tidak diterjemahkan. Naikkan token keluaran maksimum di pengaturan.',
     },
     de: {
         popupName: 'KI-Übersetzer', popupSub: 'AI Website Translator',
@@ -2401,6 +2413,7 @@ const TRANSLATIONS = {
         optAutoTranslateNewContentDesc: 'Übersetzt Inhalte, die später erscheinen, etwa bei unendlichem Scrollen oder verzögertem Laden. Das ruft die API auf und verursacht Kosten, daher ist es standardmäßig aus. Auch wenn es an ist, stoppen die automatischen Durchläufe nach einigen Runden pro Seite.',
         translateRestButton: 'Rest übersetzen',
         newContentTitle: 'Neue Inhalte sind noch nicht übersetzt',
+        blocksTooLong: '{count} Blöcke überschreiten das Ausgabe-Token-Limit und blieben unübersetzt. Erhöhen Sie die max. Ausgabe-Tokens in den Einstellungen.',
     },
     ja: {
         popupName: 'AI 翻訳', popupSub: 'AI Website Translator',
@@ -2584,6 +2597,7 @@ const TRANSLATIONS = {
         optAutoTranslateNewContentDesc: '無限スクロールや遅延読み込みなど、後から現れた内容を翻訳します。API を呼ぶため料金がかかるので、既定ではオフです。オンにしても、1 ページあたり数回で自動翻訳は打ち止めになります。',
         translateRestButton: '残りを翻訳',
         newContentTitle: '新しく表示された内容がまだ翻訳されていません',
+        blocksTooLong: '{count} 個のブロックが出力トークン上限を超えるため翻訳していません。設定で最大出力トークンを増やしてください。',
     },
     sw: {
         popupName: 'Mtafsiri AI', popupSub: 'AI Website Translator',
@@ -2767,6 +2781,7 @@ const TRANSLATIONS = {
         optAutoTranslateNewContentDesc: 'Hutafsiri maudhui yanayotokea baadaye, kama vile kusogeza bila kikomo au upakiaji wa polepole. Hii huita API na hugharimu pesa, kwa hivyo imezimwa kwa chaguo-msingi. Hata ikiwashwa, mizunguko ya kiotomatiki husimama baada ya raundi chache kwa kila ukurasa.',
         translateRestButton: 'Tafsiri iliyobaki',
         newContentTitle: 'Maudhui mapya bado hayajatafsiriwa',
+        blocksTooLong: 'Vizuizi {count} vinazidi kikomo cha tokeni za matokeo, kwa hivyo havikutafsiriwa. Ongeza tokeni za juu za matokeo katika mipangilio.',
     },
     mr: {
         popupName: 'AI अनुवादक', popupSub: 'AI Website Translator',
@@ -2950,6 +2965,7 @@ const TRANSLATIONS = {
         optAutoTranslateNewContentDesc: 'नंतर दिसणाऱ्या मजकुराचे भाषांतर करते, जसे की अनंत स्क्रोल किंवा लेझी लोडिंग. हे API ला कॉल करते आणि त्याचा खर्च होतो, म्हणून ते डीफॉल्टनुसार बंद आहे. चालू असतानाही, प्रति पृष्ठ काही फेऱ्यांनंतर स्वयंचलित भाषांतर थांबते.',
         translateRestButton: 'उर्वरित भाषांतर करा',
         newContentTitle: 'नवीन मजकुराचे भाषांतर अद्याप झालेले नाही',
+        blocksTooLong: '{count} ब्लॉक आउटपुट टोकन मर्यादेपेक्षा मोठे असल्याने भाषांतरित झाले नाहीत. सेटिंग्जमध्ये कमाल आउटपुट टोकन वाढवा.',
     },
     te: {
         popupName: 'AI అనువాదకుడు', popupSub: 'AI Website Translator',
@@ -3133,6 +3149,7 @@ const TRANSLATIONS = {
         optAutoTranslateNewContentDesc: 'అనంత స్క్రోల్ లేదా లేజీ లోడింగ్ వంటి తర్వాత కనిపించే కంటెంట్‌ను అనువదిస్తుంది. ఇది APIని పిలుస్తుంది మరియు ఖర్చవుతుంది, కాబట్టి డిఫాల్ట్‌గా ఆఫ్‌లో ఉంటుంది. ఆన్ చేసినా, ఒక్కో పేజీకి కొన్ని రౌండ్ల తర్వాత స్వయంచాలక అనువాదం ఆగిపోతుంది.',
         translateRestButton: 'మిగిలినది అనువదించు',
         newContentTitle: 'కొత్త కంటెంట్ ఇంకా అనువదించబడలేదు',
+        blocksTooLong: '{count} బ్లాక్‌లు అవుట్‌పుట్ టోకెన్ పరిమితిని మించడంతో అనువదించబడలేదు. సెట్టింగ్‌లలో గరిష్ట అవుట్‌పుట్ టోకెన్‌లను పెంచండి.',
     },
     tr: {
         popupName: 'AI Çevirmen', popupSub: 'AI Website Translator',
@@ -3316,6 +3333,7 @@ const TRANSLATIONS = {
         optAutoTranslateNewContentDesc: 'Sonsuz kaydırma veya geç yükleme gibi sonradan görünen içeriği çevirir. API çağrısı yapar ve ücretlendirilir, bu yüzden varsayılan olarak kapalıdır. Açık olsa bile otomatik geçişler sayfa başına birkaç turdan sonra durur.',
         translateRestButton: 'Kalanı çevir',
         newContentTitle: 'Yeni içerik henüz çevrilmedi',
+        blocksTooLong: '{count} blok, çıktı belirteci sınırını aştığı için çevrilmedi. Ayarlardan maksimum çıktı belirtecini artırın.',
     },
     ta: {
         popupName: 'AI மொழிபெயர்ப்பாளர்', popupSub: 'AI Website Translator',
@@ -3499,6 +3517,7 @@ const TRANSLATIONS = {
         optAutoTranslateNewContentDesc: 'முடிவற்ற உருள் அல்லது தாமதமான ஏற்றம் போன்ற பின்னர் தோன்றும் உள்ளடக்கத்தை மொழிபெயர்க்கிறது. இது APIஐ அழைத்துக் கட்டணம் ஏற்படுத்துவதால், இயல்பாக அணைக்கப்பட்டுள்ளது. இயக்கினாலும், ஒரு பக்கத்திற்குச் சில சுற்றுகளுக்குப் பிறகு தானியங்கி மொழிபெயர்ப்பு நிற்கும்.',
         translateRestButton: 'மீதியை மொழிபெயர்',
         newContentTitle: 'புதிய உள்ளடக்கம் இன்னும் மொழிபெயர்க்கப்படவில்லை',
+        blocksTooLong: '{count} தொகுதிகள் வெளியீட்டு டோக்கன் வரம்பை மீறுவதால் மொழிபெயர்க்கப்படவில்லை. அமைப்புகளில் அதிகபட்ச வெளியீட்டு டோக்கன்களை அதிகரிக்கவும்.',
     },
     vi: {
         popupName: 'Dịch AI', popupSub: 'AI Website Translator',
@@ -3682,6 +3701,7 @@ const TRANSLATIONS = {
         optAutoTranslateNewContentDesc: 'Dịch nội dung xuất hiện sau, chẳng hạn cuộn vô hạn hoặc tải trễ. Việc này gọi API và phát sinh chi phí, nên mặc định tắt. Ngay cả khi bật, các lượt tự động sẽ dừng sau vài vòng mỗi trang.',
         translateRestButton: 'Dịch phần còn lại',
         newContentTitle: 'Nội dung mới chưa được dịch',
+        blocksTooLong: '{count} khối vượt quá giới hạn token đầu ra nên không được dịch. Hãy tăng token đầu ra tối đa trong phần cài đặt.',
     },
     ko: {
         popupName: 'AI 번역기', popupSub: 'AI Website Translator',
@@ -3865,6 +3885,7 @@ const TRANSLATIONS = {
         optAutoTranslateNewContentDesc: '무한 스크롤이나 지연 로딩처럼 나중에 나타난 내용을 번역합니다. API를 호출하므로 요금이 발생하며, 그래서 기본값은 꺼짐입니다. 켜더라도 페이지당 몇 회 후에는 자동 번역이 멈춥니다.',
         translateRestButton: '나머지 번역',
         newContentTitle: '새 내용이 아직 번역되지 않았습니다',
+        blocksTooLong: '{count}개 블록이 출력 토큰 한도를 넘어 번역하지 않았습니다. 설정에서 최대 출력 토큰을 늘리세요.',
     },
 };
 

@@ -24,7 +24,8 @@
         cacheRestoredTitle: 'Restored the saved translation',
         retranslateButton: 'Re-translate',
         translateRestButton: 'Translate the rest',
-        newContentTitle: 'New content on this page is not translated'
+        newContentTitle: 'New content on this page is not translated',
+        blocksTooLong: '{count} blocks are longer than the output token limit and were left untranslated. Raise the max output tokens in settings.'
     };
 
     const RTL_LANGS = new Set(['ar', 'ur', 'he', 'fa']);
@@ -60,7 +61,8 @@
             cacheRestoredTitle: t.cacheRestoredTitle,
             retranslateButton: t.popupRetranslate,
             translateRestButton: t.translateRestButton,
-            newContentTitle: t.newContentTitle
+            newContentTitle: t.newContentTitle,
+            blocksTooLong: t.blocksTooLong
         };
     }
 
@@ -420,6 +422,7 @@
     let translationProgress = 0;
     let translatedUnitsCount = 0;
     let expectedTotalUnits = 0;
+    let oversizedSkippedCount = 0;
     let totalBatches = 0;
     let batchesProcessed = 0;
 
@@ -499,15 +502,6 @@
         attributeFilter: ['style', 'class', 'hidden', 'aria-hidden']
     };
 
-    function matchesSiteList(list, currentUrl, siteOrigin) {
-        if (!Array.isArray(list)) return false;
-        return list.some(prefix => typeof prefix === 'string' && prefix.length > 0 && (currentUrl.startsWith(prefix) || siteOrigin === prefix));
-    }
-
-    function getCurrentSiteOrigin() {
-        try { return new URL(window.location.href).origin; } catch (e) { return ''; }
-    }
-
     function initTranslation() {
         try {
             postFinishScanCount = 0;
@@ -527,9 +521,8 @@
 
                     const isReactSpa = isLikelyReactApp();
                     const currentUrl = window.location.href;
-                    const siteOrigin = getCurrentSiteOrigin();
-                    const isExcluded = matchesSiteList(items.excludeList, currentUrl, siteOrigin);
-                    const isAlwaysTranslate = !isExcluded && matchesSiteList(items.alwaysTranslateList, currentUrl, siteOrigin);
+                    const isExcluded = siteListMatchesUrl(items.excludeList, currentUrl);
+                    const isAlwaysTranslate = !isExcluded && siteListMatchesUrl(items.alwaysTranslateList, currentUrl);
                     if (!isReactSpa && !isExcluded) {
                         const restored = await tryRestoreFromCache(chosenLang);
                         if (restored || cacheRestoreActive) {
@@ -1379,11 +1372,11 @@
         noButton.addEventListener('click', function () { removePrompt(); });
         neverButton.addEventListener('click', function () {
             chrome.storage.local.get(['excludeList'], function (items) {
-                let excludeList = items.excludeList || [];
+                const excludeList = Array.isArray(items.excludeList) ? items.excludeList : [];
                 try {
-                    const siteOrigin = new URL(window.location.href).origin;
-                    if (!excludeList.includes(siteOrigin)) {
-                        excludeList.push(siteOrigin);
+                    const currentUrl = window.location.href;
+                    if (!siteListMatchesUrl(excludeList, currentUrl)) {
+                        excludeList.push(new URL(currentUrl).origin);
                         chrome.storage.local.set({ excludeList });
                     }
                 } catch (e) { }
@@ -1805,6 +1798,7 @@
         totalBatches = 0;
         batchesProcessed = 0;
         expectedTotalUnits = 0;
+        oversizedSkippedCount = 0;
         translationProgress = 0;
         domUpdateQueue = [];
         streamingBatchRegistry.clear();
@@ -1833,10 +1827,18 @@
             }
 
             const maxBatchLength = Math.min(Math.floor((config.maxToken || DEFAULTS.maxToken) * 3), DEFAULTS.maxBatchLength);
-            const tus = allTus.filter(tu => tu.template.length <= maxBatchLength);
+            const tus = [];
+            const oversizedTus = [];
+            for (const tu of allTus) {
+                if (tu.template.length <= maxBatchLength) tus.push(tu);
+                else oversizedTus.push(tu);
+            }
+            oversizedSkippedCount = oversizedTus.length;
+            markOversizedUnitsSkipped(oversizedTus);
             if (tus.length === 0) {
                 isTranslating = false;
-                chrome.runtime.sendMessage({ action: "translationComplete", message: st.noTextFound }).catch(() => { });
+                if (oversizedSkippedCount > 0) handleTranslationError(createOversizedBlockError(), lang);
+                else chrome.runtime.sendMessage({ action: "translationComplete", message: st.noTextFound }).catch(() => { });
                 return;
             }
             expectedTotalUnits = tus.length;
@@ -2136,6 +2138,7 @@
         domUpdateQueue = [];
         streamingBatchRegistry.clear();
         translatedUnitsCount = 0;
+        oversizedSkippedCount = 0;
         lastScrollScanHeight = -1;
         postFinishScanCount = 0;
         lastFinishTime = 0;
@@ -2182,6 +2185,7 @@
         modelNotFound: 'settings',
         invalidRequest: 'settings',
         maxTokensError: 'settings',
+        blockTooLong: 'settings',
         apiLimitReached: 'retry',
         requestTimeout: 'retry',
         serverError: 'retry',
@@ -2586,6 +2590,26 @@
             if (block.dataset?.translationStatus === 'translated') continue;
             try { block.dataset.translationStatus = 'failed'; } catch (e) { }
         }
+    }
+
+    function markOversizedUnitsSkipped(oversizedTus) {
+        for (const tu of oversizedTus) {
+            const block = tu?.block;
+            if (!block || !block.isConnected) continue;
+            if (block.dataset?.translationStatus === 'translated') continue;
+            try { block.dataset.translationStatus = 'failed'; } catch (e) { }
+        }
+    }
+
+    function oversizedSkippedLabel() {
+        if (!st.blocksTooLong) return '';
+        return st.blocksTooLong.replace('{count}', oversizedSkippedCount);
+    }
+
+    function createOversizedBlockError() {
+        const error = new Error(oversizedSkippedLabel() || 'Blocks exceed the output token limit');
+        error.translationErrorCode = 'blockTooLong';
+        return error;
     }
 
     function clearFailedMarkersForRetry() {
@@ -3111,6 +3135,10 @@
         } else if (phase === 'done') {
             const blocks = translatedBlocksLabel();
             if (blocks) headText.appendChild(createUiElement('div', 'sub', blocks));
+            if (oversizedSkippedCount > 0) {
+                const skipped = oversizedSkippedLabel();
+                if (skipped) headText.appendChild(createUiElement('div', 'sub', skipped));
+            }
         }
         head.appendChild(headText);
 
@@ -3328,9 +3356,10 @@
         cacheRestoreActive = false;
         updateProgress(100);
         renderStatusPanel('done');
-        chrome.runtime.sendMessage({ action: "translationComplete", message: st.translationCompleted }).catch(() => { });
+        const completionMessage = oversizedSkippedCount > 0 ? oversizedSkippedLabel() : st.translationCompleted;
+        chrome.runtime.sendMessage({ action: "translationComplete", message: completionMessage }).catch(() => { });
         saveCurrentTranslationToCache().catch(() => { });
-        setTimeout(() => { if (!isTranslating) removeStatusIndicator(); }, 3000);
+        if (oversizedSkippedCount === 0) setTimeout(() => { if (!isTranslating) removeStatusIndicator(); }, 3000);
         schedulePostFinishScans();
     }
 
@@ -3399,9 +3428,8 @@
         try {
             chrome.storage.local.get(['excludeList', 'alwaysTranslateList'], function (items) {
                 const currentUrl = window.location.href;
-                const siteOrigin = getCurrentSiteOrigin();
-                pageState.excluded = matchesSiteList(items.excludeList, currentUrl, siteOrigin);
-                pageState.alwaysTranslate = matchesSiteList(items.alwaysTranslateList, currentUrl, siteOrigin);
+                pageState.excluded = siteListMatchesUrl(items.excludeList, currentUrl);
+                pageState.alwaysTranslate = siteListMatchesUrl(items.alwaysTranslateList, currentUrl);
                 sendResponse(pageState);
             });
             return true;
