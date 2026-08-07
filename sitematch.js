@@ -19,6 +19,21 @@ function parseSiteUrl(value) {
     return url;
 }
 
+const SITE_HOSTNAME_PATTERN = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*$/i;
+
+function isUsableSiteEntry(value) {
+    if (typeof value !== 'string') return false;
+    const trimmed = value.trim();
+    if (!trimmed || trimmed.startsWith('/')) return false;
+    const scheme = /^([a-z][a-z0-9+.-]*):(?!\d)/i.exec(trimmed);
+    if (scheme && !/^https?$/i.test(scheme[1])) return false;
+    const url = parseSiteUrl(trimmed);
+    if (!url) return false;
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return false;
+    if (url.hostname.startsWith('[')) return true;
+    return SITE_HOSTNAME_PATTERN.test(url.hostname);
+}
+
 function siteEntryMatchesUrl(entry, currentUrl) {
     const entryUrl = parseSiteUrl(entry);
     if (!entryUrl) return false;

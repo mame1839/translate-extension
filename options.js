@@ -244,7 +244,13 @@ function renderSiteLists() {
 
 function addSiteEntry(inputId, entries, opposingEntries) {
     const input = el(inputId);
-    const entry = normalizeSiteEntry(input.value);
+    const raw = String(input.value || '').trim();
+    if (!raw) return;
+    if (!isUsableSiteEntry(raw)) {
+        showSnackbar(currentT().optInvalidEndpoint, true);
+        return;
+    }
+    const entry = normalizeSiteEntry(raw);
     if (!entry) return;
     if (!entries.includes(entry)) {
         entries.push(entry);
