@@ -66,6 +66,8 @@ let snackTimer = null;
 let usageStats = null;
 let cacheStats = null;
 let cacheFailureReason = '';
+let backgroundUnreachable = false;
+let backgroundVersion = null;
 let cachePages = [];
 let cachePagesTotal = 0;
 let cachePagesUnreadable = false;
@@ -103,6 +105,7 @@ function applyI18n(t) {
     renderSiteLists();
     renderUsageStats();
     renderCacheStats();
+    renderStaleBackgroundBanner();
 }
 
 function applyDir(lang) {
@@ -312,6 +315,7 @@ async function saveNow() {
         hidePromptAllSites: el('hidePromptAllSites').checked,
         showContextMenu: el('showContextMenu').checked,
         autoRetranslateDomain: el('autoRetranslateDomain').checked,
+        autoTranslateNewContent: el('autoTranslateNewContent').checked,
         streamingTranslation: el('streamingTranslation').checked,
         translationStyle: el('translationStyle').value,
         customInstruction: el('customInstruction').value.trim(),
@@ -451,7 +455,10 @@ function renderCacheStats() {
     const errorNode = el('cacheError');
     if (!errorRow || !errorNode) return;
     errorRow.hidden = readable;
-    errorNode.textContent = readable ? '' : t.dataCacheUnreadable.replace('{reason}', cacheFailureReason || t.dataCacheNoBackground);
+    if (readable) { errorNode.textContent = ''; return; }
+    errorNode.textContent = backgroundUnreachable
+        ? t.bgUnavailable + (cacheFailureReason ? ' (' + cacheFailureReason + ')' : '')
+        : t.dataCacheUnreadable.replace('{reason}', cacheFailureReason);
 }
 
 async function refreshUsageStats() {
@@ -469,17 +476,59 @@ function describeBackgroundFailure(e) {
     return message ? message.slice(0, 200) : '';
 }
 
+function pageVersion() {
+    try { return chrome.runtime.getManifest().version || ''; } catch (e) { return ''; }
+}
+
+function renderStaleBackgroundBanner() {
+    const banner = el('staleBackgroundBanner');
+    const text = el('staleBackgroundText');
+    if (!banner || !text) return;
+    const t = currentT();
+    const mine = pageVersion();
+    if (backgroundVersion && backgroundVersion === mine) {
+        banner.hidden = true;
+        text.textContent = '';
+        return;
+    }
+    if (!backgroundVersion && !backgroundUnreachable) {
+        banner.hidden = true;
+        text.textContent = '';
+        return;
+    }
+    banner.hidden = false;
+    text.textContent = backgroundVersion
+        ? t.bgVersionMismatch.replace('{swVersion}', backgroundVersion).replace('{pageVersion}', mine)
+        : t.bgUnavailable;
+}
+
+async function checkBackgroundVersion() {
+    try {
+        const response = await chrome.runtime.sendMessage({ action: 'backgroundVersion' });
+        backgroundVersion = (response && typeof response.version === 'string' && response.version) ? response.version : null;
+        backgroundUnreachable = !backgroundVersion;
+    } catch (e) {
+        backgroundVersion = null;
+        backgroundUnreachable = true;
+    }
+    renderStaleBackgroundBanner();
+}
+
 async function refreshCacheStats() {
     try {
         const response = await chrome.runtime.sendMessage({ action: 'pageCacheStats' });
         if (!response || !response.stats) throw new Error('');
         cacheStats = response.stats;
         cacheFailureReason = typeof cacheStats.error === 'string' ? cacheStats.error : '';
+        backgroundUnreachable = false;
+        if (typeof response.version === 'string' && response.version) backgroundVersion = response.version;
     } catch (e) {
         cacheStats = null;
         cacheFailureReason = describeBackgroundFailure(e);
+        backgroundUnreachable = true;
     }
     renderCacheStats();
+    renderStaleBackgroundBanner();
 }
 
 function cachePageLabel(page) {
@@ -500,9 +549,7 @@ function renderCachePages() {
     if (cachePages.length === 0) {
         const empty = document.createElement('div');
         empty.className = cachePagesUnreadable ? 'empty-list warn-text' : 'empty-list';
-        empty.textContent = cachePagesUnreadable
-            ? t.dataCacheUnreadable.replace('{reason}', t.dataCacheNoBackground)
-            : t.dataCacheNoPages;
+        empty.textContent = cachePagesUnreadable ? t.bgUnavailable : t.dataCacheNoPages;
         container.appendChild(empty);
         moreRow.hidden = true;
         return;
@@ -579,6 +626,7 @@ async function removeCachePage(key) {
 }
 
 function refreshDataSection() {
+    checkBackgroundVersion();
     refreshUsageStats();
     refreshCacheStats();
     loadCachePages(false);
@@ -652,6 +700,7 @@ const resetHandlers = {
         el('showProgressPopup').checked = true;
         el('showContextMenu').checked = true;
         el('autoRetranslateDomain').checked = true;
+        el('autoTranslateNewContent').checked = false;
     },
     style: () => {
         el('translationStyle').value = '';
@@ -677,7 +726,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             'compatibleApiKey', 'compatibleModel', 'compatibleEndpoint',
             'delayBetweenRequests', 'maxToken', 'concurrencyLimit',
             'maxRetries', 'timeout',
-            'toggleBlueBackground', 'realTimeTranslation', 'showProgressPopup', 'excludeList', 'alwaysTranslateList', 'hidePromptAllSites', 'showContextMenu', 'autoRetranslateDomain', 'streamingTranslation',
+            'toggleBlueBackground', 'realTimeTranslation', 'showProgressPopup', 'excludeList', 'alwaysTranslateList', 'hidePromptAllSites', 'showContextMenu', 'autoRetranslateDomain', 'autoTranslateNewContent', 'streamingTranslation',
             'translationStyle', 'customInstruction', 'glossaryText'
         ]);
 
@@ -713,6 +762,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         el('hidePromptAllSites').checked = items.hidePromptAllSites === true;
         el('showContextMenu').checked = items.showContextMenu !== false;
         el('autoRetranslateDomain').checked = items.autoRetranslateDomain !== false;
+        el('autoTranslateNewContent').checked = items.autoTranslateNewContent === true;
         el('streamingTranslation').checked = items.streamingTranslation === true;
         el('translationStyle').value = STYLE_PRESETS.includes(items.translationStyle) ? items.translationStyle : '';
         el('customInstruction').value = items.customInstruction || '';
@@ -724,6 +774,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     } catch (e) {
         applyI18n(getT('en'));
     }
+
+    checkBackgroundVersion();
 
     activateSection((location.hash || '').replace('#', ''));
 
@@ -763,7 +815,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     });
 
-    ['toggleBlueBackground', 'realTimeTranslation', 'showProgressPopup', 'hidePromptAllSites', 'showContextMenu', 'autoRetranslateDomain', 'streamingTranslation'].forEach(id => {
+    ['toggleBlueBackground', 'realTimeTranslation', 'showProgressPopup', 'hidePromptAllSites', 'showContextMenu', 'autoRetranslateDomain', 'autoTranslateNewContent', 'streamingTranslation'].forEach(id => {
         el(id).addEventListener('change', scheduleSave);
     });
 

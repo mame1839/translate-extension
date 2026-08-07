@@ -20,7 +20,7 @@ let usageWriteChain = Promise.resolve();
 const PAGE_CACHE_DB_NAME = 'translationCache';
 const PAGE_CACHE_DB_VERSION = 1;
 const PAGE_CACHE_STORE = 'pages';
-const PAGE_CACHE_QUOTA_PRUNE_TARGET = 250;
+const PAGE_CACHE_QUOTA_PRUNE_TARGET = 500;
 const PAGE_CACHE_SAMPLE_LIMIT = 24;
 const PAGE_CACHE_LIST_PAGE_SIZE = 25;
 
@@ -2321,11 +2321,20 @@ async function pageCacheClearAll() {
     finally { try { db.close(); } catch (e) { } }
 }
 
+function workerVersion() {
+    try { return chrome.runtime.getManifest().version || ''; } catch (e) { return ''; }
+}
+
 function handleExtensionPageMessage(request, sender, sendResponse) {
+    if (request.action === "backgroundVersion") {
+        sendResponse({ version: workerVersion() });
+        return false;
+    }
+
     if (request.action === "usageStatsGet") {
         getUsageStatsSnapshot()
-            .then(stats => sendResponse({ stats }))
-            .catch(() => sendResponse({ stats: null }));
+            .then(stats => sendResponse({ stats, version: workerVersion() }))
+            .catch(() => sendResponse({ stats: null, version: workerVersion() }));
         return true;
     }
 
@@ -2338,8 +2347,8 @@ function handleExtensionPageMessage(request, sender, sendResponse) {
 
     if (request.action === "pageCacheStats") {
         pageCacheStats()
-            .then(stats => sendResponse({ stats }))
-            .catch(() => sendResponse({ stats: null }));
+            .then(stats => sendResponse({ stats, version: workerVersion() }))
+            .catch(() => sendResponse({ stats: null, version: workerVersion() }));
         return true;
     }
 
@@ -2352,8 +2361,8 @@ function handleExtensionPageMessage(request, sender, sendResponse) {
 
     if (request.action === "pageCacheList") {
         pageCacheList(request.offset, request.limit)
-            .then(result => sendResponse(result))
-            .catch(() => sendResponse({ pages: [], total: 0, offset: 0 }));
+            .then(result => sendResponse(Object.assign({ version: workerVersion() }, result)))
+            .catch(() => sendResponse({ pages: [], total: 0, offset: 0, version: workerVersion() }));
         return true;
     }
 

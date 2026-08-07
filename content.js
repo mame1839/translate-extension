@@ -22,7 +22,9 @@
         errorDetails: 'Technical details',
         retryButton: 'Retry',
         cacheRestoredTitle: 'Restored the saved translation',
-        retranslateButton: 'Re-translate'
+        retranslateButton: 'Re-translate',
+        translateRestButton: 'Translate the rest',
+        newContentTitle: 'New content on this page is not translated'
     };
 
     const RTL_LANGS = new Set(['ar', 'ur', 'he', 'fa']);
@@ -56,7 +58,9 @@
             errorDetails: t.errDetails,
             retryButton: t.errRetry,
             cacheRestoredTitle: t.cacheRestoredTitle,
-            retranslateButton: t.popupRetranslate
+            retranslateButton: t.popupRetranslate,
+            translateRestButton: t.translateRestButton,
+            newContentTitle: t.newContentTitle
         };
     }
 
@@ -463,6 +467,29 @@
     let postFinishScanCount = 0;
     const POST_FINISH_MAX_SCANS = 1;
     const POST_FINISH_SCAN_DELAYS = [3000];
+    let autoTranslateNewContent = false;
+    let hidePromptForAllSites = false;
+    let autoRetranslateRounds = 0;
+    const AUTO_RETRANSLATE_MAX_ROUNDS = 3;
+    let continueNoticeShown = false;
+    let continueNoticeCooldownUntil = 0;
+    const CONTINUE_NOTICE_COOLDOWN_MS = 60000;
+
+    function autoTranslationBudgetLeft() {
+        return autoRetranslateRounds < AUTO_RETRANSLATE_MAX_ROUNDS;
+    }
+
+    function canAutoTranslateNewContent() {
+        if (!translationStarted) return false;
+        if (translationCancelled || translationHasError) return false;
+        if (!autoTranslateNewContent) return false;
+        return autoTranslationBudgetLeft();
+    }
+
+    function startAutoTranslation() {
+        autoRetranslateRounds++;
+        startTranslation();
+    }
 
     const observerConfig = {
         childList: true,
@@ -485,7 +512,7 @@
         try {
             postFinishScanCount = 0;
             chrome.storage.local.get(
-                ['targetLanguage', 'realTimeTranslation', 'excludeList', 'alwaysTranslateList', 'hidePromptAllSites', 'autoRetranslateDomain', 'toggleBlueBackground'],
+                ['targetLanguage', 'realTimeTranslation', 'excludeList', 'alwaysTranslateList', 'hidePromptAllSites', 'autoRetranslateDomain', 'toggleBlueBackground', 'autoTranslateNewContent'],
                 async function (items) {
                     try { watchForNewContent(); } catch (e) { }
                     try { watchUserInteractions(); } catch (e) { }
@@ -495,6 +522,8 @@
                     const pageLang = getPageLanguage();
                     const chosenLang = items.targetLanguage || 'en';
                     applyStrings(chosenLang);
+                    autoTranslateNewContent = items.autoTranslateNewContent === true;
+                    hidePromptForAllSites = items.hidePromptAllSites === true;
 
                     const isReactSpa = isLikelyReactApp();
                     const currentUrl = window.location.href;
@@ -504,7 +533,7 @@
                     if (!isReactSpa && !isExcluded) {
                         const restored = await tryRestoreFromCache(chosenLang);
                         if (restored || cacheRestoreActive) {
-                            translationStarted = true;
+                            try { applyCacheRestore(); } catch (e) { }
                             if (items.toggleBlueBackground) {
                                 try {
                                     document.querySelectorAll('[data-translation-status="translated"]').forEach(b => {
@@ -512,10 +541,16 @@
                                     });
                                 } catch (e) { }
                             }
-                            rememberTranslatedDomain();
-                            if (items.hidePromptAllSites !== true) showCacheRestoreNotice();
-                            pendingRetranslation = true;
-                            scheduleRetranslationIfNeeded();
+                            const optedIntoAutoTranslation = items.realTimeTranslation === true
+                                || isAlwaysTranslate
+                                || (items.autoRetranslateDomain !== false && await new Promise(resolve => querySessionDomainKnown(resolve)));
+                            if (!hidePromptForAllSites) showCacheRestoreNotice();
+                            if (optedIntoAutoTranslation) {
+                                translationStarted = true;
+                                rememberTranslatedDomain();
+                                pendingRetranslation = true;
+                                scheduleRetranslationIfNeeded();
+                            }
                             return;
                         }
                     }
@@ -591,7 +626,7 @@
     }
 
     const PAGE_CACHE_PREFIX = 'pageCache_';
-    const PAGE_CACHE_MAX_ENTRIES = 500;
+    const PAGE_CACHE_MAX_ENTRIES = 1000;
     const PAGE_CACHE_MAX_BLOCKS = 1500;
 
     function computeStringHash(s) {
@@ -603,11 +638,17 @@
         return hash.toString(36);
     }
 
-    function getCurrentPageKey() {
+    function getPageKeyWithoutLanguage() {
         try {
             const url = new URL(window.location.href);
             return PAGE_CACHE_PREFIX + computeStringHash(url.origin + url.pathname + url.search);
         } catch (e) { return null; }
+    }
+
+    function getCurrentPageKey(targetLanguage) {
+        const base = getPageKeyWithoutLanguage();
+        if (!base || !targetLanguage) return null;
+        return base + '_' + targetLanguage;
     }
 
     function collectCacheableBlocks() {
@@ -646,10 +687,9 @@
         return computeStringHash(text);
     }
 
-    function getPageCache() {
+    function readPageCacheByKey(key) {
         return new Promise(resolve => {
             try {
-                const key = getCurrentPageKey();
                 if (!key) { resolve(null); return; }
                 chrome.runtime.sendMessage({ action: 'pageCacheGet', key }, (response) => {
                     if (chrome.runtime.lastError || !response) { resolve(null); return; }
@@ -659,10 +699,18 @@
         });
     }
 
-    function savePageCache(cache) {
+    function getPageCache(targetLanguage) {
+        return readPageCacheByKey(getCurrentPageKey(targetLanguage));
+    }
+
+    function getPageCacheWithoutLanguage() {
+        return readPageCacheByKey(getPageKeyWithoutLanguage());
+    }
+
+    function savePageCache(targetLanguage, cache) {
         return new Promise(resolve => {
             try {
-                const key = getCurrentPageKey();
+                const key = getCurrentPageKey(targetLanguage);
                 if (!key) { resolve(false); return; }
                 chrome.runtime.sendMessage({ action: 'pageCacheSet', key, cache }, (response) => {
                     if (chrome.runtime.lastError || !response) { resolve(false); return; }
@@ -672,10 +720,10 @@
         });
     }
 
-    function clearPageCache() {
+    function clearPageCache(targetLanguage) {
         return new Promise(resolve => {
             try {
-                const key = getCurrentPageKey();
+                const key = getCurrentPageKey(targetLanguage);
                 if (!key) { resolve(); return; }
                 chrome.runtime.sendMessage({ action: 'pageCacheDelete', key }, () => {
                     void chrome.runtime.lastError;
@@ -723,10 +771,20 @@
         return (typeof remembered === 'string' && remembered) ? remembered : null;
     }
 
+    async function resolveCacheForLanguage(targetLanguage) {
+        const current = await getPageCache(targetLanguage);
+        if (current && Array.isArray(current.blocks) && current.lang === targetLanguage) return current;
+        const withoutLanguage = await getPageCacheWithoutLanguage();
+        if (!withoutLanguage || !Array.isArray(withoutLanguage.blocks)) return null;
+        if (withoutLanguage.lang !== targetLanguage) return null;
+        savePageCache(targetLanguage, withoutLanguage).catch(() => { });
+        return withoutLanguage;
+    }
+
     async function tryRestoreFromCache(targetLanguage) {
         if (!cacheRestoreMap) {
             if (!targetLanguage) return false;
-            const cache = await getPageCache();
+            const cache = await resolveCacheForLanguage(targetLanguage);
             if (!cache || !Array.isArray(cache.blocks)) return false;
             if (cache.lang !== targetLanguage) return false;
             useSessionMemoForLanguage(targetLanguage);
@@ -888,10 +946,10 @@
         if (entries.length === 0) return;
         const lang = await getStoredTargetLanguage();
         if (!lang) return;
-        const previous = await getPageCache();
+        const previous = await resolveCacheForLanguage(lang);
         let pageUrl = '';
         try { pageUrl = window.location.href; } catch (e) { }
-        const saved = await savePageCache({
+        const saved = await savePageCache(lang, {
             url: pageUrl,
             lang,
             blocks: mergeWithPreviousEntries(previous, entries, lang),
@@ -939,8 +997,11 @@
                 lastScrollScanHeight = scrollHeight;
                 domChangedSinceScrollScan = false;
                 try {
-                    if (hasUntranslatedTextInDocument()) {
-                        startTranslation();
+                    if (!hasUntranslatedTextInDocument()) return;
+                    if (canAutoTranslateNewContent()) {
+                        startAutoTranslation();
+                    } else {
+                        maybeShowContinueNotice();
                     }
                 } catch (e) { }
             }, 800);
@@ -967,6 +1028,8 @@
         }
         pendingRetranslation = false;
         lastScrollScanHeight = -1;
+        autoRetranslateRounds = 0;
+        continueNoticeShown = false;
         try { cleanupProcessingMarkers(); } catch (e) { }
         try { translationUnits.clear(); } catch (e) { }
         domUpdateQueue = [];
@@ -1348,7 +1411,29 @@
         restoreNoticeContainer = null;
     }
 
-    function showCacheRestoreNotice() {
+    function translateRemainingFromNotice() {
+        removeCacheRestoreNotice();
+        continueNoticeShown = false;
+        continueNoticeCooldownUntil = 0;
+        autoRetranslateRounds = 0;
+        translationStarted = true;
+        translationCancelled = false;
+        translationHasError = false;
+        rememberTranslatedDomain();
+        startTranslation(true);
+    }
+
+    function maybeShowContinueNotice() {
+        if (!IS_TOP_FRAME) return;
+        if (hidePromptForAllSites) return;
+        if (restoreNoticeContainer) return;
+        if (Date.now() < continueNoticeCooldownUntil) return;
+        continueNoticeShown = true;
+        continueNoticeCooldownUntil = Date.now() + CONTINUE_NOTICE_COOLDOWN_MS;
+        showCacheRestoreNotice(st.newContentTitle, false);
+    }
+
+    function showCacheRestoreNotice(titleText, offerRetranslate) {
         if (!IS_TOP_FRAME) return;
         if (restoreNoticeContainer) return;
         if (!document.body) return;
@@ -1369,7 +1454,7 @@
         const brand = createUiElement('div', 'app-icon');
         brand.appendChild(createSvgIcon('15', '2.25', ICON_LOGO));
         const headText = createUiElement('div', 'head-text');
-        headText.appendChild(createUiElement('div', 'title', st.cacheRestoredTitle));
+        headText.appendChild(createUiElement('div', 'title', titleText || st.cacheRestoredTitle));
         const pairLabel = promptLanguagePairLabel();
         if (pairLabel) headText.appendChild(createUiElement('div', 'sub', pairLabel));
         const dismissButton = createIconButton(ICON_CLOSE, st.closeButton);
@@ -1378,17 +1463,26 @@
         head.appendChild(dismissButton);
         card.appendChild(head);
 
-        const retranslateButton = createTextButton('btn btn-text', st.retranslateButton);
-        card.appendChild(createActionsRow([retranslateButton]));
+        const actions = [];
+        const continueButton = createTextButton('btn btn-text', st.translateRestButton);
+        continueButton.addEventListener('click', translateRemainingFromNotice);
+        actions.push(continueButton);
+        if (offerRetranslate !== false) {
+            const retranslateButton = createTextButton('btn btn-text', st.retranslateButton);
+            retranslateButton.addEventListener('click', function () {
+                autoRetranslateRounds = 0;
+                continueNoticeShown = false;
+                clearPageCacheAndRetranslate().catch(() => { });
+            });
+            actions.push(retranslateButton);
+        }
+        card.appendChild(createActionsRow(actions));
 
         root.appendChild(card);
         shadow.appendChild(root);
         document.body.appendChild(restoreNoticeContainer);
 
         dismissButton.addEventListener('click', removeCacheRestoreNotice);
-        retranslateButton.addEventListener('click', function () {
-            clearPageCacheAndRetranslate().catch(() => { });
-        });
         restoreNoticeTimer = setTimeout(removeCacheRestoreNotice, RESTORE_NOTICE_TIMEOUT_MS);
     }
 
@@ -1433,13 +1527,15 @@
             }
         }
         if (hasRelevantChange && translationStarted && !translationCancelled) {
-            if (isTranslating || isApplyingUpdates) {
+            if (!canAutoTranslateNewContent()) {
+                maybeShowContinueNotice();
+            } else if (isTranslating || isApplyingUpdates) {
                 pendingRetranslation = true;
             } else {
                 clearTimeout(observerDebounceTimer);
                 observerDebounceTimer = setTimeout(() => {
-                    if (translationStarted && !isTranslating && !translationCancelled) {
-                        startTranslation();
+                    if (canAutoTranslateNewContent() && !isTranslating && !isApplyingUpdates) {
+                        startAutoTranslation();
                     }
                 }, 600);
             }
@@ -1641,11 +1737,14 @@
                 if (translationCancelled || translationHasError) return;
                 if (Date.now() < postNavigationCooldownUntil) return;
                 if (isTranslating || isApplyingUpdates) {
-                    pendingRetranslation = true;
+                    if (canAutoTranslateNewContent()) pendingRetranslation = true;
                     return;
                 }
-                if (cacheRestoreActive || hasUntranslatedTextInDocument()) {
-                    startTranslation();
+                if (!cacheRestoreActive && !hasUntranslatedTextInDocument()) return;
+                if (canAutoTranslateNewContent()) {
+                    startAutoTranslation();
+                } else {
+                    maybeShowContinueNotice();
                 }
             }, 800);
         };
@@ -1678,6 +1777,8 @@
         if (userInitiated) {
             translationCancelled = false;
             translationHasError = false;
+            autoRetranslateRounds = 0;
+            continueNoticeShown = false;
         }
         const cooldownRemaining = postNavigationCooldownUntil - Date.now();
         if (cooldownRemaining > 0) {
@@ -1842,10 +1943,14 @@
         if (isTranslating || isApplyingUpdates) return;
         if (!pendingRetranslation) return;
         pendingRetranslation = false;
+        if (!autoTranslationBudgetLeft()) {
+            maybeShowContinueNotice();
+            return;
+        }
         clearTimeout(observerDebounceTimer);
         observerDebounceTimer = setTimeout(() => {
             if (translationStarted && !isTranslating && !translationCancelled && !translationHasError) {
-                startTranslation();
+                startAutoTranslation();
             }
         }, 600);
     }
@@ -2039,7 +2144,7 @@
     async function clearPageCacheAndRetranslate() {
         if (isTranslating) return false;
         removeCacheRestoreNotice();
-        await clearPageCache();
+        await clearPageCache(await getStoredTargetLanguage());
         resetPageTranslationState();
         translationStarted = true;
         translationCancelled = false;
@@ -3252,11 +3357,14 @@
                 if (Date.now() < postNavigationCooldownUntil) return;
                 if (postFinishScanCount >= POST_FINISH_MAX_SCANS) return;
                 try {
-                    if (hasUntranslatedTextInDocument()) {
-                        postFinishScanCount++;
-                        translationHasError = false;
-                        startTranslation();
+                    if (!hasUntranslatedTextInDocument()) return;
+                    if (!autoTranslationBudgetLeft()) {
+                        maybeShowContinueNotice();
+                        return;
                     }
+                    postFinishScanCount++;
+                    translationHasError = false;
+                    startAutoTranslation();
                 } catch (e) { }
             }, delay);
         }

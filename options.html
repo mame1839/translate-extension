@@ -86,6 +86,14 @@
     </nav>
 
     <main id="main">
+      <div class="stale-banner" id="staleBackgroundBanner" role="alert" hidden>
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+          <path d="M12 9v4"></path>
+          <path d="M12 17h.01"></path>
+        </svg>
+        <span id="staleBackgroundText"></span>
+      </div>
       <section data-panel="general">
         <div class="section-head">
           <div>
@@ -212,6 +220,18 @@
             <div class="row-control">
               <span class="switch">
                 <input type="checkbox" id="autoRetranslateDomain">
+                <span class="track"></span>
+              </span>
+            </div>
+          </div>
+          <div class="row">
+            <div class="row-main">
+              <label class="row-label" for="autoTranslateNewContent" data-i18n="autoTranslateNewContentLabel">Auto-translate newly loaded content</label>
+              <div class="row-desc" data-i18n="optAutoTranslateNewContentDesc"></div>
+            </div>
+            <div class="row-control">
+              <span class="switch">
+                <input type="checkbox" id="autoTranslateNewContent">
                 <span class="track"></span>
               </span>
             </div>
