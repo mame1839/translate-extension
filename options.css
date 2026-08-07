@@ -503,6 +503,11 @@ input[type="number"] {
   padding: 6px 2px;
 }
 
+.warn-text {
+  color: var(--error);
+  word-break: break-word;
+}
+
 .add-row {
   display: flex;
   gap: 8px;

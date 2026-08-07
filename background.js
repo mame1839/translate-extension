@@ -1,4 +1,30 @@
 try {
+    chrome.runtime.onMessage.addListener(handleContentScriptMessage);
+} catch (e) { }
+
+try {
+    chrome.runtime.onMessage.addListener(handleSelectionMessage);
+} catch (e) { }
+
+try {
+    chrome.runtime.onMessage.addListener(handleExtensionPageMessage);
+} catch (e) { }
+
+const USAGE_STATS_KEY = 'usageStats';
+const USAGE_FLUSH_DELAY_MS = 1500;
+
+const pendingUsage = new Map();
+let usageFlushTimer = null;
+let usageWriteChain = Promise.resolve();
+
+const PAGE_CACHE_DB_NAME = 'translationCache';
+const PAGE_CACHE_DB_VERSION = 1;
+const PAGE_CACHE_STORE = 'pages';
+const PAGE_CACHE_QUOTA_PRUNE_TARGET = 250;
+const PAGE_CACHE_SAMPLE_LIMIT = 24;
+const PAGE_CACHE_LIST_PAGE_SIZE = 25;
+
+try {
     importScripts('translations.js');
 } catch (e) { }
 
@@ -198,7 +224,7 @@ try {
     chrome.runtime.onInstalled.addListener(handleExtensionInstalled);
 } catch (e) { }
 
-chrome.runtime.onMessage.addListener(function (request, sender, sendResponse) {
+function handleContentScriptMessage(request, sender, sendResponse) {
     const tabId = sender.tab?.id;
     if (!tabId) return false;
 
@@ -295,7 +321,7 @@ chrome.runtime.onMessage.addListener(function (request, sender, sendResponse) {
     }
 
     return false;
-});
+}
 
 function getHostnameFromUrl(url) {
     if (!url) return '';
@@ -1602,13 +1628,6 @@ async function translateWithAnthropic(text, retryLimit, signal, targetLanguage =
     }, retryLimit, signal);
 }
 
-const USAGE_STATS_KEY = 'usageStats';
-const USAGE_FLUSH_DELAY_MS = 1500;
-
-const pendingUsage = new Map();
-let usageFlushTimer = null;
-let usageWriteChain = Promise.resolve();
-
 function toUsageCount(value) {
     const parsed = Number(value);
     return Number.isFinite(parsed) && parsed > 0 ? Math.round(parsed) : 0;
@@ -1817,7 +1836,7 @@ try {
     });
 } catch (e) { }
 
-chrome.runtime.onMessage.addListener(function (request, sender, sendResponse) {
+function handleSelectionMessage(request, sender, sendResponse) {
     const tabId = sender.tab?.id;
     if (!tabId) return false;
     const frameId = Number.isInteger(sender.frameId) ? sender.frameId : 0;
@@ -1833,7 +1852,7 @@ chrome.runtime.onMessage.addListener(function (request, sender, sendResponse) {
     }
 
     return false;
-});
+}
 
 function abortSelectionTranslation(key) {
     const controller = selectionControllers.get(key);
@@ -2026,10 +2045,6 @@ async function selectionRequestAnthropic(prompt, retryLimit, signal) {
     }, retryLimit, signal);
 }
 
-const PAGE_CACHE_DB_NAME = 'translationCache';
-const PAGE_CACHE_DB_VERSION = 1;
-const PAGE_CACHE_STORE = 'pages';
-
 function openPageCacheDB() {
     return new Promise((resolve, reject) => {
         let req;
@@ -2089,8 +2104,6 @@ async function pageCacheGet(key) {
     } catch (e) { return null; }
     finally { try { db.close(); } catch (e) { } }
 }
-
-const PAGE_CACHE_QUOTA_PRUNE_TARGET = 250;
 
 function isQuotaExceededError(e) {
     return !!(e && e.name === 'QuotaExceededError');
@@ -2191,8 +2204,6 @@ async function pageCachePrune(maxEntries) {
     finally { try { db.close(); } catch (e) { } }
 }
 
-const PAGE_CACHE_SAMPLE_LIMIT = 24;
-
 function measureRecordBytes(record) {
     try {
         return new Blob([JSON.stringify(record)]).size;
@@ -2202,10 +2213,16 @@ function measureRecordBytes(record) {
 async function pageCacheCountEntries(db) {
     const tx = db.transaction(PAGE_CACHE_STORE, 'readonly');
     const store = tx.objectStore(PAGE_CACHE_STORE);
-    let total = 0;
-    try { total = await reqAsPromise(store.count()) || 0; } catch (e) { total = 0; }
+    const total = await reqAsPromise(store.count()) || 0;
     try { await awaitTransaction(tx); } catch (e) { }
     return total;
+}
+
+function describeCacheFailure(e) {
+    if (!e) return 'unknown';
+    const name = e.name || 'Error';
+    const message = typeof e.message === 'string' ? e.message : '';
+    return message ? `${name}: ${message}`.slice(0, 200) : name;
 }
 
 function pageCacheSampleBytes(db) {
@@ -2228,21 +2245,20 @@ function pageCacheSampleBytes(db) {
 
 async function pageCacheStats() {
     let db;
-    try { db = await openPageCacheDB(); } catch (e) { return { entries: 0, bytes: 0 }; }
+    try { db = await openPageCacheDB(); } catch (e) { return { entries: 0, bytes: 0, error: describeCacheFailure(e) }; }
     let entries = 0;
     let bytes = 0;
+    let error = '';
     try {
         entries = await pageCacheCountEntries(db);
         if (entries > 0) {
             const sample = await pageCacheSampleBytes(db);
             if (sample.records > 0) bytes = Math.round(sample.bytes / sample.records * entries);
         }
-    } catch (e) { }
+    } catch (e) { error = describeCacheFailure(e); }
     finally { try { db.close(); } catch (e) { } }
-    return { entries, bytes };
+    return { entries, bytes, error };
 }
-
-const PAGE_CACHE_LIST_PAGE_SIZE = 25;
 
 function pageCacheSummarize(record) {
     return {
@@ -2258,8 +2274,9 @@ async function pageCacheList(offset, limit) {
     const start = Math.max(0, Number.isFinite(offset) ? Math.floor(offset) : 0);
     const size = Math.min(PAGE_CACHE_LIST_PAGE_SIZE, Math.max(1, Number.isFinite(limit) ? Math.floor(limit) : PAGE_CACHE_LIST_PAGE_SIZE));
     let db;
-    try { db = await openPageCacheDB(); } catch (e) { return { pages: [], total: 0, offset: start }; }
+    try { db = await openPageCacheDB(); } catch (e) { return { pages: [], total: 0, offset: start, error: describeCacheFailure(e) }; }
     let total = 0;
+    let error = '';
     const pages = [];
     try {
         total = await pageCacheCountEntries(db);
@@ -2286,9 +2303,9 @@ async function pageCacheList(offset, limit) {
             });
             try { await awaitTransaction(tx); } catch (e) { }
         }
-    } catch (e) { }
+    } catch (e) { error = describeCacheFailure(e); }
     finally { try { db.close(); } catch (e) { } }
-    return { pages, total, offset: start };
+    return { pages, total, offset: start, error };
 }
 
 async function pageCacheClearAll() {
@@ -2304,7 +2321,7 @@ async function pageCacheClearAll() {
     finally { try { db.close(); } catch (e) { } }
 }
 
-chrome.runtime.onMessage.addListener(function (request, sender, sendResponse) {
+function handleExtensionPageMessage(request, sender, sendResponse) {
     if (request.action === "usageStatsGet") {
         getUsageStatsSnapshot()
             .then(stats => sendResponse({ stats }))
@@ -2348,7 +2365,7 @@ chrome.runtime.onMessage.addListener(function (request, sender, sendResponse) {
     }
 
     return false;
-});
+}
 
 const KEYBOARD_COMMAND_ACTIONS = {
     'translate-page': 'startTranslationFromPopup',

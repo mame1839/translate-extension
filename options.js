@@ -65,8 +65,10 @@ let saveTimer = null;
 let snackTimer = null;
 let usageStats = null;
 let cacheStats = null;
+let cacheFailureReason = '';
 let cachePages = [];
 let cachePagesTotal = 0;
+let cachePagesUnreadable = false;
 
 function el(id) {
     return document.getElementById(id);
@@ -440,9 +442,16 @@ function renderCacheStats() {
     const entriesNode = el('cacheEntries');
     const sizeNode = el('cacheSize');
     if (!entriesNode || !sizeNode) return;
+    const t = currentT();
     const lang = getUiLang();
-    entriesNode.textContent = cacheStats ? formatNumber(cacheStats.entries, lang) : '—';
-    sizeNode.textContent = cacheStats ? formatBytes(cacheStats.bytes, lang) : '—';
+    const readable = !!cacheStats && !cacheFailureReason;
+    entriesNode.textContent = readable ? formatNumber(cacheStats.entries, lang) : '—';
+    sizeNode.textContent = readable ? formatBytes(cacheStats.bytes, lang) : '—';
+    const errorRow = el('cacheErrorRow');
+    const errorNode = el('cacheError');
+    if (!errorRow || !errorNode) return;
+    errorRow.hidden = readable;
+    errorNode.textContent = readable ? '' : t.dataCacheUnreadable.replace('{reason}', cacheFailureReason || t.dataCacheNoBackground);
 }
 
 async function refreshUsageStats() {
@@ -455,12 +464,20 @@ async function refreshUsageStats() {
     renderUsageStats();
 }
 
+function describeBackgroundFailure(e) {
+    const message = e && typeof e.message === 'string' ? e.message : '';
+    return message ? message.slice(0, 200) : '';
+}
+
 async function refreshCacheStats() {
     try {
         const response = await chrome.runtime.sendMessage({ action: 'pageCacheStats' });
-        cacheStats = (response && response.stats) || null;
+        if (!response || !response.stats) throw new Error('');
+        cacheStats = response.stats;
+        cacheFailureReason = typeof cacheStats.error === 'string' ? cacheStats.error : '';
     } catch (e) {
         cacheStats = null;
+        cacheFailureReason = describeBackgroundFailure(e);
     }
     renderCacheStats();
 }
@@ -482,8 +499,10 @@ function renderCachePages() {
     container.replaceChildren();
     if (cachePages.length === 0) {
         const empty = document.createElement('div');
-        empty.className = 'empty-list';
-        empty.textContent = t.dataCacheNoPages;
+        empty.className = cachePagesUnreadable ? 'empty-list warn-text' : 'empty-list';
+        empty.textContent = cachePagesUnreadable
+            ? t.dataCacheUnreadable.replace('{reason}', t.dataCacheNoBackground)
+            : t.dataCacheNoPages;
         container.appendChild(empty);
         moreRow.hidden = true;
         return;
@@ -529,14 +548,17 @@ async function loadCachePages(append) {
     try {
         const offset = append ? cachePages.length : 0;
         const response = await chrome.runtime.sendMessage({ action: 'pageCacheList', offset });
-        const incoming = (response && Array.isArray(response.pages)) ? response.pages : [];
-        cachePagesTotal = (response && Number.isFinite(response.total)) ? response.total : incoming.length;
-        cachePages = append ? cachePages.concat(incoming) : incoming;
+        if (!response || !Array.isArray(response.pages)) throw new Error('');
+        if (response.error) throw new Error(response.error);
+        cachePagesTotal = Number.isFinite(response.total) ? response.total : response.pages.length;
+        cachePages = append ? cachePages.concat(response.pages) : response.pages;
+        cachePagesUnreadable = false;
     } catch (e) {
         if (!append) {
             cachePages = [];
             cachePagesTotal = 0;
         }
+        cachePagesUnreadable = true;
     }
     renderCachePages();
 }
@@ -583,8 +605,10 @@ async function clearPageCache() {
         const response = await chrome.runtime.sendMessage({ action: 'pageCacheClearAll' });
         if (!response || response.cleared !== true) throw new Error('cache clear rejected');
         cacheStats = { entries: 0, bytes: 0 };
+        cacheFailureReason = '';
         cachePages = [];
         cachePagesTotal = 0;
+        cachePagesUnreadable = false;
         renderCacheStats();
         renderCachePages();
         showSnackbar(t.dataClearDone, false);
