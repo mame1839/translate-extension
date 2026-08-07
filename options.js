@@ -315,6 +315,7 @@ async function saveNow() {
         hidePromptAllSites: el('hidePromptAllSites').checked,
         showContextMenu: el('showContextMenu').checked,
         autoRetranslateDomain: el('autoRetranslateDomain').checked,
+        autoTranslateNewContent: el('autoTranslateNewContent').checked,
         streamingTranslation: el('streamingTranslation').checked,
         translationStyle: el('translationStyle').value,
         customInstruction: el('customInstruction').value.trim(),
@@ -699,6 +700,7 @@ const resetHandlers = {
         el('showProgressPopup').checked = true;
         el('showContextMenu').checked = true;
         el('autoRetranslateDomain').checked = true;
+        el('autoTranslateNewContent').checked = false;
     },
     style: () => {
         el('translationStyle').value = '';
@@ -724,7 +726,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             'compatibleApiKey', 'compatibleModel', 'compatibleEndpoint',
             'delayBetweenRequests', 'maxToken', 'concurrencyLimit',
             'maxRetries', 'timeout',
-            'toggleBlueBackground', 'realTimeTranslation', 'showProgressPopup', 'excludeList', 'alwaysTranslateList', 'hidePromptAllSites', 'showContextMenu', 'autoRetranslateDomain', 'streamingTranslation',
+            'toggleBlueBackground', 'realTimeTranslation', 'showProgressPopup', 'excludeList', 'alwaysTranslateList', 'hidePromptAllSites', 'showContextMenu', 'autoRetranslateDomain', 'autoTranslateNewContent', 'streamingTranslation',
             'translationStyle', 'customInstruction', 'glossaryText'
         ]);
 
@@ -760,6 +762,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         el('hidePromptAllSites').checked = items.hidePromptAllSites === true;
         el('showContextMenu').checked = items.showContextMenu !== false;
         el('autoRetranslateDomain').checked = items.autoRetranslateDomain !== false;
+        el('autoTranslateNewContent').checked = items.autoTranslateNewContent === true;
         el('streamingTranslation').checked = items.streamingTranslation === true;
         el('translationStyle').value = STYLE_PRESETS.includes(items.translationStyle) ? items.translationStyle : '';
         el('customInstruction').value = items.customInstruction || '';
@@ -812,7 +815,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     });
 
-    ['toggleBlueBackground', 'realTimeTranslation', 'showProgressPopup', 'hidePromptAllSites', 'showContextMenu', 'autoRetranslateDomain', 'streamingTranslation'].forEach(id => {
+    ['toggleBlueBackground', 'realTimeTranslation', 'showProgressPopup', 'hidePromptAllSites', 'showContextMenu', 'autoRetranslateDomain', 'autoTranslateNewContent', 'streamingTranslation'].forEach(id => {
         el(id).addEventListener('change', scheduleSave);
     });
 
