@@ -2321,11 +2321,20 @@ async function pageCacheClearAll() {
     finally { try { db.close(); } catch (e) { } }
 }
 
+function workerVersion() {
+    try { return chrome.runtime.getManifest().version || ''; } catch (e) { return ''; }
+}
+
 function handleExtensionPageMessage(request, sender, sendResponse) {
+    if (request.action === "backgroundVersion") {
+        sendResponse({ version: workerVersion() });
+        return false;
+    }
+
     if (request.action === "usageStatsGet") {
         getUsageStatsSnapshot()
-            .then(stats => sendResponse({ stats }))
-            .catch(() => sendResponse({ stats: null }));
+            .then(stats => sendResponse({ stats, version: workerVersion() }))
+            .catch(() => sendResponse({ stats: null, version: workerVersion() }));
         return true;
     }
 
@@ -2338,8 +2347,8 @@ function handleExtensionPageMessage(request, sender, sendResponse) {
 
     if (request.action === "pageCacheStats") {
         pageCacheStats()
-            .then(stats => sendResponse({ stats }))
-            .catch(() => sendResponse({ stats: null }));
+            .then(stats => sendResponse({ stats, version: workerVersion() }))
+            .catch(() => sendResponse({ stats: null, version: workerVersion() }));
         return true;
     }
 
@@ -2352,8 +2361,8 @@ function handleExtensionPageMessage(request, sender, sendResponse) {
 
     if (request.action === "pageCacheList") {
         pageCacheList(request.offset, request.limit)
-            .then(result => sendResponse(result))
-            .catch(() => sendResponse({ pages: [], total: 0, offset: 0 }));
+            .then(result => sendResponse(Object.assign({ version: workerVersion() }, result)))
+            .catch(() => sendResponse({ pages: [], total: 0, offset: 0, version: workerVersion() }));
         return true;
     }
 
