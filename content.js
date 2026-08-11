@@ -2613,22 +2613,9 @@
     }
 
     function clearFailedMarkersForRetry() {
-        const queue = [];
-        if (document.body) queue.push(document.body);
-        const visited = new WeakSet();
-        while (queue.length > 0) {
-            const root = queue.shift();
-            if (!root || visited.has(root)) continue;
-            visited.add(root);
-            try {
-                root.querySelectorAll('[data-translation-status="failed"]').forEach(el => {
-                    delete el.dataset.translationStatus;
-                });
-                for (const el of root.querySelectorAll('*')) {
-                    if (el.shadowRoot && !visited.has(el.shadowRoot)) queue.push(el.shadowRoot);
-                }
-            } catch (e) { }
-        }
+        forEachMarkedElement('[data-translation-status="failed"]', el => {
+            delete el.dataset.translationStatus;
+        });
     }
 
     async function processBatch(batch, runGeneration) {
@@ -2978,9 +2965,11 @@
         clearTimeout(observerDebounceTimer);
         disconnectAllObservers();
         try {
-            const blocks = Array.from(document.querySelectorAll(
-                '[data-translation-status="translated"], [data-translation-status="original"]'
-            ));
+            const blocks = [];
+            forEachMarkedElement(
+                '[data-translation-status="translated"], [data-translation-status="original"]',
+                block => blocks.push(block)
+            );
             if (blocks.length === 0) return;
             const shouldRevert = blocks.some(block => block.dataset.translationStatus === 'translated');
             blocks.forEach(block => {
@@ -3403,8 +3392,13 @@
         let translatedBlocks = 0;
         let revertedBlocks = 0;
         try {
-            translatedBlocks = document.querySelectorAll('[data-translation-status="translated"]').length;
-            revertedBlocks = document.querySelectorAll('[data-translation-status="original"]').length;
+            forEachMarkedElement(
+                '[data-translation-status="translated"], [data-translation-status="original"]',
+                block => {
+                    if (block.dataset.translationStatus === 'translated') translatedBlocks++;
+                    else revertedBlocks++;
+                }
+            );
         } catch (e) { }
         let translationStatus = 'idle';
         if (isTranslating || isApplyingUpdates) translationStatus = 'translating';
