@@ -2896,20 +2896,169 @@
         return markApplyFailed(tu, fromCacheRestore);
     }
 
+    function blockContainsCustomElement(block) {
+        if (block.nodeName.indexOf('-') !== -1) return true;
+        for (const element of block.querySelectorAll('*')) {
+            if (element.nodeName.indexOf('-') !== -1) return true;
+        }
+        return false;
+    }
+
+    function collectRearrangedChildren(parsedNode, placeholders, parentNode, plan) {
+        const wanted = [];
+        for (const child of parsedNode.childNodes) {
+            if (child.nodeType === Node.TEXT_NODE) {
+                wanted.push({ text: child.textContent || '' });
+                continue;
+            }
+            if (child.nodeType !== Node.ELEMENT_NODE) continue;
+            const match = child.nodeName.toLowerCase().match(/^([atbs])(\d+)$/);
+            if (!match) {
+                const unwrapped = collectRearrangedChildren(child, placeholders, parentNode, plan);
+                if (!unwrapped) return null;
+                for (const item of unwrapped) wanted.push(item);
+                continue;
+            }
+            const entry = placeholders[parseInt(match[2], 10)];
+            if (!entry || !entry.node) return null;
+            const bothNodeKeeping = (match[1] === 'b' || match[1] === 's') &&
+                (entry.type === 'block' || entry.type === 'skip');
+            if (entry.ph !== `${match[1]}${match[2]}` && !bothNodeKeeping) return null;
+            if (entry.node.parentNode !== parentNode) return null;
+            wanted.push({ node: entry.node });
+            if (entry.type === 'tag' || entry.type === 'anchor') {
+                const inner = collectRearrangedChildren(child, placeholders, entry.node, plan);
+                if (!inner) return null;
+                plan.push({ parent: entry.node, wanted: inner });
+            }
+        }
+        return wanted;
+    }
+
+    function placeNodeBefore(parent, node, reference) {
+        if (node.parentNode === parent && typeof parent.moveBefore === 'function') {
+            try {
+                parent.moveBefore(node, reference);
+                return;
+            } catch (e) { }
+        }
+        parent.insertBefore(node, reference);
+    }
+
+    function applyRearrangementPlan(plan) {
+        for (const step of plan) {
+            const parent = step.parent;
+            const spareTexts = [];
+            for (const child of parent.childNodes) {
+                if (child.nodeType === Node.TEXT_NODE) spareTexts.push(child);
+            }
+            let spareCursor = 0;
+            const ordered = [];
+            for (const item of step.wanted) {
+                if (item.node) {
+                    ordered.push(item.node);
+                    continue;
+                }
+                let textNode = spareTexts[spareCursor];
+                if (textNode) spareCursor++;
+                else textNode = document.createTextNode('');
+                textNode.nodeValue = item.text;
+                ordered.push(textNode);
+            }
+            let cursor = parent.firstChild;
+            for (const node of ordered) {
+                if (cursor === node) {
+                    cursor = cursor.nextSibling;
+                    continue;
+                }
+                placeNodeBefore(parent, node, cursor);
+            }
+            for (let index = spareCursor; index < spareTexts.length; index++) {
+                spareTexts[index].nodeValue = '';
+            }
+        }
+    }
+
+    function rearrangementKeepsTranslatableText(plan) {
+        for (const step of plan) {
+            let liveHasText = false;
+            for (const child of step.parent.childNodes) {
+                if (child.nodeType === Node.TEXT_NODE && isTranslatableText(child.nodeValue)) {
+                    liveHasText = true;
+                    break;
+                }
+            }
+            if (!liveHasText) continue;
+            let translatedHasText = false;
+            for (const item of step.wanted) {
+                if (item.text !== undefined && isTranslatableText(item.text)) {
+                    translatedHasText = true;
+                    break;
+                }
+            }
+            if (!translatedHasText) return false;
+        }
+        return true;
+    }
+
+    function rearrangeWithoutRebuilding(tu, translatedTemplate, fromCacheRestore) {
+        if (typeof tu.block.moveBefore !== 'function' && blockContainsCustomElement(tu.block)) return false;
+        const parsed = parseTemplateFragment(normalizeTranslatedTemplate(translatedTemplate, tu.placeholders));
+        if (!parsed) return false;
+        const plan = [];
+        const topLevel = collectRearrangedChildren(parsed, tu.placeholders, tu.block, plan);
+        if (!topLevel) return false;
+        plan.push({ parent: tu.block, wanted: topLevel });
+        if (!rearrangementKeepsTranslatableText(plan)) return false;
+
+        const snapshot = snapshotSubtree(tu.block);
+        try {
+            applyRearrangementPlan(plan);
+        } catch (e) {
+            restoreSubtree(snapshot);
+            return false;
+        }
+        if (!appliedResultMatchesTranslation(tu, translatedTemplate)) {
+            restoreSubtree(snapshot);
+            return false;
+        }
+        try { tu.block.dataset.tuTranslatedTemplate = translatedTemplate; } catch (e) { }
+        try { tu.block.dataset.tuTemplate = tu.template; } catch (e) { }
+        try {
+            if (!('originalHtml' in tu.block.dataset)) tu.block.dataset.originalHtml = tu.originalInnerHTML;
+            tu.block.dataset.translatedHtml = tu.block.innerHTML;
+            tu.block.dataset.translationStatus = 'translated';
+        } catch (e) { }
+        if (highlightTranslated) tu.block.classList.add('translated-text');
+        else tu.block.classList.remove('translated-text');
+        countTranslatedUnitOnce(tu, fromCacheRestore);
+        return true;
+    }
+
     function applyTranslation(tu, translatedTemplate, fromCacheRestore) {
         if (!tu || !tu.block || !tu.block.isConnected) return;
-        const snapshot = snapshotSubtree(tu.block);
+        let snapshot = null;
+        try { snapshot = snapshotSubtree(tu.block); } catch (e) { }
         if (shouldUseTextOnlyApply(tu.block)) {
             applyTranslationInPlace(tu, translatedTemplate, fromCacheRestore);
         } else {
             applyTranslationByReplacement(tu, translatedTemplate, fromCacheRestore);
         }
-        if (tu.block.dataset?.translationStatus !== 'translated') return;
-        if (!appliedResultMatchesTranslation(tu, translatedTemplate)) {
-            discardApplyThatDidNotMatch(tu, fromCacheRestore, snapshot);
-            return;
+        try {
+            if (tu.block.dataset?.translationStatus === 'translated' &&
+                appliedResultMatchesTranslation(tu, translatedTemplate)) {
+                rememberTranslatedTemplate(tu.template, translatedTemplate);
+                return;
+            }
+            if (snapshot) discardApplyThatDidNotMatch(tu, fromCacheRestore, snapshot);
+            if (!snapshot || !rearrangeWithoutRebuilding(tu, translatedTemplate, fromCacheRestore)) {
+                markApplyFailed(tu, fromCacheRestore);
+                return;
+            }
+            rememberTranslatedTemplate(tu.template, translatedTemplate);
+        } catch (e) {
+            markApplyFailed(tu, fromCacheRestore);
         }
-        rememberTranslatedTemplate(tu.template, translatedTemplate);
     }
 
     function markApplyFailed(tu, fromCacheRestore) {
