@@ -2458,12 +2458,20 @@
     function buildTU(block) {
         const placeholders = [];
         const textRuns = [];
+        const commentAnchors = [];
+        let commentAnchorCount = 0;
         let template = '';
         let hasTranslatableText = false;
         let anchorDepth = 0;
         let runOpen = false;
+        let rebuiltScope = block;
 
         function visit(node) {
+            if (node.nodeType === Node.COMMENT_NODE) {
+                commentAnchors.push({ scope: rebuiltScope, node });
+                commentAnchorCount++;
+                return;
+            }
             if (node.nodeType === Node.TEXT_NODE) {
                 const text = node.textContent;
                 if (!text) return;
@@ -2491,6 +2499,7 @@
             if (childStatus === 'translated' || childStatus === 'original') {
                 const idx = placeholders.length;
                 placeholders.push({ type: 'skip', ph: `s${idx}`, node });
+                commentAnchors.push({ scope: rebuiltScope, node });
                 template += `<s${idx}></s${idx}>`;
                 runOpen = false;
                 return;
@@ -2499,6 +2508,7 @@
             if (BLOCK_TAGS.has(node.nodeName) || isShadowHostingCustomElement(node) || isBlockLikeAnchorInShadowHost(node)) {
                 const idx = placeholders.length;
                 placeholders.push({ type: 'block', ph: `b${idx}`, node });
+                commentAnchors.push({ scope: rebuiltScope, node });
                 template += `<b${idx}></b${idx}>`;
                 runOpen = false;
                 return;
@@ -2507,6 +2517,7 @@
             if (isFullyExcluded(node)) {
                 const idx = placeholders.length;
                 placeholders.push({ type: 'skip', ph: `s${idx}`, node });
+                commentAnchors.push({ scope: rebuiltScope, node });
                 template += `<s${idx}></s${idx}>`;
                 runOpen = false;
                 return;
@@ -2520,10 +2531,14 @@
                 const idx = placeholders.length;
                 const originalText = (node.textContent || '').trim();
                 placeholders.push({ type: 'anchor', ph: `a${idx}`, node, originalText });
+                commentAnchors.push({ scope: rebuiltScope, node });
                 template += `<a${idx}>`;
                 runOpen = false;
                 anchorDepth++;
+                const outerAnchorScope = rebuiltScope;
+                rebuiltScope = node;
                 for (const child of node.childNodes) visit(child);
+                rebuiltScope = outerAnchorScope;
                 anchorDepth--;
                 template += `</a${idx}>`;
                 runOpen = false;
@@ -2532,9 +2547,13 @@
 
             const idx = placeholders.length;
             placeholders.push({ type: 'tag', ph: `t${idx}`, node });
+            commentAnchors.push({ scope: rebuiltScope, node });
             template += `<t${idx}>`;
             runOpen = false;
+            const outerTagScope = rebuiltScope;
+            rebuiltScope = node;
             for (const child of node.childNodes) visit(child);
+            rebuiltScope = outerTagScope;
             template += `</t${idx}>`;
             runOpen = false;
         }
@@ -2549,6 +2568,7 @@
             template: normalizedTemplate,
             placeholders,
             textRuns,
+            commentAnchors: commentAnchorCount > 0 ? commentAnchors : null,
             hasTranslatableText,
             originalInnerHTML: block.innerHTML
         };
@@ -2646,6 +2666,38 @@
         });
     }
 
+    function reattachCommentAnchors(commentAnchors) {
+        if (!commentAnchors) return;
+        const sequenceByScope = new Map();
+        for (const entry of commentAnchors) {
+            let sequence = sequenceByScope.get(entry.scope);
+            if (!sequence) {
+                sequence = [];
+                sequenceByScope.set(entry.scope, sequence);
+            }
+            sequence.push(entry.node);
+        }
+        sequenceByScope.forEach((sequence, scope) => {
+            let pending = null;
+            for (const node of sequence) {
+                if (node.nodeType === Node.COMMENT_NODE) {
+                    if (!pending) pending = [];
+                    pending.push(node);
+                    continue;
+                }
+                if (!pending || node.parentNode !== scope) continue;
+                try {
+                    for (const comment of pending) scope.insertBefore(comment, node);
+                    pending = null;
+                } catch (e) { }
+            }
+            if (!pending) return;
+            try {
+                for (const comment of pending) scope.appendChild(comment);
+            } catch (e) { }
+        });
+    }
+
     function applyTemplateWithPlaceholders(tu, template) {
         const normalized = normalizeTranslatedTemplate(template, tu.placeholders);
         const parsed = parseTemplateFragment(normalized);
@@ -2663,6 +2715,7 @@
             while (tu.block.firstChild) tu.block.removeChild(tu.block.firstChild);
             for (const child of newChildren) tu.block.appendChild(child);
         }
+        reattachCommentAnchors(tu.commentAnchors);
         return true;
     }
 
