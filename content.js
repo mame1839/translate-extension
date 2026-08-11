@@ -653,7 +653,9 @@
                     if (!node || !(node instanceof Element)) return NodeFilter.FILTER_REJECT;
                     if (node.dataset?.translationWrapper === 'true') return NodeFilter.FILTER_REJECT;
                     if (node.dataset?.geminiIgnore === 'true') return NodeFilter.FILTER_REJECT;
-                    if (isFullyExcluded(node)) return NodeFilter.FILTER_REJECT;
+                    if (isFullyExcluded(node)) {
+                        return isFullyExcluded(node, true) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_SKIP;
+                    }
                     if (BLOCK_TAGS.has(node.nodeName) || isShadowHostingCustomElement(node) || isBlockLikeAnchorInShadowHost(node)) {
                         if (blockContainsReactCustomElement(node)) return NodeFilter.FILTER_SKIP;
                         return NodeFilter.FILTER_ACCEPT;
@@ -1584,7 +1586,9 @@
                     const s = node.dataset?.translationStatus;
                     if (s === 'translated' || s === 'processing' || s === 'original' || s === 'failed') return NodeFilter.FILTER_REJECT;
                     if (node.dataset?.translationWrapper === 'true') return NodeFilter.FILTER_REJECT;
-                    if (isFullyExcluded(node)) return NodeFilter.FILTER_REJECT;
+                    if (isFullyExcluded(node)) {
+                        return isFullyExcluded(node, true) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_SKIP;
+                    }
                     if (BLOCK_TAGS.has(node.nodeName) || isShadowHostingCustomElement(node) || isBlockLikeAnchorInShadowHost(node)) {
                         if (blockContainsReactCustomElement(node)) return NodeFilter.FILTER_SKIP;
                         return NodeFilter.FILTER_ACCEPT;
@@ -2287,7 +2291,7 @@
         return null;
     }
 
-    function isFullyExcluded(element) {
+    function isFullyExcluded(element, ignoreVisibilityHidden) {
         if (!element || !(element instanceof Element) || !element.isConnected) return true;
         if (INLINE_SKIP_TAGS.has(element.nodeName)) return true;
         if (element.isContentEditable === true) return true;
@@ -2302,14 +2306,16 @@
         if (element.hasAttribute && element.hasAttribute('hidden')) return true;
         if (element.namespaceURI && element.namespaceURI !== 'http://www.w3.org/1999/xhtml') return true;
         if (BLOCK_TAGS.has(element.nodeName)) {
-            if (scanCache) {
-                const cached = scanCache.hiddenBlockStyles.get(element);
-                if (cached !== undefined) return cached;
-                const hidden = isHiddenByComputedStyle(element);
-                scanCache.hiddenBlockStyles.set(element, hidden);
-                return hidden;
+            let hidden;
+            const cached = scanCache ? scanCache.hiddenBlockStyles.get(element) : undefined;
+            if (cached !== undefined) {
+                hidden = cached;
+            } else {
+                hidden = isHiddenByComputedStyle(element);
+                if (scanCache) scanCache.hiddenBlockStyles.set(element, hidden);
             }
-            return isHiddenByComputedStyle(element);
+            if (ignoreVisibilityHidden && hidden === 'visibility') return false;
+            return hidden !== '';
         }
         return false;
     }
@@ -2317,9 +2323,11 @@
     function isHiddenByComputedStyle(element) {
         try {
             const style = window.getComputedStyle(element);
-            return style.display === 'none' || style.visibility === 'hidden';
+            if (style.display === 'none') return 'display';
+            if (style.visibility === 'hidden') return 'visibility';
+            return '';
         } catch (e) {
-            return false;
+            return '';
         }
     }
 
@@ -2424,7 +2432,9 @@
                         if (node.dataset?.translationStatus === 'original') return NodeFilter.FILTER_REJECT;
                         if (node.dataset?.translationStatus === 'failed') return NodeFilter.FILTER_REJECT;
                         if (node.dataset?.translationWrapper === 'true') return NodeFilter.FILTER_REJECT;
-                        if (isFullyExcluded(node)) return NodeFilter.FILTER_REJECT;
+                        if (isFullyExcluded(node)) {
+                            return isFullyExcluded(node, true) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_SKIP;
+                        }
                         if (node.shadowRoot) queue.push(node.shadowRoot);
                         if (BLOCK_TAGS.has(node.nodeName) || isShadowHostingCustomElement(node) || isBlockLikeAnchorInShadowHost(node)) {
                             if (blockContainsReactCustomElement(node)) return NodeFilter.FILTER_SKIP;
