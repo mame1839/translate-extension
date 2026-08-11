@@ -2885,7 +2885,7 @@
     }
 
     function discardApplyThatDidNotMatch(tu, fromCacheRestore, snapshot) {
-        restoreSubtree(snapshot);
+        try { restoreSubtree(snapshot); } catch (e) { }
         try { delete tu.block.dataset.translationStatus; } catch (e) { }
         try { delete tu.block.dataset.translatedHtml; } catch (e) { }
         try { delete tu.block.dataset.tuTranslatedTemplate; } catch (e) { }
@@ -3040,6 +3040,7 @@
         if (!tu || !tu.block || !tu.block.isConnected) return;
         let snapshot = null;
         try { snapshot = snapshotSubtree(tu.block); } catch (e) { }
+        if (!snapshot) return markApplyFailed(tu, fromCacheRestore);
         if (shouldUseTextOnlyApply(tu.block)) {
             applyTranslationInPlace(tu, translatedTemplate, fromCacheRestore);
         } else {
@@ -3051,14 +3052,11 @@
                 rememberTranslatedTemplate(tu.template, translatedTemplate);
                 return;
             }
-            if (snapshot) discardApplyThatDidNotMatch(tu, fromCacheRestore, snapshot);
-            if (!snapshot || !rearrangeWithoutRebuilding(tu, translatedTemplate, fromCacheRestore)) {
-                markApplyFailed(tu, fromCacheRestore);
-                return;
-            }
+            discardApplyThatDidNotMatch(tu, fromCacheRestore, snapshot);
+            if (!rearrangeWithoutRebuilding(tu, translatedTemplate, fromCacheRestore)) return;
             rememberTranslatedTemplate(tu.template, translatedTemplate);
         } catch (e) {
-            markApplyFailed(tu, fromCacheRestore);
+            discardApplyThatDidNotMatch(tu, fromCacheRestore, snapshot);
         }
     }
 
