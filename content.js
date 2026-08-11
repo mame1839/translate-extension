@@ -688,13 +688,6 @@
         showExtensionContextLostPanel();
     }
 
-    function extensionContextIsLost() {
-        if (extensionContextLost) return true;
-        if (!extensionBindingsGone()) return false;
-        noteExtensionContextLost();
-        return true;
-    }
-
     function extensionReloadedMessage() {
         return extensionContextLost ? localizedErrorCause('extensionReloaded') : '';
     }
@@ -2152,15 +2145,6 @@
             return;
         }
         translationHasError = true;
-        if (extensionContextIsLost()) {
-            if (progressInterval) {
-                clearInterval(progressInterval);
-                progressInterval = null;
-            }
-            cleanupProcessingMarkers();
-            showExtensionContextLostPanel();
-            return;
-        }
         let errorMessage = st.errorOccurred;
         if (error && error.message) {
             errorMessage = error.message;
@@ -2169,12 +2153,16 @@
         }
         const errorCode = translationErrorCodeOf(error);
         updateProgress();
-        if (ensureStatusPanelForError()) showErrorPopup(errorMessage, errorCode);
         if (progressInterval) {
             clearInterval(progressInterval);
             progressInterval = null;
         }
         cleanupProcessingMarkers();
+        if (extensionContextLost) {
+            showExtensionContextLostPanel();
+            return;
+        }
+        if (ensureStatusPanelForError()) showErrorPopup(errorMessage, errorCode);
         sendRuntimeMessage({ action: "translationError", error: errorMessage, code: errorCode });
     }
 
@@ -3503,15 +3491,15 @@
         }
         cacheRestoreMap = null;
         cacheRestoreActive = false;
-        if (extensionContextIsLost()) {
-            showExtensionContextLostPanel();
-            return;
-        }
         updateProgress();
         const errorMessage = error?.message || st.errorOccurred;
         const errorCode = translationErrorCodeOf(error);
-        if (ensureStatusPanelForError()) showErrorPopup(errorMessage, errorCode);
-        sendRuntimeMessage({ action: "translationError", error: errorMessage, code: errorCode });
+        if (extensionContextLost) {
+            showExtensionContextLostPanel();
+        } else {
+            if (ensureStatusPanelForError()) showErrorPopup(errorMessage, errorCode);
+            sendRuntimeMessage({ action: "translationError", error: errorMessage, code: errorCode });
+        }
         saveCurrentTranslationToCache().catch(() => { });
     }
 
