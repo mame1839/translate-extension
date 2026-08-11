@@ -2744,6 +2744,12 @@
         }
     }
 
+    function markApplyFailed(tu, fromCacheRestore) {
+        if (fromCacheRestore) return false;
+        try { tu.block.dataset.translationStatus = 'failed'; } catch (e) { }
+        return false;
+    }
+
     function applyTranslationByReplacement(tu, translatedTemplate, fromCacheRestore) {
         try {
             try { tu.block.dataset.tuTranslatedTemplate = translatedTemplate; } catch (e) { }
@@ -2753,7 +2759,7 @@
                 tu.block.dataset.originalHtml = tu.originalInnerHTML;
             }
 
-            if (!applyTemplateWithPlaceholders(tu, translatedTemplate)) return;
+            if (!applyTemplateWithPlaceholders(tu, translatedTemplate)) return markApplyFailed(tu, fromCacheRestore);
 
             tu.block.dataset.translatedHtml = tu.block.innerHTML;
             tu.block.dataset.translationStatus = 'translated';
@@ -2763,10 +2769,9 @@
                 tu.block.classList.remove('translated-text');
             }
             countTranslatedUnitOnce(tu, fromCacheRestore);
+            return true;
         } catch (e) {
-            if (tu.block && tu.block.dataset) {
-                delete tu.block.dataset.translationStatus;
-            }
+            return markApplyFailed(tu, fromCacheRestore);
         }
     }
 
@@ -2868,10 +2873,7 @@
         try {
             try { tu.block.dataset.tuTranslatedTemplate = translatedTemplate; } catch (e) { }
             try { tu.block.dataset.tuTemplate = tu.template; } catch (e) { }
-            if (!applyTemplateTextOnly(tu, translatedTemplate)) {
-                try { tu.block.dataset.translationStatus = 'failed'; } catch (e) { }
-                return false;
-            }
+            if (!applyTemplateTextOnly(tu, translatedTemplate)) return markApplyFailed(tu, fromCacheRestore);
             if (!('originalHtml' in tu.block.dataset)) {
                 try { tu.block.dataset.originalHtml = tu.originalInnerHTML; } catch (e) { }
             }
@@ -2884,8 +2886,7 @@
             countTranslatedUnitOnce(tu, fromCacheRestore);
             return true;
         } catch (e) {
-            try { tu.block.dataset.translationStatus = 'failed'; } catch (_) { }
-            return false;
+            return markApplyFailed(tu, fromCacheRestore);
         }
     }
 
