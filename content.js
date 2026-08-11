@@ -418,6 +418,7 @@
     let translationStarted = false;
     let translationCancelled = false;
     let translationHasError = false;
+    let extensionContextLost = false;
 
     let translationProgress = 0;
     let translatedUnitsCount = 0;
@@ -441,6 +442,7 @@
     let progressInterval = null;
     let statusContainer = null;
     let statusShadowRoot = null;
+    let statusPanelPhase = '';
     let promptContainer = null;
     let promptShadowRoot = null;
     let minimizedDiv = null;
@@ -603,19 +605,118 @@
         } catch (error) { }
     }
 
-    function querySessionDomainKnown(callback) {
+    function messagingRuntime() {
         try {
-            chrome.runtime.sendMessage({ action: 'sessionIsDomainKnown' }, (response) => {
-                if (chrome.runtime.lastError) { callback(false); return; }
-                callback(!!response?.known);
-            });
-        } catch (e) { callback(false); }
+            if (typeof chrome === 'undefined') return null;
+            const runtime = chrome.runtime;
+            if (!runtime || typeof runtime.sendMessage !== 'function') return null;
+            return runtime;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    function readRuntimeLastError() {
+        try {
+            const runtime = messagingRuntime();
+            const lastError = runtime ? runtime.lastError : null;
+            if (!lastError) return '';
+            return lastError.message || 'runtime error';
+        } catch (e) {
+            return 'runtime error';
+        }
+    }
+
+    function extensionBindingsGone() {
+        try {
+            const runtime = messagingRuntime();
+            return !runtime || !runtime.id;
+        } catch (e) {
+            return true;
+        }
+    }
+
+    function messagingFailureText(reason) {
+        if (typeof reason === 'string') return reason || 'messaging failed';
+        const message = reason && reason.message;
+        return typeof message === 'string' && message ? message : 'messaging failed';
+    }
+
+    function sendRuntimeMessage(message, onResponse) {
+        const wantsResponse = typeof onResponse === 'function';
+        const deliver = (response, failure) => {
+            if (!wantsResponse) return;
+            try { onResponse(response, failure); } catch (e) { }
+        };
+        const giveUp = (reason) => {
+            if (extensionBindingsGone()) noteExtensionContextLost();
+            deliver(undefined, messagingFailureText(reason));
+            return false;
+        };
+        const runtime = messagingRuntime();
+        if (!runtime) return giveUp('Extension context invalidated.');
+        try {
+            if (wantsResponse) {
+                runtime.sendMessage(message, (response) => {
+                    const failure = readRuntimeLastError();
+                    if (failure) { giveUp(failure); return; }
+                    deliver(response, '');
+                });
+            } else {
+                const sending = runtime.sendMessage(message);
+                if (sending && typeof sending.catch === 'function') {
+                    sending.catch(() => {
+                        if (extensionBindingsGone()) noteExtensionContextLost();
+                    });
+                }
+            }
+            return true;
+        } catch (reason) {
+            return giveUp(reason);
+        }
+    }
+
+    function noteExtensionContextLost() {
+        if (extensionContextLost) return;
+        extensionContextLost = true;
+        translationHasError = true;
+        pendingRetranslation = false;
+        if (progressInterval) {
+            clearInterval(progressInterval);
+            progressInterval = null;
+        }
+        showExtensionContextLostPanel();
+    }
+
+    function extensionContextIsLost() {
+        if (extensionContextLost) return true;
+        if (!extensionBindingsGone()) return false;
+        noteExtensionContextLost();
+        return true;
+    }
+
+    function extensionReloadedMessage() {
+        return extensionContextLost ? localizedErrorCause('extensionReloaded') : '';
+    }
+
+    function showExtensionContextLostPanel() {
+        if (!IS_TOP_FRAME) return;
+        if (statusPanelPhase !== 'progress') return;
+        if (!statusContainer || !statusShadowRoot) return;
+        statusContainer.style.display = 'block';
+        removeMinimizedIndicator();
+        renderStatusPanel('error', { message: extensionReloadedMessage(), code: 'extensionReloaded' });
+    }
+
+    function querySessionDomainKnown(callback) {
+        sendRuntimeMessage({ action: 'sessionIsDomainKnown' }, (response, failure) => {
+            if (failure) { callback(false); return; }
+            callback(!!response?.known);
+        });
     }
 
     function rememberTranslatedDomain() {
-        try {
-            chrome.runtime.sendMessage({ action: 'sessionMarkTranslated' }).catch(() => { });
-        } catch (e) { }
+        sendRuntimeMessage({ action: 'sessionMarkTranslated' });
     }
 
     const PAGE_CACHE_PREFIX = 'pageCache_';
@@ -682,13 +783,11 @@
 
     function readPageCacheByKey(key) {
         return new Promise(resolve => {
-            try {
-                if (!key) { resolve(null); return; }
-                chrome.runtime.sendMessage({ action: 'pageCacheGet', key }, (response) => {
-                    if (chrome.runtime.lastError || !response) { resolve(null); return; }
-                    resolve(response.cache || null);
-                });
-            } catch (e) { resolve(null); }
+            if (!key) { resolve(null); return; }
+            sendRuntimeMessage({ action: 'pageCacheGet', key }, (response, failure) => {
+                if (failure || !response) { resolve(null); return; }
+                resolve(response.cache || null);
+            });
         });
     }
 
@@ -702,38 +801,26 @@
 
     function savePageCache(targetLanguage, cache) {
         return new Promise(resolve => {
-            try {
-                const key = getCurrentPageKey(targetLanguage);
-                if (!key) { resolve(false); return; }
-                chrome.runtime.sendMessage({ action: 'pageCacheSet', key, cache }, (response) => {
-                    if (chrome.runtime.lastError || !response) { resolve(false); return; }
-                    resolve(!!response.saved);
-                });
-            } catch (e) { resolve(false); }
+            const key = getCurrentPageKey(targetLanguage);
+            if (!key) { resolve(false); return; }
+            sendRuntimeMessage({ action: 'pageCacheSet', key, cache }, (response, failure) => {
+                if (failure || !response) { resolve(false); return; }
+                resolve(!!response.saved);
+            });
         });
     }
 
     function clearPageCache(targetLanguage) {
         return new Promise(resolve => {
-            try {
-                const key = getCurrentPageKey(targetLanguage);
-                if (!key) { resolve(); return; }
-                chrome.runtime.sendMessage({ action: 'pageCacheDelete', key }, () => {
-                    void chrome.runtime.lastError;
-                    resolve();
-                });
-            } catch (e) { resolve(); }
+            const key = getCurrentPageKey(targetLanguage);
+            if (!key) { resolve(); return; }
+            sendRuntimeMessage({ action: 'pageCacheDelete', key }, () => { resolve(); });
         });
     }
 
     function pruneOldCaches() {
         return new Promise(resolve => {
-            try {
-                chrome.runtime.sendMessage({ action: 'pageCachePrune', maxEntries: PAGE_CACHE_MAX_ENTRIES }, () => {
-                    void chrome.runtime.lastError;
-                    resolve();
-                });
-            } catch (e) { resolve(); }
+            sendRuntimeMessage({ action: 'pageCachePrune', maxEntries: PAGE_CACHE_MAX_ENTRIES }, () => { resolve(); });
         });
     }
 
@@ -1367,7 +1454,7 @@
             translationStarted = true;
             rememberTranslatedDomain();
             startTranslation(true);
-            try { chrome.runtime.sendMessage({ action: 'startTranslationAllFrames' }).catch(() => { }); } catch (e) { }
+            sendRuntimeMessage({ action: 'startTranslationAllFrames' });
         });
         noButton.addEventListener('click', function () { removePrompt(); });
         neverButton.addEventListener('click', function () {
@@ -1822,7 +1909,7 @@
             const allTus = collectTranslationUnits();
             if (allTus.length === 0) {
                 isTranslating = false;
-                chrome.runtime.sendMessage({ action: "translationComplete", message: st.noTextFound }).catch(() => { });
+                sendRuntimeMessage({ action: "translationComplete", message: st.noTextFound });
                 return;
             }
 
@@ -1838,7 +1925,7 @@
             if (tus.length === 0) {
                 isTranslating = false;
                 if (oversizedSkippedCount > 0) handleTranslationError(createOversizedBlockError(), lang);
-                else chrome.runtime.sendMessage({ action: "translationComplete", message: st.noTextFound }).catch(() => { });
+                else sendRuntimeMessage({ action: "translationComplete", message: st.noTextFound });
                 return;
             }
             expectedTotalUnits = tus.length;
@@ -1895,10 +1982,7 @@
                         failures.push(error);
                         if (error?.translationFatal === true && !fatalCancelSent && !translationCancelled) {
                             fatalCancelSent = true;
-                            try {
-                                chrome.runtime.sendMessage({ action: "cancelTranslation" })
-                                    ?.catch?.(() => { });
-                            } catch (e) { }
+                            sendRuntimeMessage({ action: "cancelTranslation" });
                         }
                     })
             );
@@ -2068,6 +2152,15 @@
             return;
         }
         translationHasError = true;
+        if (extensionContextIsLost()) {
+            if (progressInterval) {
+                clearInterval(progressInterval);
+                progressInterval = null;
+            }
+            cleanupProcessingMarkers();
+            showExtensionContextLostPanel();
+            return;
+        }
         let errorMessage = st.errorOccurred;
         if (error && error.message) {
             errorMessage = error.message;
@@ -2082,7 +2175,7 @@
             progressInterval = null;
         }
         cleanupProcessingMarkers();
-        chrome.runtime.sendMessage({ action: "translationError", error: errorMessage, code: errorCode }).catch(() => { });
+        sendRuntimeMessage({ action: "translationError", error: errorMessage, code: errorCode });
     }
 
     function translationErrorCodeOf(error) {
@@ -2173,7 +2266,8 @@
         jsonExtractFailed: 'errBadResponse',
         emptyResponse: 'errBadResponse',
         invalidRequest: 'errInvalidRequest',
-        unknownError: 'errUnknown'
+        unknownError: 'errUnknown',
+        extensionReloaded: 'errExtensionReloaded'
     };
 
     const ERROR_CODE_ACTIONS = {
@@ -2193,7 +2287,8 @@
         emptyResponse: 'retry',
         jsonParseFailed: 'retry',
         jsonExtractFailed: 'retry',
-        unknownError: 'close'
+        unknownError: 'close',
+        extensionReloaded: 'close'
     };
 
     function localizedErrorCause(code) {
@@ -2212,7 +2307,7 @@
     }
 
     function openExtensionOptions() {
-        try { chrome.runtime.sendMessage({ action: 'openOptionsPage' }).catch(() => { }); } catch (e) { }
+        sendRuntimeMessage({ action: 'openOptionsPage' });
     }
 
     function retryTranslationFromPanel() {
@@ -2273,7 +2368,7 @@
         updateProgress();
         renderStatusPanel('cancelled');
         cleanupProcessingMarkers();
-        chrome.runtime.sendMessage({ action: "translationCancelled" }).catch(() => { });
+        sendRuntimeMessage({ action: "translationCancelled" });
     }
 
     function findBlockAncestor(node) {
@@ -2663,11 +2758,9 @@
         batch.forEach((item, index) => keyToTuId.set(`TU_${index}`, item.id));
         streamingBatchRegistry.set(batchId, { keyToTuId, generation: runGeneration });
         return new Promise((resolve, reject) => {
-            chrome.runtime.sendMessage({ action: "translateBatch", batch, batchId }, response => {
+            sendRuntimeMessage({ action: "translateBatch", batch, batchId }, (response, failure) => {
                 streamingBatchRegistry.delete(batchId);
-                if (chrome.runtime.lastError) {
-                    return reject(new Error(chrome.runtime.lastError.message));
-                }
+                if (failure) return reject(new Error(failure));
                 if (!response) return reject(new Error('No response from background'));
                 if (response.success) return resolve(response.translations || []);
                 const error = new Error(response.error || 'Translation failed');
@@ -3086,13 +3179,9 @@
             currentCancelBtn.disabled = true;
             currentCancelBtn.textContent = st.cancelling;
         }
-        try {
-            chrome.runtime.sendMessage({ action: "cancelTranslation", allFrames: true }, () => {
-                if (chrome.runtime.lastError) handleCancellation();
-            });
-        } catch (err) {
-            handleCancellation();
-        }
+        sendRuntimeMessage({ action: "cancelTranslation", allFrames: true }, (response, failure) => {
+            if (failure) handleCancellation();
+        });
     }
 
     function createStatusIndicator(lang) {
@@ -3170,6 +3259,7 @@
     function renderStatusPanel(phase, detail) {
         const card = getStatusCard();
         if (!card) return;
+        statusPanelPhase = phase;
         const options = detail || {};
         while (card.firstChild) card.removeChild(card.firstChild);
 
@@ -3270,6 +3360,7 @@
     }
 
     function removeStatusIndicator() {
+        statusPanelPhase = '';
         if (statusContainer && statusContainer.parentNode) {
             statusContainer.parentNode.removeChild(statusContainer);
             statusContainer = null;
@@ -3385,7 +3476,7 @@
             }
         }
         renderMiniProgress(translationProgress);
-        chrome.runtime.sendMessage({
+        sendRuntimeMessage({
             action: "updateProgress",
             progress: translationProgress,
             stats: {
@@ -3394,7 +3485,7 @@
                 translatedFragments: translatedUnitsCount,
                 totalFragments: expectedTotalUnits
             }
-        }).catch(() => { });
+        });
     }
 
     function finishTranslation() {
@@ -3410,7 +3501,7 @@
         updateProgress(100);
         renderStatusPanel('done');
         const completionMessage = oversizedSkippedCount > 0 ? oversizedSkippedLabel() : st.translationCompleted;
-        chrome.runtime.sendMessage({ action: "translationComplete", message: completionMessage }).catch(() => { });
+        sendRuntimeMessage({ action: "translationComplete", message: completionMessage });
         saveCurrentTranslationToCache().catch(() => { });
         if (oversizedSkippedCount === 0) setTimeout(() => { if (!isTranslating) removeStatusIndicator(); }, 3000);
         schedulePostFinishScans();
@@ -3423,11 +3514,15 @@
         }
         cacheRestoreMap = null;
         cacheRestoreActive = false;
+        if (extensionContextIsLost()) {
+            showExtensionContextLostPanel();
+            return;
+        }
         updateProgress();
         const errorMessage = error?.message || st.errorOccurred;
         const errorCode = translationErrorCodeOf(error);
         if (ensureStatusPanelForError()) showErrorPopup(errorMessage, errorCode);
-        chrome.runtime.sendMessage({ action: "translationError", error: errorMessage, code: errorCode }).catch(() => { });
+        sendRuntimeMessage({ action: "translationError", error: errorMessage, code: errorCode });
         saveCurrentTranslationToCache().catch(() => { });
     }
 
@@ -3732,22 +3827,17 @@
             if (requestId !== selectionRequestId) return;
             renderSelectionError(message || genericError);
         };
-        try {
-            chrome.runtime.sendMessage({ action: 'translateSelection', text }).then(function (response) {
-                if (requestId !== selectionRequestId) return;
-                if (!response) { handleFailure(genericError); return; }
-                if (response.cancelled) { closeSelectionPopup(); return; }
-                if (response.success) {
-                    renderSelectionResult(typeof response.translation === 'string' ? response.translation : '');
-                    return;
-                }
-                handleFailure(response.error);
-            }).catch(function (error) {
-                handleFailure(error?.message);
-            });
-        } catch (error) {
-            handleFailure(error?.message);
-        }
+        sendRuntimeMessage({ action: 'translateSelection', text }, function (response, failure) {
+            if (requestId !== selectionRequestId) return;
+            if (failure) { handleFailure(extensionReloadedMessage() || failure); return; }
+            if (!response) { handleFailure(genericError); return; }
+            if (response.cancelled) { closeSelectionPopup(); return; }
+            if (response.success) {
+                renderSelectionResult(typeof response.translation === 'string' ? response.translation : '');
+                return;
+            }
+            handleFailure(response.error);
+        });
     }
 
     function openSelectionPopup() {
@@ -3987,7 +4077,7 @@
         const hadRequest = selectionRequestId > 0;
         selectionRequestId++;
         if (hadRequest) {
-            try { chrome.runtime.sendMessage({ action: 'cancelSelectionTranslation' }).catch(() => { }); } catch (e) { }
+            sendRuntimeMessage({ action: 'cancelSelectionTranslation' });
         }
         if (selectionContainer && selectionContainer.parentNode) {
             selectionContainer.parentNode.removeChild(selectionContainer);

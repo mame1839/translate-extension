@@ -247,7 +247,7 @@ function handleContentScriptMessage(request, sender, sendResponse) {
     }
 
     if (request.action === "startTranslationAllFrames") {
-        chrome.tabs.sendMessage(tabId, { action: "startTranslationFromPopup" }).catch(() => { });
+        sendTabMessage(tabId, { action: "startTranslationFromPopup" });
         return false;
     }
 
@@ -255,11 +255,11 @@ function handleContentScriptMessage(request, sender, sendResponse) {
         const frameId = Number.isInteger(sender.frameId) ? sender.frameId : 0;
         if (request.allFrames === true) {
             for (const key of frameKeysForTab(tabId)) cancelFrameByKey(key);
-            chrome.tabs.sendMessage(tabId, { action: "translationCancelled" }).catch(() => { });
+            sendTabMessage(tabId, { action: "translationCancelled" });
         } else {
             const key = toFrameKey(tabId, frameId);
             cancelFrameByKey(key);
-            chrome.tabs.sendMessage(tabId, { action: "translationCancelled" }, { frameId }).catch(() => {
+            sendTabMessage(tabId, { action: "translationCancelled" }, { frameId }, () => {
                 frameStates.delete(key);
             });
         }
@@ -418,7 +418,7 @@ function handleTabUrlChange(tabId, newUrl) {
 try {
     chrome.contextMenus.onClicked.addListener(function (info, tab) {
         if (info.menuItemId === "toggleTranslation" && tab?.id) {
-            chrome.tabs.sendMessage(tab.id, { action: "toggleTranslation" }).catch(() => { });
+            sendTabMessage(tab.id, { action: "toggleTranslation" });
         }
     });
 } catch (e) { }
@@ -1239,6 +1239,21 @@ function parseCompletedTranslationPairs(partialText) {
     return result;
 }
 
+function sendTabMessage(tabId, message, options, onFailure) {
+    const fail = () => {
+        if (typeof onFailure !== 'function') return;
+        try { onFailure(); } catch (e) { }
+    };
+    try {
+        const sending = options
+            ? chrome.tabs.sendMessage(tabId, message, options)
+            : chrome.tabs.sendMessage(tabId, message);
+        if (sending && typeof sending.catch === 'function') sending.catch(fail);
+    } catch (e) {
+        fail();
+    }
+}
+
 function emitStreamingUpdates(streamContext, acc) {
     if (!streamContext || !streamContext.keys) return;
     const completedPairs = parseCompletedTranslationPairs(acc.fullText);
@@ -1255,12 +1270,8 @@ function emitStreamingUpdates(streamContext, acc) {
         batchId: streamContext.batchId,
         translations: updates
     };
-    try {
-        const sending = Number.isInteger(streamContext.frameId)
-            ? chrome.tabs.sendMessage(streamContext.tabId, message, { frameId: streamContext.frameId })
-            : chrome.tabs.sendMessage(streamContext.tabId, message);
-        if (sending && typeof sending.catch === 'function') sending.catch(() => { });
-    } catch (e) { }
+    const options = Number.isInteger(streamContext.frameId) ? { frameId: streamContext.frameId } : null;
+    sendTabMessage(streamContext.tabId, message, options);
 }
 
 function consumeSSELine(line, readChunk, acc, streamContext) {
@@ -1832,7 +1843,7 @@ try {
         const text = (info.selectionText || '').trim();
         if (!text) return;
         const frameId = Number.isInteger(info.frameId) ? info.frameId : 0;
-        chrome.tabs.sendMessage(tab.id, { action: "showSelectionTranslation", text }, { frameId }).catch(() => { });
+        sendTabMessage(tab.id, { action: "showSelectionTranslation", text }, { frameId });
     });
 } catch (e) { }
 
