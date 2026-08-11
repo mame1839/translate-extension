@@ -2888,6 +2888,7 @@
         restoreSubtree(snapshot);
         try { delete tu.block.dataset.translationStatus; } catch (e) { }
         try { delete tu.block.dataset.translatedHtml; } catch (e) { }
+        try { delete tu.block.dataset.tuTranslatedTemplate; } catch (e) { }
         try { tu.block.classList.remove('translated-text'); } catch (e) { }
         if (tu.progressCounted) {
             tu.progressCounted = false;
