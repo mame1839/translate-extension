@@ -2809,16 +2809,107 @@
         return true;
     }
 
+    function templateSignature(parsedNode, placeholders, referencePlaceholders) {
+        let signature = '';
+        for (const child of parsedNode.childNodes) {
+            if (child.nodeType === Node.TEXT_NODE) {
+                const text = (child.textContent || '').replace(/\s+/g, ' ').trim();
+                if (text) signature += 'T:' + text + '\n';
+                continue;
+            }
+            if (child.nodeType !== Node.ELEMENT_NODE) continue;
+            const match = child.nodeName.toLowerCase().match(/^([atbs])(\d+)$/);
+            if (!match) {
+                signature += templateSignature(child, placeholders, referencePlaceholders);
+                continue;
+            }
+            const entry = placeholders[parseInt(match[2], 10)];
+            const node = entry ? entry.node : null;
+            let name = 'P?' + match[0];
+            if (node) {
+                const index = referencePlaceholders.findIndex(reference => reference.node === node);
+                if (index >= 0) name = 'P' + index;
+            }
+            signature += name + '\n';
+            if (entry && (entry.type === 'tag' || entry.type === 'anchor')) {
+                signature += templateSignature(child, placeholders, referencePlaceholders);
+            }
+            signature += '/' + name + '\n';
+        }
+        return signature;
+    }
+
+    function appliedResultMatchesTranslation(tu, translatedTemplate) {
+        for (const entry of tu.placeholders) {
+            if (!entry.node || !tu.block.contains(entry.node)) return false;
+        }
+        const wanted = parseTemplateFragment(normalizeTranslatedTemplate(translatedTemplate, tu.placeholders));
+        if (!wanted) return false;
+        const applied = buildTU(tu.block);
+        if (!applied) return false;
+        const appliedFragment = parseTemplateFragment(applied.template);
+        if (!appliedFragment) return false;
+        return templateSignature(appliedFragment, applied.placeholders, tu.placeholders) ===
+            templateSignature(wanted, tu.placeholders, tu.placeholders);
+    }
+
+    function snapshotSubtree(node) {
+        const entry = { node, children: [] };
+        if (node.nodeType === Node.TEXT_NODE) {
+            entry.value = node.nodeValue;
+            return entry;
+        }
+        for (const child of node.childNodes) entry.children.push(snapshotSubtree(child));
+        return entry;
+    }
+
+    function restoreSubtree(entry) {
+        if (entry.node.nodeType === Node.TEXT_NODE) {
+            if (entry.node.nodeValue !== entry.value) entry.node.nodeValue = entry.value;
+            return;
+        }
+        for (const child of entry.children) restoreSubtree(child);
+        const wanted = entry.children.map(child => child.node);
+        const current = entry.node.childNodes;
+        let identical = current.length === wanted.length;
+        for (let index = 0; identical && index < wanted.length; index++) {
+            if (current[index] !== wanted[index]) identical = false;
+        }
+        if (identical) return;
+        if (typeof entry.node.replaceChildren === 'function') {
+            entry.node.replaceChildren(...wanted);
+        } else {
+            while (entry.node.firstChild) entry.node.removeChild(entry.node.firstChild);
+            for (const child of wanted) entry.node.appendChild(child);
+        }
+    }
+
+    function discardApplyThatDidNotMatch(tu, fromCacheRestore, snapshot) {
+        restoreSubtree(snapshot);
+        try { delete tu.block.dataset.translationStatus; } catch (e) { }
+        try { delete tu.block.dataset.translatedHtml; } catch (e) { }
+        try { tu.block.classList.remove('translated-text'); } catch (e) { }
+        if (tu.progressCounted) {
+            tu.progressCounted = false;
+            translatedUnitsCount--;
+        }
+        return markApplyFailed(tu, fromCacheRestore);
+    }
+
     function applyTranslation(tu, translatedTemplate, fromCacheRestore) {
         if (!tu || !tu.block || !tu.block.isConnected) return;
+        const snapshot = snapshotSubtree(tu.block);
         if (shouldUseTextOnlyApply(tu.block)) {
             applyTranslationInPlace(tu, translatedTemplate, fromCacheRestore);
         } else {
             applyTranslationByReplacement(tu, translatedTemplate, fromCacheRestore);
         }
-        if (tu.block.dataset?.translationStatus === 'translated') {
-            rememberTranslatedTemplate(tu.template, translatedTemplate);
+        if (tu.block.dataset?.translationStatus !== 'translated') return;
+        if (!appliedResultMatchesTranslation(tu, translatedTemplate)) {
+            discardApplyThatDidNotMatch(tu, fromCacheRestore, snapshot);
+            return;
         }
+        rememberTranslatedTemplate(tu.template, translatedTemplate);
     }
 
     function markApplyFailed(tu, fromCacheRestore) {
@@ -3107,13 +3198,18 @@
         s = s.replace(/^```[a-z]*\s*/i, '').replace(/```\s*$/i, '').trim();
         s = s.replace(/<([atbs])(\d+)\s*\/>/g, '<$1$2></$1$2>');
         const present = new Set();
+        const nodeKeepingIds = new Set();
         const tagRe = /<\/?([atbs])(\d+)\b[^>]*>/g;
         let m;
-        while ((m = tagRe.exec(s)) !== null) present.add(`${m[1]}${m[2]}`);
+        while ((m = tagRe.exec(s)) !== null) {
+            present.add(`${m[1]}${m[2]}`);
+            if (m[1] === 'b' || m[1] === 's') nodeKeepingIds.add(parseInt(m[2], 10));
+        }
         for (let i = 0; i < placeholders.length; i++) {
             const ph = placeholders[i];
             if (present.has(ph.ph)) continue;
             if (ph.type === 'block' || ph.type === 'skip') {
+                if (nodeKeepingIds.has(i)) continue;
                 s += `<${ph.ph}></${ph.ph}>`;
             } else if (ph.type === 'anchor' && ph.originalText) {
                 s += `<${ph.ph}>${escapeHtml(ph.originalText)}</${ph.ph}>`;
@@ -3217,7 +3313,8 @@
                 const tu = buildTU(block);
                 if (tu) {
                     if (textOnly) return applyTemplateTextOnly(tu, originalTemplate);
-                    if (applyTemplateWithPlaceholders(tu, originalTemplate)) return true;
+                    if (applyTemplateWithPlaceholders(tu, originalTemplate) &&
+                        tu.placeholders.every(entry => entry.node && block.contains(entry.node))) return true;
                 }
             } catch (e) { }
         }
