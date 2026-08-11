@@ -10,13 +10,5 @@
   "contextMenuToggle": {
     "message": "অনুবাদ চালু/বন্ধ করুন",
     "description": "Context menu item to toggle translation"
-  },
-  "commandTranslatePage": {
-    "message": "এই পৃষ্ঠা অনুবাদ করুন",
-    "description": "Keyboard shortcut description for starting translation"
-  },
-  "commandToggleTranslation": {
-    "message": "মূল ও অনুবাদের মধ্যে পরিবর্তন করুন",
-    "description": "Keyboard shortcut description for switching between original and translation"
   }
 }

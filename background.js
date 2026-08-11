@@ -2375,37 +2375,3 @@ function handleExtensionPageMessage(request, sender, sendResponse) {
 
     return false;
 }
-
-const KEYBOARD_COMMAND_ACTIONS = {
-    'translate-page': 'startTranslationFromPopup',
-    'toggle-translation': 'toggleTranslation'
-};
-
-function isCommandDispatchableUrl(url) {
-    if (!url) return true;
-    return url.startsWith('http://') || url.startsWith('https://');
-}
-
-function dispatchKeyboardCommand(tabId, url, action) {
-    if (!Number.isInteger(tabId) || tabId < 0) return;
-    if (!isCommandDispatchableUrl(url)) return;
-    chrome.tabs.sendMessage(tabId, { action }).catch(() => { });
-}
-
-function handleKeyboardCommand(command, tab) {
-    const action = KEYBOARD_COMMAND_ACTIONS[command];
-    if (!action) return;
-    if (tab && Number.isInteger(tab.id) && tab.id >= 0) {
-        dispatchKeyboardCommand(tab.id, tab.url, action);
-        return;
-    }
-    chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
-        if (chrome.runtime.lastError) return;
-        const target = Array.isArray(tabs) ? tabs[0] : null;
-        if (target) dispatchKeyboardCommand(target.id, target.url, action);
-    });
-}
-
-try {
-    chrome.commands.onCommand.addListener(handleKeyboardCommand);
-} catch (e) { }

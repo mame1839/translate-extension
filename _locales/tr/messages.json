@@ -10,13 +10,5 @@
   "contextMenuToggle": {
     "message": "Çeviriyi aç/kapat",
     "description": "Context menu item to toggle translation"
-  },
-  "commandTranslatePage": {
-    "message": "Bu sayfayı çevir",
-    "description": "Keyboard shortcut description for starting translation"
-  },
-  "commandToggleTranslation": {
-    "message": "Orijinal ve çeviri arasında geçiş yap",
-    "description": "Keyboard shortcut description for switching between original and translation"
   }
 }

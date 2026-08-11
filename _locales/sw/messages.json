@@ -10,13 +10,5 @@
   "contextMenuToggle": {
     "message": "Washa/zima tafsiri",
     "description": "Context menu item to toggle translation"
-  },
-  "commandTranslatePage": {
-    "message": "Tafsiri ukurasa huu",
-    "description": "Keyboard shortcut description for starting translation"
-  },
-  "commandToggleTranslation": {
-    "message": "Badilisha kati ya asili na tafsiri",
-    "description": "Keyboard shortcut description for switching between original and translation"
   }
 }

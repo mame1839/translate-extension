@@ -10,13 +10,5 @@
   "contextMenuToggle": {
     "message": "अनुवाद टॉगल करें",
     "description": "Context menu item to toggle translation"
-  },
-  "commandTranslatePage": {
-    "message": "इस पृष्ठ का अनुवाद करें",
-    "description": "Keyboard shortcut description for starting translation"
-  },
-  "commandToggleTranslation": {
-    "message": "मूल और अनुवाद के बीच बदलें",
-    "description": "Keyboard shortcut description for switching between original and translation"
   }
 }

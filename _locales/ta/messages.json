@@ -10,13 +10,5 @@
   "contextMenuToggle": {
     "message": "மொழிபெயர்ப்பை மாற்று",
     "description": "Context menu item to toggle translation"
-  },
-  "commandTranslatePage": {
-    "message": "இந்தப் பக்கத்தை மொழிபெயர்",
-    "description": "Keyboard shortcut description for starting translation"
-  },
-  "commandToggleTranslation": {
-    "message": "மூலத்திற்கும் மொழிபெயர்ப்பிற்கும் இடையே மாற்று",
-    "description": "Keyboard shortcut description for switching between original and translation"
   }
 }

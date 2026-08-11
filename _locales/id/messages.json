@@ -10,13 +10,5 @@
   "contextMenuToggle": {
     "message": "Aktifkan/nonaktifkan terjemahan",
     "description": "Context menu item to toggle translation"
-  },
-  "commandTranslatePage": {
-    "message": "Terjemahkan halaman ini",
-    "description": "Keyboard shortcut description for starting translation"
-  },
-  "commandToggleTranslation": {
-    "message": "Beralih antara asli dan terjemahan",
-    "description": "Keyboard shortcut description for switching between original and translation"
   }
 }
