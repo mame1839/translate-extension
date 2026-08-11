@@ -2474,7 +2474,6 @@
             }
             if (node.nodeType === Node.TEXT_NODE) {
                 const text = node.textContent;
-                if (!text) return;
                 if (!runOpen) {
                     textRuns.push({ nodes: [], translatable: false });
                     runOpen = true;
@@ -2813,7 +2812,6 @@
             for (const child of parent.childNodes) {
                 if (child.nodeType === Node.TEXT_NODE) {
                     const text = child.textContent;
-                    if (!text) continue;
                     if (!runOpen) {
                         runs.push({ nodes: [], translatable: false });
                         runOpen = true;
@@ -2841,31 +2839,167 @@
         return runs;
     }
 
+    function placeholderNameOfNode(node) {
+        if (!node || node.nodeType !== Node.ELEMENT_NODE) return '';
+        const name = node.nodeName.toLowerCase();
+        return /^[atbs]\d+$/.test(name) ? name : '';
+    }
+
+    function slotKeyWithin(node, root, nameOf, allowedScopeNames) {
+        let scope = node.parentNode;
+        let scopeName = '';
+        while (scope && scope !== root) {
+            const name = nameOf(scope);
+            if (name && (!allowedScopeNames || allowedScopeNames.has(name))) {
+                scopeName = name;
+                break;
+            }
+            scope = scope.parentNode;
+        }
+        if (!scope) return null;
+        let atScopeLevel = node;
+        while (atScopeLevel && atScopeLevel.parentNode !== scope) atScopeLevel = atScopeLevel.parentNode;
+        if (!atScopeLevel) return null;
+        let previous = atScopeLevel.previousSibling;
+        while (previous) {
+            const name = nameOf(previous);
+            if (name) return scopeName + '>' + name;
+            previous = previous.previousSibling;
+        }
+        return scopeName + '>';
+    }
+
+    function collectSlotTexts(parsed, liveScopeNames) {
+        const bySlot = new Map();
+        const byScope = new Map();
+        const slotKeysByScope = new Map();
+        const translatedScopes = new Set();
+        const walker = document.createTreeWalker(parsed, NodeFilter.SHOW_TEXT);
+        let node;
+        while (node = walker.nextNode()) {
+            const value = node.nodeValue;
+            if (!value) continue;
+            const key = slotKeyWithin(node, parsed, placeholderNameOfNode, liveScopeNames);
+            if (key === null) continue;
+            const scopeName = key.slice(0, key.indexOf('>'));
+            const slotTexts = bySlot.get(key);
+            if (slotTexts) {
+                slotTexts.push(value);
+            } else {
+                bySlot.set(key, [value]);
+                const scopeKeys = slotKeysByScope.get(scopeName);
+                if (scopeKeys) scopeKeys.push(key);
+                else slotKeysByScope.set(scopeName, [key]);
+            }
+            const scopeTexts = byScope.get(scopeName);
+            if (scopeTexts) scopeTexts.push(value);
+            else byScope.set(scopeName, [value]);
+            if (isTranslatableText(value)) translatedScopes.add(scopeName);
+        }
+        return { bySlot, byScope, slotKeysByScope, translatedScopes };
+    }
+
+    function collectLiveRunSlots(tu, runs) {
+        const placeholderNames = new Map();
+        for (const entry of tu.placeholders) {
+            if (entry.node) placeholderNames.set(entry.node, entry.ph);
+        }
+        const nameOf = node => placeholderNames.get(node) || '';
+        const scopes = new Map();
+        for (const run of runs) {
+            if (run.nodes.length === 0) continue;
+            const key = slotKeyWithin(run.nodes[0], tu.block, nameOf, null);
+            if (key === null) continue;
+            const scopeName = key.slice(0, key.indexOf('>'));
+            let scope = scopes.get(scopeName);
+            if (!scope) {
+                scope = { runs: [], slots: new Map() };
+                scopes.set(scopeName, scope);
+            }
+            scope.runs.push(run);
+            const slotRuns = scope.slots.get(key);
+            if (slotRuns) slotRuns.push(run);
+            else scope.slots.set(key, [run]);
+        }
+        return scopes;
+    }
+
+    function writeRunText(run, value) {
+        run.nodes.forEach((node, index) => {
+            node.nodeValue = index === 0 ? value : '';
+        });
+    }
+
+    function planScopeWrites(scope, scopeName, translated, writes) {
+        const translatedKeys = translated.slotKeysByScope.get(scopeName) || [];
+        const everySegmentHasASlot = translatedKeys.every(key => scope.slots.has(key));
+
+        if (!everySegmentHasASlot) {
+            const scopeTexts = translated.byScope.get(scopeName);
+            const target = scope.runs.find(run => run.translatable) || scope.runs[0];
+            writes.push({ run: target, value: scopeTexts.join('') });
+            for (const run of scope.runs) {
+                if (run !== target && run.translatable) writes.push({ run, value: '' });
+            }
+            return;
+        }
+
+        scope.slots.forEach((slotRuns, key) => {
+            const texts = translated.bySlot.get(key);
+            if (!texts) {
+                for (const run of slotRuns) {
+                    if (run.translatable) writes.push({ run, value: '' });
+                }
+                return;
+            }
+            if (texts.length === slotRuns.length) {
+                slotRuns.forEach((run, index) => writes.push({ run, value: texts[index] }));
+                return;
+            }
+            writes.push({ run: slotRuns[0], value: texts.join('') });
+            for (let index = 1; index < slotRuns.length; index++) {
+                if (slotRuns[index].translatable) writes.push({ run: slotRuns[index], value: '' });
+            }
+        });
+    }
+
+    function planSlotWrites(scopes, translated) {
+        const writes = [];
+        let everyScopeTranslated = true;
+        scopes.forEach((scope, scopeName) => {
+            const scopeNeedsText = scope.runs.some(run => run.translatable);
+            if (scopeNeedsText && !translated.translatedScopes.has(scopeName)) {
+                everyScopeTranslated = false;
+                return;
+            }
+            if (!translated.byScope.has(scopeName)) return;
+            planScopeWrites(scope, scopeName, translated, writes);
+        });
+        if (!everyScopeTranslated) return null;
+        return writes.length > 0 ? writes : null;
+    }
+
     function applyTemplateTextOnly(tu, template) {
         const normalized = normalizeTranslatedTemplate(template, tu.placeholders);
         const parsed = parseTemplateFragment(normalized);
         if (!parsed) return false;
 
-        const translatedTexts = [];
-        const parsedWalker = document.createTreeWalker(parsed, NodeFilter.SHOW_TEXT);
-        let t;
-        while (t = parsedWalker.nextNode()) {
-            if (isTranslatableText(t.nodeValue)) translatedTexts.push(t.nodeValue);
-        }
-
         let runs = tu.textRuns;
         const runsAreLive = Array.isArray(runs) &&
             runs.every(run => run.nodes.every(node => tu.block.contains(node)));
         if (!runsAreLive) runs = collectLiveTextRuns(tu.block);
+        if (!runs.some(run => run.translatable)) return false;
 
-        const translatableRuns = runs.filter(run => run.translatable);
-        if (translatableRuns.length === 0 || translatableRuns.length !== translatedTexts.length) return false;
+        const scopes = collectLiveRunSlots(tu, runs);
+        if (scopes.size === 0) return false;
 
-        translatableRuns.forEach((run, index) => {
-            run.nodes.forEach((node, nodeIndex) => {
-                node.nodeValue = nodeIndex === 0 ? translatedTexts[index] : '';
-            });
-        });
+        const translated = collectSlotTexts(parsed, new Set(scopes.keys()));
+        if (translated.translatedScopes.size === 0) return false;
+
+        const writes = planSlotWrites(scopes, translated);
+        if (!writes) return false;
+
+        for (const write of writes) writeRunText(write.run, write.value);
         return true;
     }
 
