@@ -62,7 +62,8 @@
             retranslateButton: t.popupRetranslate,
             translateRestButton: t.translateRestButton,
             newContentTitle: t.newContentTitle,
-            blocksTooLong: t.blocksTooLong
+            blocksTooLong: t.blocksTooLong,
+            nothingTranslated: t.nothingTranslated
         };
     }
 
@@ -469,7 +470,7 @@
     const RESTORE_NOTICE_TIMEOUT_MS = 12000;
     let postNavigationCooldownUntil = 0;
     let highlightTranslated = false;
-    let lastFinishTime = 0;
+    let fatalErrorCancelPending = false;
     let postFinishScanCount = 0;
     const POST_FINISH_MAX_SCANS = 1;
     const POST_FINISH_SCAN_DELAYS = [3000];
@@ -1106,6 +1107,7 @@
         lastScrollScanHeight = -1;
         autoRetranslateRounds = 0;
         continueNoticeShown = false;
+        translationRunGeneration++;
         try { cleanupProcessingMarkers(); } catch (e) { }
         try { translationUnits.clear(); } catch (e) { }
         domUpdateQueue = [];
@@ -1888,6 +1890,7 @@
         pendingRetranslation = false;
         translationCancelled = false;
         translationHasError = false;
+        fatalErrorCancelPending = false;
         translatedUnitsCount = 0;
         totalBatches = 0;
         batchesProcessed = 0;
@@ -1916,7 +1919,7 @@
             const allTus = collectTranslationUnits();
             if (allTus.length === 0) {
                 isTranslating = false;
-                sendRuntimeMessage({ action: "translationComplete", message: st.noTextFound });
+                reportNoTranslatableText(userInitiated);
                 return;
             }
 
@@ -1932,7 +1935,7 @@
             if (tus.length === 0) {
                 isTranslating = false;
                 if (oversizedSkippedCount > 0) handleTranslationError(createOversizedBlockError(), lang);
-                else sendRuntimeMessage({ action: "translationComplete", message: st.noTextFound });
+                else reportNoTranslatableText(userInitiated);
                 return;
             }
             expectedTotalUnits = tus.length;
@@ -1969,7 +1972,6 @@
 
             const failures = [];
             let cancelledBatchCount = 0;
-            let fatalCancelSent = false;
             const batchPromises = batches.map(batch =>
                 processBatch(batch, runGeneration)
                     .then(translations => {
@@ -1987,8 +1989,8 @@
                             return;
                         }
                         failures.push(error);
-                        if (error?.translationFatal === true && !fatalCancelSent && !translationCancelled) {
-                            fatalCancelSent = true;
+                        if (error?.translationFatal === true && !fatalErrorCancelPending && !translationCancelled) {
+                            fatalErrorCancelPending = true;
                             sendRuntimeMessage({ action: "cancelTranslation" });
                         }
                     })
@@ -2006,6 +2008,10 @@
                 }, 50);
             });
 
+            if (runGeneration !== translationRunGeneration) {
+                removeStatusIndicator();
+                return;
+            }
             if (translationCancelled) {
                 handleCancellation(lang);
             } else if (failures.length > 0) {
@@ -2017,6 +2023,8 @@
                 }
             } else if (cancelledBatchCount > 0) {
                 handleCancellation(lang);
+            } else if (translatedUnitsCount === 0 && expectedTotalUnits > 0) {
+                handleTranslationError(createNothingTranslatedError(), lang);
             } else {
                 finishTranslation();
             }
@@ -2236,7 +2244,6 @@
         oversizedSkippedCount = 0;
         lastScrollScanHeight = -1;
         postFinishScanCount = 0;
-        lastFinishTime = 0;
     }
 
     async function clearPageCacheAndRetranslate() {
@@ -2282,6 +2289,7 @@
         invalidRequest: 'settings',
         maxTokensError: 'settings',
         blockTooLong: 'settings',
+        nothingTranslated: 'retry',
         apiLimitReached: 'retry',
         requestTimeout: 'retry',
         serverError: 'retry',
@@ -2368,6 +2376,7 @@
             progressInterval = null;
         }
         updateProgress();
+        restoreStatusPanelFromMinimized();
         renderStatusPanel('cancelled');
         cleanupProcessingMarkers();
         sendRuntimeMessage({ action: "translationCancelled" });
@@ -2732,6 +2741,17 @@
         const error = new Error(oversizedSkippedLabel() || 'Blocks exceed the output token limit');
         error.translationErrorCode = 'blockTooLong';
         return error;
+    }
+
+    function createNothingTranslatedError() {
+        const error = new Error(st.nothingTranslated || 'No block could be translated');
+        error.translationErrorCode = 'nothingTranslated';
+        return error;
+    }
+
+    function reportNoTranslatableText(userInitiated) {
+        if (!userInitiated) return;
+        if (ensureStatusPanelForError()) renderStatusPanel('empty');
     }
 
     function clearFailedMarkersForRetry() {
@@ -3670,6 +3690,7 @@
     function statusPanelTitle(phase) {
         if (phase === 'done') return st.translationCompleted;
         if (phase === 'cancelled') return st.translationCancelled;
+        if (phase === 'empty') return st.noTextFound;
         if (phase === 'error') return st.errorTitle || st.errorOccurred;
         return st.translating;
     }
@@ -3806,6 +3827,11 @@
         minimizedShadowRoot = null;
     }
 
+    function restoreStatusPanelFromMinimized() {
+        if (statusContainer) statusContainer.style.display = 'block';
+        removeMinimizedIndicator();
+    }
+
     function removeStatusIndicator() {
         statusPanelPhase = '';
         if (statusContainer && statusContainer.parentNode) {
@@ -3936,9 +3962,6 @@
     }
 
     function finishTranslation() {
-        const now = Date.now();
-        if (now - lastFinishTime < 1500) return;
-        lastFinishTime = now;
         if (progressInterval) {
             clearInterval(progressInterval);
             progressInterval = null;
@@ -3946,6 +3969,7 @@
         cacheRestoreMap = null;
         cacheRestoreActive = false;
         updateProgress(100);
+        restoreStatusPanelFromMinimized();
         renderStatusPanel('done');
         const completionMessage = oversizedSkippedCount > 0 ? oversizedSkippedLabel() : st.translationCompleted;
         sendRuntimeMessage({ action: "translationComplete", message: completionMessage });
@@ -4651,7 +4675,7 @@
                         }
                         return false;
                     case "translationCancelled":
-                        if (!translationCancelled && !translationHasError) handleCancellation();
+                        if (!translationCancelled && !translationHasError && !fatalErrorCancelPending) handleCancellation();
                         sendResponse({ status: "cancelled_ack" });
                         return false;
                     case "streamingTranslationUpdate":
