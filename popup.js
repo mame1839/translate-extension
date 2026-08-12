@@ -216,18 +216,18 @@ function buildSegmented(pageState) {
     const seg = document.createElement('div');
     seg.className = 'segmented';
     const showingOriginal = !!pageState.showingOriginal;
-    seg.appendChild(segmentButton(t.popupShowOriginal, showingOriginal));
-    seg.appendChild(segmentButton(t.popupShowTranslation, !showingOriginal));
+    seg.appendChild(segmentButton(t.popupShowOriginal, showingOriginal, 'original'));
+    seg.appendChild(segmentButton(t.popupShowTranslation, !showingOriginal, 'translation'));
     return seg;
 }
 
-function segmentButton(label, active) {
+function segmentButton(label, active, view) {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.setAttribute('aria-pressed', String(active));
     if (active) btn.innerHTML = SEGMENT_CHECK;
     btn.appendChild(document.createTextNode(label));
-    if (!active) btn.addEventListener('click', toggleTranslationView);
+    btn.addEventListener('click', () => toggleTranslationView(view));
     return btn;
 }
 
@@ -266,12 +266,12 @@ async function cancelTranslation() {
     refreshPageState(true);
 }
 
-async function toggleTranslationView() {
+async function toggleTranslationView(view) {
     if (busy || !activeTab) return;
     busy = true;
     setActionsDisabled(true);
     try {
-        await chrome.tabs.sendMessage(activeTab.id, { action: 'toggleTranslation' });
+        await chrome.tabs.sendMessage(activeTab.id, { action: 'toggleTranslation', view });
     } catch (e) { }
     busy = false;
     refreshPageState(true);

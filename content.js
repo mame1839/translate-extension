@@ -3002,14 +3002,20 @@
         return true;
     }
 
-    function rearrangeWithoutRebuilding(tu, translatedTemplate, fromCacheRestore) {
-        if (typeof tu.block.moveBefore !== 'function' && blockContainsCustomElement(tu.block)) return false;
-        const parsed = parseTemplateFragment(normalizeTranslatedTemplate(translatedTemplate, tu.placeholders));
-        if (!parsed) return false;
+    function planRearrangementToTemplate(tu, template) {
+        const parsed = parseTemplateFragment(normalizeTranslatedTemplate(template, tu.placeholders));
+        if (!parsed) return null;
         const plan = [];
         const topLevel = collectRearrangedChildren(parsed, tu.placeholders, tu.block, plan);
-        if (!topLevel) return false;
+        if (!topLevel) return null;
         plan.push({ parent: tu.block, wanted: topLevel });
+        return plan;
+    }
+
+    function rearrangeWithoutRebuilding(tu, translatedTemplate, fromCacheRestore) {
+        if (typeof tu.block.moveBefore !== 'function' && blockContainsCustomElement(tu.block)) return false;
+        const plan = planRearrangementToTemplate(tu, translatedTemplate);
+        if (!plan) return false;
         if (!rearrangementKeepsTranslatableText(plan)) return false;
 
         const snapshot = snapshotSubtree(tu.block);
@@ -3453,16 +3459,61 @@
         return document.createTextNode(parsedNode.textContent || '');
     }
 
+    function placeholderOrderFromAppliedTemplate(template, count) {
+        if (typeof template !== 'string' || !template) return null;
+        const order = [];
+        const seen = new Set();
+        const tagRe = /<([atbs])(\d+)\b[^>]*>/g;
+        let match;
+        while ((match = tagRe.exec(template)) !== null) {
+            const index = parseInt(match[2], 10);
+            if (index >= count || seen.has(index)) return null;
+            seen.add(index);
+            order.push(index);
+        }
+        for (let index = 0; index < count; index++) {
+            if (!seen.has(index)) order.push(index);
+        }
+        return order;
+    }
+
+    function placeholdersInOriginalOrder(tu, appliedTemplate) {
+        const order = placeholderOrderFromAppliedTemplate(appliedTemplate, tu.placeholders.length);
+        if (!order) return null;
+        const ordered = new Array(tu.placeholders.length);
+        for (let position = 0; position < order.length; position++) {
+            const entry = tu.placeholders[position];
+            const originalIndex = order[position];
+            ordered[originalIndex] = Object.assign({}, entry, { ph: entry.ph.charAt(0) + originalIndex });
+        }
+        return ordered;
+    }
+
+    function writeBlockBackToTemplate(tu, originalTemplate, textOnly) {
+        if (!textOnly) return applyTemplateWithPlaceholders(tu, originalTemplate);
+        const plan = planRearrangementToTemplate(tu, originalTemplate);
+        if (!plan) return false;
+        applyRearrangementPlan(plan);
+        return true;
+    }
+
     function revertBlockToOriginal(block) {
         const textOnly = shouldUseTextOnlyApply(block);
         const originalTemplate = block.dataset.tuTemplate;
         if (typeof originalTemplate === 'string' && originalTemplate) {
             try {
                 const tu = buildTU(block);
-                if (tu) {
-                    if (textOnly) return applyTemplateTextOnly(tu, originalTemplate);
-                    if (applyTemplateWithPlaceholders(tu, originalTemplate) &&
-                        tu.placeholders.every(entry => entry.node && block.contains(entry.node))) return true;
+                const ordered = tu ? placeholdersInOriginalOrder(tu, block.dataset.tuTranslatedTemplate) : null;
+                if (ordered) {
+                    tu.placeholders = ordered;
+                    const snapshot = snapshotSubtree(block);
+                    let restored = false;
+                    try {
+                        restored = writeBlockBackToTemplate(tu, originalTemplate, textOnly) &&
+                            appliedResultMatchesTranslation(tu, originalTemplate);
+                    } catch (e) { }
+                    if (restored) return true;
+                    restoreSubtree(snapshot);
                 }
             } catch (e) { }
         }
@@ -3484,7 +3535,7 @@
         }
     }
 
-    function toggleAllTranslations() {
+    function toggleAllTranslations(requestedView) {
         if (isTranslating) return;
         clearTimeout(observerDebounceTimer);
         disconnectAllObservers();
@@ -3495,15 +3546,21 @@
                 block => blocks.push(block)
             );
             if (blocks.length === 0) return;
-            const shouldRevert = blocks.some(block => block.dataset.translationStatus === 'translated');
+            let shouldRevert = blocks.some(block => block.dataset.translationStatus === 'translated');
+            if (requestedView === 'original') shouldRevert = true;
+            else if (requestedView === 'translation') shouldRevert = false;
             blocks.forEach(block => {
                 if (shouldRevert) {
-                    if (block.dataset.translationStatus === 'translated' && revertBlockToOriginal(block)) {
+                    if (block.dataset.translationStatus !== 'translated') return;
+                    if (revertBlockToOriginal(block)) {
                         block.dataset.translationStatus = 'original';
                         block.classList.remove('translated-text');
+                    } else {
+                        block.dataset.translationStatus = 'failed';
                     }
                     return;
                 }
+                if (block.dataset.translationStatus === 'translated') return;
                 if (typeof block.dataset.tuTranslatedTemplate === 'string' && block.dataset.tuTranslatedTemplate) {
                     try {
                         const tu = buildTU(block);
@@ -4552,7 +4609,7 @@
                         if (isTranslating) {
                             sendResponse({ status: "Translating" });
                         } else {
-                            toggleAllTranslations();
+                            toggleAllTranslations(request.view);
                             sendResponse({ status: "toggled" });
                         }
                         return false;
