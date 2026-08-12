@@ -140,7 +140,9 @@ async function refreshPageState(force) {
         pageState.mixedView ? 1 : 0,
         Math.round(pageState.progress || 0),
         stats.translatedFragments || 0,
-        stats.totalFragments || 0
+        stats.totalFragments || 0,
+        pageState.restorableChars || 0,
+        pageState.hasUntranslatedText ? 1 : 0
     ].join('|');
     lastView = view;
     if (!force && signature === lastSignature) return;
@@ -193,10 +195,19 @@ function renderActions(view, pageState) {
     const area = els.actionArea;
     area.replaceChildren();
     if (view === 'idle') {
-        area.appendChild(actionButton('btn btn-filled', t.popupTranslatePage, startTranslation));
+        if (pageState.restorableChars > 0 && !pageState.cacheReadError) {
+            area.appendChild(restorableHintElement(pageState));
+            area.appendChild(actionButton('btn btn-tonal', t.popupRestoreFromCache, restoreFromCache));
+            area.appendChild(actionButton('btn btn-filled', t.popupTranslateApi, startTranslation));
+        } else {
+            area.appendChild(actionButton('btn btn-filled', t.popupTranslatePage, startTranslation));
+        }
     } else if (view === 'translating') {
         area.appendChild(actionButton('btn btn-danger-tonal', t.cancelBtn, cancelTranslation));
     } else if (view === 'translated') {
+        if (pageState.hasUntranslatedText) {
+            area.appendChild(actionButton('btn btn-tonal', t.popupTranslateRemaining, startTranslation));
+        }
         area.appendChild(buildSegmented(pageState));
         const row = document.createElement('div');
         row.className = 'action-row';
@@ -211,6 +222,17 @@ function renderActions(view, pageState) {
         row.appendChild(actionButton('btn btn-text', t.openOptions, openOptions));
         area.appendChild(row);
     }
+}
+
+function restorableHintElement(pageState) {
+    const p = document.createElement('p');
+    p.className = 'restore-hint';
+    const percent = Math.max(1, Math.round((pageState.restorableChars / pageState.totalChars) * 100));
+    p.textContent = t.popupRestorableHint
+        .replace('{percent}', String(percent))
+        .replace('{matched}', String(pageState.restorableChars))
+        .replace('{total}', String(pageState.totalChars));
+    return p;
 }
 
 function buildSegmented(pageState) {
@@ -243,6 +265,17 @@ async function startTranslation() {
     setActionsDisabled(true);
     try {
         await chrome.tabs.sendMessage(activeTab.id, { action: 'startTranslationFromPopup' });
+    } catch (e) { }
+    busy = false;
+    refreshPageState(true);
+}
+
+async function restoreFromCache() {
+    if (busy || !activeTab || !pageSupported) return;
+    busy = true;
+    setActionsDisabled(true);
+    try {
+        await chrome.tabs.sendMessage(activeTab.id, { action: 'restoreFromCacheOnly' });
     } catch (e) { }
     busy = false;
     refreshPageState(true);
