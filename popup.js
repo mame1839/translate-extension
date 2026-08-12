@@ -137,6 +137,7 @@ async function refreshPageState(force) {
         pageState.excluded ? 1 : 0,
         pageState.alwaysTranslate ? 1 : 0,
         pageState.showingOriginal ? 1 : 0,
+        pageState.mixedView ? 1 : 0,
         Math.round(pageState.progress || 0),
         stats.translatedFragments || 0,
         stats.totalFragments || 0
@@ -215,19 +216,20 @@ function renderActions(view, pageState) {
 function buildSegmented(pageState) {
     const seg = document.createElement('div');
     seg.className = 'segmented';
+    const mixed = !!pageState.mixedView;
     const showingOriginal = !!pageState.showingOriginal;
-    seg.appendChild(segmentButton(t.popupShowOriginal, showingOriginal));
-    seg.appendChild(segmentButton(t.popupShowTranslation, !showingOriginal));
+    seg.appendChild(segmentButton(t.popupShowOriginal, !mixed && showingOriginal, 'original'));
+    seg.appendChild(segmentButton(t.popupShowTranslation, !mixed && !showingOriginal, 'translation'));
     return seg;
 }
 
-function segmentButton(label, active) {
+function segmentButton(label, active, view) {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.setAttribute('aria-pressed', String(active));
     if (active) btn.innerHTML = SEGMENT_CHECK;
     btn.appendChild(document.createTextNode(label));
-    if (!active) btn.addEventListener('click', toggleTranslationView);
+    btn.addEventListener('click', () => toggleTranslationView(view));
     return btn;
 }
 
@@ -266,12 +268,12 @@ async function cancelTranslation() {
     refreshPageState(true);
 }
 
-async function toggleTranslationView() {
+async function toggleTranslationView(view) {
     if (busy || !activeTab) return;
     busy = true;
     setActionsDisabled(true);
     try {
-        await chrome.tabs.sendMessage(activeTab.id, { action: 'toggleTranslation' });
+        await chrome.tabs.sendMessage(activeTab.id, { action: 'toggleTranslation', view });
     } catch (e) { }
     busy = false;
     refreshPageState(true);

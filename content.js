@@ -2956,7 +2956,7 @@
         parent.insertBefore(node, reference);
     }
 
-    function applyRearrangementPlan(plan) {
+    function applyRearrangementPlan(plan, allowElementMoves) {
         for (const step of plan) {
             const parent = step.parent;
             const spareTexts = [];
@@ -2982,12 +2982,19 @@
                     cursor = cursor.nextSibling;
                     continue;
                 }
+                if (!allowElementMoves && node.nodeType === Node.ELEMENT_NODE) return false;
                 placeNodeBefore(parent, node, cursor);
             }
             for (let index = spareCursor; index < spareTexts.length; index++) {
                 spareTexts[index].nodeValue = '';
             }
         }
+        return true;
+    }
+
+    function blockAllowsElementMoves(block) {
+        if (typeof block.moveBefore === 'function') return true;
+        return !blockContainsCustomElement(block);
     }
 
     function rearrangementKeepsTranslatableText(plan) {
@@ -3012,19 +3019,28 @@
         return true;
     }
 
-    function rearrangeWithoutRebuilding(tu, translatedTemplate, fromCacheRestore) {
-        if (typeof tu.block.moveBefore !== 'function' && blockContainsCustomElement(tu.block)) return false;
-        const parsed = parseTemplateFragment(normalizeTranslatedTemplate(translatedTemplate, tu.placeholders));
-        if (!parsed) return false;
+    function planRearrangementToTemplate(tu, template) {
+        const parsed = parseTemplateFragment(normalizeTranslatedTemplate(template, tu.placeholders));
+        if (!parsed) return null;
         const plan = [];
         const topLevel = collectRearrangedChildren(parsed, tu.placeholders, tu.block, plan);
-        if (!topLevel) return false;
+        if (!topLevel) return null;
         plan.push({ parent: tu.block, wanted: topLevel });
+        return plan;
+    }
+
+    function rearrangeWithoutRebuilding(tu, translatedTemplate, fromCacheRestore) {
+        if (!blockAllowsElementMoves(tu.block)) return false;
+        const plan = planRearrangementToTemplate(tu, translatedTemplate);
+        if (!plan) return false;
         if (!rearrangementKeepsTranslatableText(plan)) return false;
 
         const snapshot = snapshotSubtree(tu.block);
         try {
-            applyRearrangementPlan(plan);
+            if (!applyRearrangementPlan(plan, true)) {
+                restoreSubtree(snapshot);
+                return false;
+            }
         } catch (e) {
             restoreSubtree(snapshot);
             return false;
@@ -3463,16 +3479,63 @@
         return document.createTextNode(parsedNode.textContent || '');
     }
 
+    function placeholderOrderFromAppliedTemplate(template, count) {
+        if (typeof template !== 'string' || !template) return null;
+        const order = [];
+        const seen = new Set();
+        const tagRe = /<([atbs])(\d+)\b[^>]*>/g;
+        let match;
+        while ((match = tagRe.exec(template)) !== null) {
+            const index = parseInt(match[2], 10);
+            if (index >= count || seen.has(index)) return null;
+            seen.add(index);
+            order.push(index);
+        }
+        for (let index = 0; index < count; index++) {
+            if (!seen.has(index)) order.push(index);
+        }
+        return order;
+    }
+
+    function placeholdersInOriginalOrder(tu, appliedTemplate) {
+        const order = placeholderOrderFromAppliedTemplate(appliedTemplate, tu.placeholders.length);
+        if (!order) return null;
+        const ordered = new Array(tu.placeholders.length);
+        for (let position = 0; position < order.length; position++) {
+            const entry = tu.placeholders[position];
+            const originalIndex = order[position];
+            ordered[originalIndex] = Object.assign({}, entry, { ph: entry.ph.charAt(0) + originalIndex });
+        }
+        return ordered;
+    }
+
+    function writeBlockBackToTemplate(tu, originalTemplate, textOnly) {
+        if (!textOnly) return applyTemplateWithPlaceholders(tu, originalTemplate);
+        const plan = planRearrangementToTemplate(tu, originalTemplate);
+        if (!plan) return false;
+        return applyRearrangementPlan(plan, blockAllowsElementMoves(tu.block));
+    }
+
     function revertBlockToOriginal(block) {
         const textOnly = shouldUseTextOnlyApply(block);
         const originalTemplate = block.dataset.tuTemplate;
+        const appliedTemplate = block.dataset.tuTranslatedTemplate;
         if (typeof originalTemplate === 'string' && originalTemplate) {
             try {
                 const tu = buildTU(block);
-                if (tu) {
-                    if (textOnly) return applyTemplateTextOnly(tu, originalTemplate);
-                    if (applyTemplateWithPlaceholders(tu, originalTemplate) &&
-                        tu.placeholders.every(entry => entry.node && block.contains(entry.node))) return true;
+                const ordered = tu ? placeholdersInOriginalOrder(tu, appliedTemplate) : null;
+                if (ordered) {
+                    tu.placeholders = ordered;
+                    if (appliedResultMatchesTranslation(tu, appliedTemplate)) {
+                        const snapshot = snapshotSubtree(block);
+                        let restored = false;
+                        try {
+                            restored = writeBlockBackToTemplate(tu, originalTemplate, textOnly) &&
+                                appliedResultMatchesTranslation(tu, originalTemplate);
+                        } catch (e) { }
+                        if (restored) return true;
+                        restoreSubtree(snapshot);
+                    }
                 }
             } catch (e) { }
         }
@@ -3494,7 +3557,7 @@
         }
     }
 
-    function toggleAllTranslations() {
+    function toggleAllTranslations(requestedView) {
         if (isTranslating) return;
         clearTimeout(observerDebounceTimer);
         disconnectAllObservers();
@@ -3505,15 +3568,21 @@
                 block => blocks.push(block)
             );
             if (blocks.length === 0) return;
-            const shouldRevert = blocks.some(block => block.dataset.translationStatus === 'translated');
+            let shouldRevert = blocks.some(block => block.dataset.translationStatus === 'translated');
+            if (requestedView === 'original') shouldRevert = true;
+            else if (requestedView === 'translation') shouldRevert = false;
             blocks.forEach(block => {
                 if (shouldRevert) {
-                    if (block.dataset.translationStatus === 'translated' && revertBlockToOriginal(block)) {
+                    if (block.dataset.translationStatus !== 'translated') return;
+                    if (revertBlockToOriginal(block)) {
                         block.dataset.translationStatus = 'original';
                         block.classList.remove('translated-text');
+                    } else {
+                        block.dataset.translationStatus = 'failed';
                     }
                     return;
                 }
+                if (block.dataset.translationStatus === 'translated') return;
                 if (typeof block.dataset.tuTranslatedTemplate === 'string' && block.dataset.tuTranslatedTemplate) {
                     try {
                         const tu = buildTU(block);
@@ -3928,22 +3997,27 @@
     function collectPopupPageState() {
         let translatedBlocks = 0;
         let revertedBlocks = 0;
+        let stuckTranslatedBlocks = 0;
         try {
             forEachMarkedElement(
-                '[data-translation-status="translated"], [data-translation-status="original"]',
+                '[data-translation-status="translated"], [data-translation-status="original"], [data-translation-status="failed"]',
                 block => {
-                    if (block.dataset.translationStatus === 'translated') translatedBlocks++;
-                    else revertedBlocks++;
+                    const status = block.dataset.translationStatus;
+                    if (status === 'translated') translatedBlocks++;
+                    else if (status === 'original') revertedBlocks++;
+                    else if ('translatedHtml' in block.dataset) stuckTranslatedBlocks++;
                 }
             );
         } catch (e) { }
+        const showingTranslation = translatedBlocks + stuckTranslatedBlocks;
         let translationStatus = 'idle';
         if (isTranslating || isApplyingUpdates) translationStatus = 'translating';
         else if (translationHasError) translationStatus = 'error';
-        else if (translatedBlocks > 0 || revertedBlocks > 0) translationStatus = 'translated';
+        else if (showingTranslation > 0 || revertedBlocks > 0) translationStatus = 'translated';
         return {
             translationStatus,
-            showingOriginal: translatedBlocks === 0 && revertedBlocks > 0,
+            showingOriginal: showingTranslation === 0 && revertedBlocks > 0,
+            mixedView: showingTranslation > 0 && revertedBlocks > 0,
             progress: translationProgress,
             stats: {
                 batches: batchesProcessed,
@@ -4572,7 +4646,7 @@
                         if (isTranslating) {
                             sendResponse({ status: "Translating" });
                         } else {
-                            toggleAllTranslations();
+                            toggleAllTranslations(request.view);
                             sendResponse({ status: "toggled" });
                         }
                         return false;
