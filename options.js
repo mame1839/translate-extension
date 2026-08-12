@@ -490,10 +490,13 @@ function renderCacheStats() {
     if (!errorRow || !errorNode) return;
     errorRow.hidden = readable && sizeReadable;
     if (readable && sizeReadable) { errorNode.textContent = ''; return; }
-    const reason = readable ? cacheStats.bytesError : cacheFailureReason;
-    errorNode.textContent = backgroundUnreachable && !readable
-        ? t.bgUnavailable + (reason ? ' (' + reason + ')' : '')
-        : t.dataCacheUnreadable.replace('{reason}', reason);
+    if (readable) {
+        errorNode.textContent = t.dataCacheSizeUnreadable.replace('{reason}', cacheStats.bytesError);
+        return;
+    }
+    errorNode.textContent = backgroundUnreachable
+        ? t.bgUnavailable + (cacheFailureReason ? ' (' + cacheFailureReason + ')' : '')
+        : t.dataCacheUnreadable.replace('{reason}', cacheFailureReason);
 }
 
 async function refreshUsageStats() {
