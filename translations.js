@@ -202,6 +202,7 @@ const TRANSLATIONS = {
         translateRestButton: 'Translate the rest',
         newContentTitle: 'New content is not translated yet',
         blocksTooLong: '{count} blocks are longer than the output token limit and were left untranslated. Raise the max output tokens in settings.',
+        nothingTranslated: 'None of the text on this page could be translated. Try again.',
     },
     zh: {
         popupName: 'AI 翻译', popupSub: 'AI Website Translator',
@@ -382,6 +383,7 @@ const TRANSLATIONS = {
         translateRestButton: '翻译其余部分',
         newContentTitle: '新内容尚未翻译',
         blocksTooLong: '有 {count} 个文本块超过输出令牌上限，未被翻译。请在设置中提高最大输出令牌数。',
+        nothingTranslated: '本页没有任何内容被翻译。请重试。',
     },
     'zh-Hant': {
         popupName: 'AI 翻譯', popupSub: 'AI Website Translator',
@@ -562,6 +564,7 @@ const TRANSLATIONS = {
         translateRestButton: '翻譯其餘部分',
         newContentTitle: '新內容尚未翻譯',
         blocksTooLong: '有 {count} 個文字區塊超過輸出權杖上限，未被翻譯。請在設定中提高最大輸出權杖數。',
+        nothingTranslated: '本頁沒有任何內容被翻譯。請重試。',
     },
     hi: {
         popupName: 'AI अनुवादक', popupSub: 'AI Website Translator',
@@ -742,6 +745,7 @@ const TRANSLATIONS = {
         translateRestButton: 'बाकी का अनुवाद करें',
         newContentTitle: 'नई सामग्री का अनुवाद अभी नहीं हुआ है',
         blocksTooLong: '{count} ब्लॉक आउटपुट टोकन सीमा से बड़े हैं, इसलिए उनका अनुवाद नहीं हुआ। सेटिंग में अधिकतम आउटपुट टोकन बढ़ाएँ।',
+        nothingTranslated: 'इस पेज का कोई भी हिस्सा अनुवादित नहीं हुआ। फिर कोशिश करें।',
     },
     es: {
         popupName: 'Traductor AI', popupSub: 'AI Website Translator',
@@ -922,6 +926,7 @@ const TRANSLATIONS = {
         translateRestButton: 'Traducir el resto',
         newContentTitle: 'El contenido nuevo aún no está traducido',
         blocksTooLong: '{count} bloques superan el límite de tokens de salida y quedaron sin traducir. Aumenta los tokens de salida máximos en los ajustes.',
+        nothingTranslated: 'No se pudo traducir ningún texto de esta página. Inténtalo de nuevo.',
     },
     fr: {
         popupName: 'Traducteur IA', popupSub: 'AI Website Translator',
@@ -1102,6 +1107,7 @@ const TRANSLATIONS = {
         translateRestButton: 'Traduire le reste',
         newContentTitle: 'Le nouveau contenu n’est pas encore traduit',
         blocksTooLong: '{count} blocs dépassent la limite de jetons de sortie et n\'ont pas été traduits. Augmentez les jetons de sortie maximum dans les paramètres.',
+        nothingTranslated: 'Aucun texte de cette page n\'a pu être traduit. Réessayez.',
     },
     ar: {
         popupName: 'مترجم AI', popupSub: 'AI Website Translator',
@@ -1282,6 +1288,7 @@ const TRANSLATIONS = {
         translateRestButton: 'ترجمة الباقي',
         newContentTitle: 'المحتوى الجديد لم يُترجم بعد',
         blocksTooLong: '{count} من الكتل تتجاوز حد رموز الإخراج ولم تُترجم. ارفع الحد الأقصى لرموز الإخراج في الإعدادات.',
+        nothingTranslated: 'تعذّرت ترجمة أي نص في هذه الصفحة. أعد المحاولة.',
     },
     bn: {
         popupName: 'AI অনুবাদক', popupSub: 'AI Website Translator',
@@ -1462,6 +1469,7 @@ const TRANSLATIONS = {
         translateRestButton: 'বাকিটা অনুবাদ করুন',
         newContentTitle: 'নতুন কনটেন্ট এখনও অনুবাদ হয়নি',
         blocksTooLong: '{count}টি ব্লক আউটপুট টোকেন সীমার চেয়ে বড় হওয়ায় অনূদিত হয়নি। সেটিংসে সর্বোচ্চ আউটপুট টোকেন বাড়ান।',
+        nothingTranslated: 'এই পেজের কোনো লেখাই অনুবাদ করা যায়নি। আবার চেষ্টা করুন।',
     },
     ru: {
         popupName: 'AI Переводчик', popupSub: 'AI Website Translator',
@@ -1642,6 +1650,7 @@ const TRANSLATIONS = {
         translateRestButton: 'Перевести остальное',
         newContentTitle: 'Новое содержимое ещё не переведено',
         blocksTooLong: '{count} блоков превышают лимит токенов вывода и остались без перевода. Увеличьте максимум токенов на вывод в настройках.',
+        nothingTranslated: 'Не удалось перевести ни один фрагмент этой страницы. Повторите попытку.',
     },
     pt: {
         popupName: 'Tradutor AI', popupSub: 'AI Website Translator',
@@ -1822,6 +1831,7 @@ const TRANSLATIONS = {
         translateRestButton: 'Traduzir o resto',
         newContentTitle: 'O conteúdo novo ainda não foi traduzido',
         blocksTooLong: '{count} blocos excedem o limite de tokens de saída e não foram traduzidos. Aumente os tokens de saída máximos nas configurações.',
+        nothingTranslated: 'Não foi possível traduzir nenhum texto desta página. Tente novamente.',
     },
     ur: {
         popupName: 'AI مترجم', popupSub: 'AI Website Translator',
@@ -2002,6 +2012,7 @@ const TRANSLATIONS = {
         translateRestButton: 'باقی کا ترجمہ کریں',
         newContentTitle: 'نئے مواد کا ابھی ترجمہ نہیں ہوا',
         blocksTooLong: '{count} بلاکس آؤٹ پٹ ٹوکن کی حد سے بڑے ہیں، اس لیے ان کا ترجمہ نہیں ہوا۔ ترتیبات میں زیادہ سے زیادہ آؤٹ پٹ ٹوکن بڑھائیں۔',
+        nothingTranslated: 'اس صفحے کے کسی متن کا ترجمہ نہ ہو سکا۔ دوبارہ کوشش کریں۔',
     },
     id: {
         popupName: 'Penerjemah AI', popupSub: 'AI Website Translator',
@@ -2182,6 +2193,7 @@ const TRANSLATIONS = {
         translateRestButton: 'Terjemahkan sisanya',
         newContentTitle: 'Konten baru belum diterjemahkan',
         blocksTooLong: '{count} blok melebihi batas token keluaran sehingga tidak diterjemahkan. Naikkan token keluaran maksimum di pengaturan.',
+        nothingTranslated: 'Tidak ada teks di halaman ini yang bisa diterjemahkan. Coba lagi.',
     },
     de: {
         popupName: 'KI-Übersetzer', popupSub: 'AI Website Translator',
@@ -2362,6 +2374,7 @@ const TRANSLATIONS = {
         translateRestButton: 'Rest übersetzen',
         newContentTitle: 'Neue Inhalte sind noch nicht übersetzt',
         blocksTooLong: '{count} Blöcke überschreiten das Ausgabe-Token-Limit und blieben unübersetzt. Erhöhen Sie die max. Ausgabe-Tokens in den Einstellungen.',
+        nothingTranslated: 'Kein Text auf dieser Seite konnte übersetzt werden. Versuchen Sie es erneut.',
     },
     ja: {
         popupName: 'AI 翻訳', popupSub: 'AI Website Translator',
@@ -2542,6 +2555,7 @@ const TRANSLATIONS = {
         translateRestButton: '残りを翻訳',
         newContentTitle: '新しく表示された内容がまだ翻訳されていません',
         blocksTooLong: '{count} 個のブロックが出力トークン上限を超えるため翻訳していません。設定で最大出力トークンを増やしてください。',
+        nothingTranslated: 'このページのテキストを 1 件も翻訳できませんでした。再試行してください。',
     },
     sw: {
         popupName: 'Mtafsiri AI', popupSub: 'AI Website Translator',
@@ -2722,6 +2736,7 @@ const TRANSLATIONS = {
         translateRestButton: 'Tafsiri iliyobaki',
         newContentTitle: 'Maudhui mapya bado hayajatafsiriwa',
         blocksTooLong: 'Vizuizi {count} vinazidi kikomo cha tokeni za matokeo, kwa hivyo havikutafsiriwa. Ongeza tokeni za juu za matokeo katika mipangilio.',
+        nothingTranslated: 'Hakuna maandishi ya ukurasa huu yaliyoweza kutafsiriwa. Jaribu tena.',
     },
     mr: {
         popupName: 'AI अनुवादक', popupSub: 'AI Website Translator',
@@ -2902,6 +2917,7 @@ const TRANSLATIONS = {
         translateRestButton: 'उर्वरित भाषांतर करा',
         newContentTitle: 'नवीन मजकुराचे भाषांतर अद्याप झालेले नाही',
         blocksTooLong: '{count} ब्लॉक आउटपुट टोकन मर्यादेपेक्षा मोठे असल्याने भाषांतरित झाले नाहीत. सेटिंग्जमध्ये कमाल आउटपुट टोकन वाढवा.',
+        nothingTranslated: 'या पेजवरील कोणताही मजकूर भाषांतरित करता आला नाही. पुन्हा प्रयत्न करा.',
     },
     te: {
         popupName: 'AI అనువాదకుడు', popupSub: 'AI Website Translator',
@@ -3082,6 +3098,7 @@ const TRANSLATIONS = {
         translateRestButton: 'మిగిలినది అనువదించు',
         newContentTitle: 'కొత్త కంటెంట్ ఇంకా అనువదించబడలేదు',
         blocksTooLong: '{count} బ్లాక్‌లు అవుట్‌పుట్ టోకెన్ పరిమితిని మించడంతో అనువదించబడలేదు. సెట్టింగ్‌లలో గరిష్ట అవుట్‌పుట్ టోకెన్‌లను పెంచండి.',
+        nothingTranslated: 'ఈ పేజీలోని ఏ వచనాన్నీ అనువదించలేకపోయాం. మళ్లీ ప్రయత్నించండి.',
     },
     tr: {
         popupName: 'AI Çevirmen', popupSub: 'AI Website Translator',
@@ -3262,6 +3279,7 @@ const TRANSLATIONS = {
         translateRestButton: 'Kalanı çevir',
         newContentTitle: 'Yeni içerik henüz çevrilmedi',
         blocksTooLong: '{count} blok, çıktı belirteci sınırını aştığı için çevrilmedi. Ayarlardan maksimum çıktı belirtecini artırın.',
+        nothingTranslated: 'Bu sayfadaki hiçbir metin çevrilemedi. Yeniden deneyin.',
     },
     ta: {
         popupName: 'AI மொழிபெயர்ப்பாளர்', popupSub: 'AI Website Translator',
@@ -3442,6 +3460,7 @@ const TRANSLATIONS = {
         translateRestButton: 'மீதியை மொழிபெயர்',
         newContentTitle: 'புதிய உள்ளடக்கம் இன்னும் மொழிபெயர்க்கப்படவில்லை',
         blocksTooLong: '{count} தொகுதிகள் வெளியீட்டு டோக்கன் வரம்பை மீறுவதால் மொழிபெயர்க்கப்படவில்லை. அமைப்புகளில் அதிகபட்ச வெளியீட்டு டோக்கன்களை அதிகரிக்கவும்.',
+        nothingTranslated: 'இந்தப் பக்கத்தில் எந்த உரையையும் மொழிபெயர்க்க முடியவில்லை. மீண்டும் முயலவும்.',
     },
     vi: {
         popupName: 'Dịch AI', popupSub: 'AI Website Translator',
@@ -3622,6 +3641,7 @@ const TRANSLATIONS = {
         translateRestButton: 'Dịch phần còn lại',
         newContentTitle: 'Nội dung mới chưa được dịch',
         blocksTooLong: '{count} khối vượt quá giới hạn token đầu ra nên không được dịch. Hãy tăng token đầu ra tối đa trong phần cài đặt.',
+        nothingTranslated: 'Không dịch được văn bản nào trên trang này. Hãy thử lại.',
     },
     ko: {
         popupName: 'AI 번역기', popupSub: 'AI Website Translator',
@@ -3802,6 +3822,7 @@ const TRANSLATIONS = {
         translateRestButton: '나머지 번역',
         newContentTitle: '새 내용이 아직 번역되지 않았습니다',
         blocksTooLong: '{count}개 블록이 출력 토큰 한도를 넘어 번역하지 않았습니다. 설정에서 최대 출력 토큰을 늘리세요.',
+        nothingTranslated: '이 페이지의 텍스트를 하나도 번역하지 못했습니다. 다시 시도하세요.',
     },
 };
 
