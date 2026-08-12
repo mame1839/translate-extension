@@ -25,7 +25,9 @@
         retranslateButton: 'Re-translate',
         translateRestButton: 'Translate the rest',
         newContentTitle: 'New content on this page is not translated',
-        blocksTooLong: '{count} blocks are longer than the output token limit and were left untranslated. Raise the max output tokens in settings.'
+        blocksTooLong: '{count} blocks are longer than the output token limit and were left untranslated. Raise the max output tokens in settings.',
+        cacheSaveFailed: 'Could not save the translation for this page. It will be translated again next time.',
+        cacheStorageFull: 'Storage is full. The translation for this page was not saved.'
     };
 
     const RTL_LANGS = new Set(['ar', 'ur', 'he', 'fa']);
@@ -63,7 +65,9 @@
             translateRestButton: t.translateRestButton,
             newContentTitle: t.newContentTitle,
             blocksTooLong: t.blocksTooLong,
-            nothingTranslated: t.nothingTranslated
+            nothingTranslated: t.nothingTranslated,
+            cacheSaveFailed: t.cacheSaveFailed,
+            cacheStorageFull: t.cacheStorageFull
         };
     }
 
@@ -468,6 +472,8 @@
     const sessionTranslationMemo = new Map();
     let sessionTranslationMemoLang = '';
     const SESSION_MEMO_MAX_ENTRIES = 2000;
+    const blockTranslationLanguage = new WeakMap();
+    let statusAutoDismissTimer = null;
     let restoreNoticeContainer = null;
     let restoreNoticeTimer = null;
     const RESTORE_NOTICE_TIMEOUT_MS = 12000;
@@ -532,11 +538,14 @@
                     const isAlwaysTranslate = !isExcluded && siteListMatchesUrl(items.alwaysTranslateList, currentUrl);
                     if (!isReactSpa && !isExcluded) {
                         const restored = await tryRestoreFromCache(chosenLang);
+                        let restoredBlocks = 0;
                         if (restored || cacheRestoreActive) {
-                            try { applyCacheRestore(); } catch (e) { }
+                            try { restoredBlocks = applyCacheRestore(); } catch (e) { }
+                        }
+                        if (restoredBlocks > 0) {
                             if (items.toggleBlueBackground) {
                                 try {
-                                    document.querySelectorAll('[data-translation-status="translated"]').forEach(b => {
+                                    forEachMarkedElement('[data-translation-status="translated"]', b => {
                                         if (b.dataset && b.dataset.geminiIgnore !== 'true') b.classList.add('translated-text');
                                     });
                                 } catch (e) { }
@@ -730,11 +739,27 @@
         return hash.toString(36);
     }
 
-    function getPageKeyWithoutLanguage() {
+    function currentPageIdentity() {
         try {
             const url = new URL(window.location.href);
-            return PAGE_CACHE_PREFIX + computeStringHash(url.origin + url.pathname + url.search);
-        } catch (e) { return null; }
+            return url.origin + url.pathname + url.search;
+        } catch (e) { return ''; }
+    }
+
+    function getPageKeyWithoutLanguage() {
+        const identity = currentPageIdentity();
+        if (!identity) return null;
+        return PAGE_CACHE_PREFIX + computeStringHash(identity);
+    }
+
+    function cacheRecordMatchesCurrentPage(record) {
+        const identity = currentPageIdentity();
+        if (!identity) return false;
+        if (!record || typeof record.url !== 'string' || !record.url) return false;
+        try {
+            const saved = new URL(record.url);
+            return saved.origin + saved.pathname + saved.search === identity;
+        } catch (e) { return false; }
     }
 
     function getCurrentPageKey(targetLanguage) {
@@ -744,28 +769,11 @@
     }
 
     function collectCacheableBlocks() {
-        const result = [];
-        if (!document.body) return result;
-        try {
-            const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT, {
-                acceptNode: (node) => {
-                    if (!node || !(node instanceof Element)) return NodeFilter.FILTER_REJECT;
-                    if (node.dataset?.translationWrapper === 'true') return NodeFilter.FILTER_REJECT;
-                    if (node.dataset?.geminiIgnore === 'true') return NodeFilter.FILTER_REJECT;
-                    if (isFullyExcluded(node)) {
-                        return isFullyExcluded(node, true) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_SKIP;
-                    }
-                    if (BLOCK_TAGS.has(node.nodeName) || isShadowHostingCustomElement(node) || isBlockLikeAnchorInShadowHost(node)) {
-                        if (blockContainsReactCustomElement(node)) return NodeFilter.FILTER_SKIP;
-                        return NodeFilter.FILTER_ACCEPT;
-                    }
-                    return NodeFilter.FILTER_SKIP;
-                }
-            });
-            let el;
-            while (el = walker.nextNode()) result.push(el);
-        } catch (e) { }
-        return result;
+        return collectBlocksAcrossRoots((node) => {
+            if (node.dataset?.translationWrapper === 'true') return NodeFilter.FILTER_REJECT;
+            if (node.dataset?.geminiIgnore === 'true') return NodeFilter.FILTER_REJECT;
+            return 0;
+        });
     }
 
     function getBlockOriginalText(block) {
@@ -783,10 +791,12 @@
 
     function readPageCacheByKey(key) {
         return new Promise(resolve => {
-            if (!key) { resolve(null); return; }
+            if (!key) { resolve({ record: null, error: '' }); return; }
             sendRuntimeMessage({ action: 'pageCacheGet', key }, (response, failure) => {
-                if (failure || !response) { resolve(null); return; }
-                resolve(response.cache || null);
+                if (failure) { resolve({ record: null, error: failure }); return; }
+                if (!response) { resolve({ record: null, error: 'noResponse' }); return; }
+                const error = typeof response.error === 'string' ? response.error : '';
+                resolve({ record: error ? null : (response.cache || null), error });
             });
         });
     }
@@ -802,10 +812,15 @@
     function savePageCache(targetLanguage, cache) {
         return new Promise(resolve => {
             const key = getCurrentPageKey(targetLanguage);
-            if (!key) { resolve(false); return; }
+            if (!key) { resolve({ saved: false, error: '', quotaExhausted: false }); return; }
             sendRuntimeMessage({ action: 'pageCacheSet', key, cache }, (response, failure) => {
-                if (failure || !response) { resolve(false); return; }
-                resolve(!!response.saved);
+                if (failure) { resolve({ saved: false, error: failure, quotaExhausted: false }); return; }
+                if (!response) { resolve({ saved: false, error: 'noResponse', quotaExhausted: false }); return; }
+                resolve({
+                    saved: !!response.saved,
+                    error: typeof response.error === 'string' ? response.error : '',
+                    quotaExhausted: response.quotaExhausted === true
+                });
             });
         });
     }
@@ -851,22 +866,30 @@
         return (typeof remembered === 'string' && remembered) ? remembered : null;
     }
 
+    function usableCacheRecord(record, targetLanguage) {
+        if (!record || !Array.isArray(record.blocks)) return null;
+        if (record.lang !== targetLanguage) return null;
+        if (!cacheRecordMatchesCurrentPage(record)) return null;
+        return record;
+    }
+
     async function resolveCacheForLanguage(targetLanguage) {
         const current = await getPageCache(targetLanguage);
-        if (current && Array.isArray(current.blocks) && current.lang === targetLanguage) return current;
+        if (current.error) return current;
+        if (usableCacheRecord(current.record, targetLanguage)) return current;
         const withoutLanguage = await getPageCacheWithoutLanguage();
-        if (!withoutLanguage || !Array.isArray(withoutLanguage.blocks)) return null;
-        if (withoutLanguage.lang !== targetLanguage) return null;
-        savePageCache(targetLanguage, withoutLanguage).catch(() => { });
+        if (withoutLanguage.error) return withoutLanguage;
+        const legacy = usableCacheRecord(withoutLanguage.record, targetLanguage);
+        if (!legacy) return { record: null, error: '' };
+        savePageCache(targetLanguage, legacy).catch(() => { });
         return withoutLanguage;
     }
 
     async function tryRestoreFromCache(targetLanguage) {
         if (!cacheRestoreMap) {
             if (!targetLanguage) return false;
-            const cache = await resolveCacheForLanguage(targetLanguage);
-            if (!cache || !Array.isArray(cache.blocks)) return false;
-            if (cache.lang !== targetLanguage) return false;
+            const cache = (await resolveCacheForLanguage(targetLanguage)).record;
+            if (!cache) return false;
             useSessionMemoForLanguage(targetLanguage);
             const map = new Map();
             for (const entry of cache.blocks) {
@@ -999,9 +1022,12 @@
     async function saveCurrentTranslationToCache() {
         const blocks = collectCacheableBlocks();
         if (blocks.length === 0) return;
+        const lang = await getStoredTargetLanguage();
+        if (!lang) return;
         const entries = [];
         const seen = new Set();
         for (const block of blocks) {
+            if (blockTranslationLanguage.get(block) !== lang) continue;
             if (block.dataset?.translationStatus !== 'translated') continue;
             if (typeof block.dataset.translatedHtml !== 'string') continue;
             if (typeof block.dataset.originalHtml !== 'string') continue;
@@ -1024,18 +1050,21 @@
             });
         }
         if (entries.length === 0) return;
-        const lang = await getStoredTargetLanguage();
-        if (!lang) return;
         const previous = await resolveCacheForLanguage(lang);
+        if (previous.error) return;
         let pageUrl = '';
         try { pageUrl = window.location.href; } catch (e) { }
-        const saved = await savePageCache(lang, {
+        const result = await savePageCache(lang, {
             url: pageUrl,
             lang,
-            blocks: mergeWithPreviousEntries(previous, entries, lang),
+            blocks: mergeWithPreviousEntries(previous.record, entries, lang),
             savedAt: Date.now()
         });
-        if (saved) pruneOldCaches().catch(() => { });
+        if (result.saved) {
+            pruneOldCaches().catch(() => { });
+            return;
+        }
+        showCacheSaveFailureNote(result.quotaExhausted ? st.cacheStorageFull : st.cacheSaveFailed);
     }
 
     let lastObservedUrl = '';
@@ -2514,11 +2543,8 @@
         return withScanCache(collectTranslationUnitsScan);
     }
 
-    function collectTranslationUnitsScan() {
-        const tus = [];
-        translationUnits.clear();
-        let tuIdCounter = 0;
-
+    function collectBlocksAcrossRoots(rejectNode) {
+        const blocks = [];
         const queue = [];
         if (document.body) queue.push(document.body);
 
@@ -2529,7 +2555,6 @@
             if (!root || visited.has(root)) continue;
             visited.add(root);
 
-            const blocks = [];
             if (root.nodeType === Node.ELEMENT_NODE && BLOCK_TAGS.has(root.nodeName)) {
                 blocks.push(root);
             }
@@ -2538,10 +2563,8 @@
                 const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT, {
                     acceptNode: (node) => {
                         if (!node || !(node instanceof Element)) return NodeFilter.FILTER_REJECT;
-                        if (node.dataset?.translationStatus === 'translated') return NodeFilter.FILTER_REJECT;
-                        if (node.dataset?.translationStatus === 'original') return NodeFilter.FILTER_REJECT;
-                        if (node.dataset?.translationStatus === 'failed') return NodeFilter.FILTER_REJECT;
-                        if (node.dataset?.translationWrapper === 'true') return NodeFilter.FILTER_REJECT;
+                        const rejected = rejectNode(node);
+                        if (rejected) return rejected;
                         if (isFullyExcluded(node)) {
                             return isFullyExcluded(node, true) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_SKIP;
                         }
@@ -2556,19 +2579,35 @@
                 let el;
                 while (el = walker.nextNode()) blocks.push(el);
             } catch (e) { continue; }
+        }
 
-            for (const block of blocks) {
-                if (!block || !block.isConnected) continue;
-                if (block.dataset?.translationStatus === 'translated') continue;
-                if (block.dataset?.translationStatus === 'processing') continue;
-                if (block.dataset?.translationStatus === 'original') continue;
-                if (block.dataset?.translationStatus === 'failed') continue;
-                const tu = buildTU(block);
-                if (tu && tu.hasTranslatableText) {
-                    tu.id = `tu_${translationRunGeneration}_${tuIdCounter++}`;
-                    tus.push(tu);
-                    translationUnits.set(tu.id, tu);
-                }
+        return blocks;
+    }
+
+    function collectTranslationUnitsScan() {
+        const tus = [];
+        translationUnits.clear();
+        let tuIdCounter = 0;
+
+        const blocks = collectBlocksAcrossRoots((node) => {
+            if (node.dataset?.translationStatus === 'translated') return NodeFilter.FILTER_REJECT;
+            if (node.dataset?.translationStatus === 'original') return NodeFilter.FILTER_REJECT;
+            if (node.dataset?.translationStatus === 'failed') return NodeFilter.FILTER_REJECT;
+            if (node.dataset?.translationWrapper === 'true') return NodeFilter.FILTER_REJECT;
+            return 0;
+        });
+
+        for (const block of blocks) {
+            if (!block || !block.isConnected) continue;
+            if (block.dataset?.translationStatus === 'translated') continue;
+            if (block.dataset?.translationStatus === 'processing') continue;
+            if (block.dataset?.translationStatus === 'original') continue;
+            if (block.dataset?.translationStatus === 'failed') continue;
+            const tu = buildTU(block);
+            if (tu && tu.hasTranslatableText) {
+                tu.id = `tu_${translationRunGeneration}_${tuIdCounter++}`;
+                tus.push(tu);
+                translationUnits.set(tu.id, tu);
             }
         }
 
@@ -2924,6 +2963,7 @@
 
     function discardApplyThatDidNotMatch(tu, fromCacheRestore, snapshot) {
         try { restoreSubtree(snapshot); } catch (e) { }
+        try { blockTranslationLanguage.delete(tu.block); } catch (e) { }
         try { delete tu.block.dataset.translationStatus; } catch (e) { }
         try { delete tu.block.dataset.translatedHtml; } catch (e) { }
         try { delete tu.block.dataset.tuTranslatedTemplate; } catch (e) { }
@@ -3103,15 +3143,20 @@
         try {
             if (tu.block.dataset?.translationStatus === 'translated' &&
                 appliedResultMatchesTranslation(tu, translatedTemplate)) {
-                rememberTranslatedTemplate(tu.template, translatedTemplate);
+                acceptAppliedTranslation(tu, translatedTemplate);
                 return;
             }
             discardApplyThatDidNotMatch(tu, fromCacheRestore, snapshot);
             if (!rearrangeWithoutRebuilding(tu, translatedTemplate, fromCacheRestore)) return;
-            rememberTranslatedTemplate(tu.template, translatedTemplate);
+            acceptAppliedTranslation(tu, translatedTemplate);
         } catch (e) {
             discardApplyThatDidNotMatch(tu, fromCacheRestore, snapshot);
         }
+    }
+
+    function acceptAppliedTranslation(tu, translatedTemplate) {
+        rememberTranslatedTemplate(tu.template, translatedTemplate);
+        try { blockTranslationLanguage.set(tu.block, sessionTranslationMemoLang); } catch (e) { }
     }
 
     function markApplyFailed(tu, fromCacheRestore) {
@@ -3729,6 +3774,31 @@
         return statusShadowRoot ? statusShadowRoot.querySelector('#translationStatus') : null;
     }
 
+    function cancelStatusAutoDismiss() {
+        if (statusAutoDismissTimer === null) return;
+        clearTimeout(statusAutoDismissTimer);
+        statusAutoDismissTimer = null;
+    }
+
+    function showCacheSaveFailureNote(message) {
+        if (!IS_TOP_FRAME) return;
+        if (!message) return;
+        cancelStatusAutoDismiss();
+        if (!ensureStatusPanelForError()) return;
+        if (statusPanelPhase !== 'done' && statusPanelPhase !== 'error') renderStatusPanel('done');
+        const card = getStatusCard();
+        const headText = card ? card.querySelector('.head-text') : null;
+        if (!headText) return;
+        const existing = headText.querySelector('#translationCacheNote');
+        if (existing) {
+            existing.textContent = message;
+            return;
+        }
+        const note = createUiElement('div', 'sub', message);
+        note.id = 'translationCacheNote';
+        headText.appendChild(note);
+    }
+
     function statusPanelTitle(phase) {
         if (phase === 'done') return st.translationCompleted;
         if (phase === 'cancelled') return st.translationCancelled;
@@ -4016,7 +4086,13 @@
         const completionMessage = oversizedSkippedCount > 0 ? oversizedSkippedLabel() : st.translationCompleted;
         sendRuntimeMessage({ action: "translationComplete", message: completionMessage });
         saveCurrentTranslationToCache().catch(() => { });
-        if (oversizedSkippedCount === 0) setTimeout(() => { if (!isTranslating) removeStatusIndicator(); }, 3000);
+        if (oversizedSkippedCount === 0) {
+            cancelStatusAutoDismiss();
+            statusAutoDismissTimer = setTimeout(() => {
+                statusAutoDismissTimer = null;
+                if (!isTranslating) removeStatusIndicator();
+            }, 3000);
+        }
         schedulePostFinishScans();
     }
 
