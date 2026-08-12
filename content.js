@@ -2946,7 +2946,7 @@
         parent.insertBefore(node, reference);
     }
 
-    function applyRearrangementPlan(plan) {
+    function applyRearrangementPlan(plan, allowElementMoves) {
         for (const step of plan) {
             const parent = step.parent;
             const spareTexts = [];
@@ -2972,12 +2972,19 @@
                     cursor = cursor.nextSibling;
                     continue;
                 }
+                if (!allowElementMoves && node.nodeType === Node.ELEMENT_NODE) return false;
                 placeNodeBefore(parent, node, cursor);
             }
             for (let index = spareCursor; index < spareTexts.length; index++) {
                 spareTexts[index].nodeValue = '';
             }
         }
+        return true;
+    }
+
+    function blockAllowsElementMoves(block) {
+        if (typeof block.moveBefore === 'function') return true;
+        return !blockContainsCustomElement(block);
     }
 
     function rearrangementKeepsTranslatableText(plan) {
@@ -3013,14 +3020,17 @@
     }
 
     function rearrangeWithoutRebuilding(tu, translatedTemplate, fromCacheRestore) {
-        if (typeof tu.block.moveBefore !== 'function' && blockContainsCustomElement(tu.block)) return false;
+        if (!blockAllowsElementMoves(tu.block)) return false;
         const plan = planRearrangementToTemplate(tu, translatedTemplate);
         if (!plan) return false;
         if (!rearrangementKeepsTranslatableText(plan)) return false;
 
         const snapshot = snapshotSubtree(tu.block);
         try {
-            applyRearrangementPlan(plan);
+            if (!applyRearrangementPlan(plan, true)) {
+                restoreSubtree(snapshot);
+                return false;
+            }
         } catch (e) {
             restoreSubtree(snapshot);
             return false;
@@ -3493,27 +3503,29 @@
         if (!textOnly) return applyTemplateWithPlaceholders(tu, originalTemplate);
         const plan = planRearrangementToTemplate(tu, originalTemplate);
         if (!plan) return false;
-        applyRearrangementPlan(plan);
-        return true;
+        return applyRearrangementPlan(plan, blockAllowsElementMoves(tu.block));
     }
 
     function revertBlockToOriginal(block) {
         const textOnly = shouldUseTextOnlyApply(block);
         const originalTemplate = block.dataset.tuTemplate;
+        const appliedTemplate = block.dataset.tuTranslatedTemplate;
         if (typeof originalTemplate === 'string' && originalTemplate) {
             try {
                 const tu = buildTU(block);
-                const ordered = tu ? placeholdersInOriginalOrder(tu, block.dataset.tuTranslatedTemplate) : null;
+                const ordered = tu ? placeholdersInOriginalOrder(tu, appliedTemplate) : null;
                 if (ordered) {
                     tu.placeholders = ordered;
-                    const snapshot = snapshotSubtree(block);
-                    let restored = false;
-                    try {
-                        restored = writeBlockBackToTemplate(tu, originalTemplate, textOnly) &&
-                            appliedResultMatchesTranslation(tu, originalTemplate);
-                    } catch (e) { }
-                    if (restored) return true;
-                    restoreSubtree(snapshot);
+                    if (appliedResultMatchesTranslation(tu, appliedTemplate)) {
+                        const snapshot = snapshotSubtree(block);
+                        let restored = false;
+                        try {
+                            restored = writeBlockBackToTemplate(tu, originalTemplate, textOnly) &&
+                                appliedResultMatchesTranslation(tu, originalTemplate);
+                        } catch (e) { }
+                        if (restored) return true;
+                        restoreSubtree(snapshot);
+                    }
                 }
             } catch (e) { }
         }
@@ -3974,22 +3986,27 @@
     function collectPopupPageState() {
         let translatedBlocks = 0;
         let revertedBlocks = 0;
+        let stuckTranslatedBlocks = 0;
         try {
             forEachMarkedElement(
-                '[data-translation-status="translated"], [data-translation-status="original"]',
+                '[data-translation-status="translated"], [data-translation-status="original"], [data-translation-status="failed"]',
                 block => {
-                    if (block.dataset.translationStatus === 'translated') translatedBlocks++;
-                    else revertedBlocks++;
+                    const status = block.dataset.translationStatus;
+                    if (status === 'translated') translatedBlocks++;
+                    else if (status === 'original') revertedBlocks++;
+                    else if ('translatedHtml' in block.dataset) stuckTranslatedBlocks++;
                 }
             );
         } catch (e) { }
+        const showingTranslation = translatedBlocks + stuckTranslatedBlocks;
         let translationStatus = 'idle';
         if (isTranslating || isApplyingUpdates) translationStatus = 'translating';
         else if (translationHasError) translationStatus = 'error';
-        else if (translatedBlocks > 0 || revertedBlocks > 0) translationStatus = 'translated';
+        else if (showingTranslation > 0 || revertedBlocks > 0) translationStatus = 'translated';
         return {
             translationStatus,
-            showingOriginal: translatedBlocks === 0 && revertedBlocks > 0,
+            showingOriginal: showingTranslation === 0 && revertedBlocks > 0,
+            mixedView: showingTranslation > 0 && revertedBlocks > 0,
             progress: translationProgress,
             stats: {
                 batches: batchesProcessed,
