@@ -415,6 +415,9 @@
         try { return window.top === window; } catch (e) { return false; }
     })();
 
+    const translatingSubframes = new Set();
+    let subframeFailures = [];
+
     let isTranslating = false;
     let translationStarted = false;
     let translationCancelled = false;
@@ -1885,8 +1888,10 @@
             return;
         }
         isTranslating = true;
+        reportFrameTranslationState(true);
         await waitForPendingApply();
         const runGeneration = ++translationRunGeneration;
+        subframeFailures = [];
         pendingRetranslation = false;
         translationCancelled = false;
         translationHasError = false;
@@ -2025,6 +2030,8 @@
                 handleCancellation(lang);
             } else if (translatedUnitsCount === 0 && expectedTotalUnits > 0) {
                 handleTranslationError(createNothingTranslatedError(), lang);
+            } else if (subframeFailures.length > 0) {
+                finishTranslationWithFailures(subframeFailures[0]);
             } else {
                 finishTranslation();
             }
@@ -2032,6 +2039,7 @@
             if (!translationCancelled) handleTranslationError(error, lang);
         } finally {
             isTranslating = false;
+            reportFrameTranslationState(false);
             if (progressInterval) clearInterval(progressInterval);
             cleanupProcessingMarkers();
             scheduleRetranslationIfNeeded();
@@ -3645,9 +3653,43 @@
             currentCancelBtn.disabled = true;
             currentCancelBtn.textContent = st.cancelling;
         }
+        broadcastCancelToAllFrames();
+    }
+
+    function broadcastCancelToAllFrames() {
+        translatingSubframes.clear();
         sendRuntimeMessage({ action: "cancelTranslation", allFrames: true }, (response, failure) => {
             if (failure) handleCancellation();
         });
+    }
+
+    function reportFrameTranslationState(translating) {
+        if (IS_TOP_FRAME) return;
+        sendRuntimeMessage({ action: "frameTranslationState", translating });
+    }
+
+    function trackSubframeTranslationState(report) {
+        if (!IS_TOP_FRAME) return;
+        const frameId = Number.isInteger(report?.frameId) ? report.frameId : -1;
+        if (frameId <= 0) return;
+        if (report.translating === true) translatingSubframes.add(frameId);
+        else translatingSubframes.delete(frameId);
+    }
+
+    function subframeFailureError(report) {
+        const cause = typeof report?.error === 'string' && report.error ? report.error : st.errorOccurred;
+        const error = new Error(cause);
+        error.translationErrorCode = typeof report?.code === 'string' ? report.code : '';
+        return error;
+    }
+
+    function noteSubframeTranslationFailure(report) {
+        if (!IS_TOP_FRAME) return;
+        const failure = subframeFailureError(report);
+        subframeFailures.push(failure);
+        if (isTranslating) return;
+        if (translationHasError) return;
+        if (ensureStatusPanelForError()) showErrorPopup(failure.message, translationErrorCodeOf(failure));
     }
 
     function createStatusIndicator(lang) {
@@ -4035,7 +4077,7 @@
         } catch (e) { }
         const showingTranslation = translatedBlocks + stuckTranslatedBlocks;
         let translationStatus = 'idle';
-        if (isTranslating || isApplyingUpdates) translationStatus = 'translating';
+        if (isTranslating || isApplyingUpdates || translatingSubframes.size > 0) translationStatus = 'translating';
         else if (translationHasError) translationStatus = 'error';
         else if (showingTranslation > 0 || revertedBlocks > 0) translationStatus = 'translated';
         return {
@@ -4644,7 +4686,16 @@
                         return respondPopupPageState(sendResponse);
                     case "cancelTranslationFromPopup":
                         if (isTranslating && !translationCancelled && !translationHasError) handleCancelButtonClick();
+                        else broadcastCancelToAllFrames();
                         sendResponse({ status: "cancelling" });
+                        return false;
+                    case "subframeTranslationState":
+                        trackSubframeTranslationState(request);
+                        sendResponse({ status: "noted" });
+                        return false;
+                    case "subframeTranslationFailed":
+                        noteSubframeTranslationFailure(request);
+                        sendResponse({ status: "noted" });
                         return false;
                     case "startTranslationFromPopup":
                         if (isTranslating) {
