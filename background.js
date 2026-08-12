@@ -223,6 +223,12 @@ function handleExtensionInstalled(details) {
                     contexts: ["selection"],
                     visible: items.showContextMenu !== false
                 });
+                chrome.contextMenus.create({
+                    id: REPLACE_MENU_ID,
+                    title: contextMenuTitle('selMenuReplace', items.targetLanguage),
+                    contexts: ["selection"],
+                    visible: items.showContextMenu !== false
+                });
             });
         }
     );
@@ -1827,12 +1833,14 @@ async function resetUsageStats() {
 
 const TOGGLE_MENU_ID = 'toggleTranslation';
 const SELECTION_MENU_ID = 'translateSelection';
+const REPLACE_MENU_ID = 'translateReplaceSelection';
 const SELECTION_MAX_OUTPUT_TOKENS = 16384;
 const selectionControllers = new Map();
 
 const CONTEXT_MENU_TITLE_FALLBACKS = {
     selMenuToggle: 'Toggle translation',
-    selMenuTranslate: 'Translate selection'
+    selMenuTranslate: 'Translate selection',
+    selMenuReplace: 'Translate and replace selection'
 };
 
 function contextMenuTitle(key, langCode) {
@@ -1856,7 +1864,8 @@ function handleContextMenuSettingsChange(changes, areaName) {
     const newLanguage = languageChanged ? changes.targetLanguage.newValue : null;
     const menus = [
         { id: TOGGLE_MENU_ID, key: 'selMenuToggle' },
-        { id: SELECTION_MENU_ID, key: 'selMenuTranslate' }
+        { id: SELECTION_MENU_ID, key: 'selMenuTranslate' },
+        { id: REPLACE_MENU_ID, key: 'selMenuReplace' }
     ];
     for (const menu of menus) {
         const update = { ...shared };
@@ -1874,12 +1883,13 @@ try {
 
 try {
     chrome.contextMenus.onClicked.addListener(function (info, tab) {
-        if (info.menuItemId !== SELECTION_MENU_ID) return;
+        if (info.menuItemId !== SELECTION_MENU_ID && info.menuItemId !== REPLACE_MENU_ID) return;
         if (!tab?.id) return;
         const text = (info.selectionText || '').trim();
         if (!text) return;
         const frameId = Number.isInteger(info.frameId) ? info.frameId : 0;
-        sendTabMessage(tab.id, { action: "showSelectionTranslation", text }, { frameId });
+        const replaceIntent = info.menuItemId === REPLACE_MENU_ID;
+        sendTabMessage(tab.id, { action: "showSelectionTranslation", text, replaceIntent }, { frameId });
     });
 } catch (e) { }
 

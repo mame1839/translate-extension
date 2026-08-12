@@ -4364,6 +4364,10 @@
         }
         .sel-btn:hover { box-shadow: 0 1px 2px rgba(23, 23, 40, 0.10), 0 1px 3px 1px rgba(23, 23, 40, 0.06); }
         .sel-btn:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.35); }
+        .sel-btn.secondary { background: transparent; color: #1a73e8; box-shadow: inset 0 0 0 1px rgba(27, 27, 33, 0.16); }
+        .sel-btn.secondary:hover { background: #f5f5fa; box-shadow: inset 0 0 0 1px rgba(27, 27, 33, 0.24); }
+        .sel-note { margin: 10px 0 0; overflow-wrap: anywhere; font-size: 12.5px; color: #4a4952; }
+        .sel-note.done { color: #146c2e; font-weight: 600; }
         @media (prefers-color-scheme: dark) {
             .sel-card {
                 background: #1a1a20;
@@ -4384,6 +4388,10 @@
             .sel-btn { background: #0842a0; color: #d3e3fd; }
             .sel-btn:hover { box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 1px 3px 1px rgba(0, 0, 0, 0.25); }
             .sel-btn:focus-visible { box-shadow: 0 0 0 3px rgba(138, 180, 248, 0.4); }
+            .sel-btn.secondary { background: transparent; color: #8ab4f8; box-shadow: inset 0 0 0 1px rgba(232, 231, 240, 0.18); }
+            .sel-btn.secondary:hover { background: #1e1e24; box-shadow: inset 0 0 0 1px rgba(232, 231, 240, 0.26); }
+            .sel-note { color: #b6b5bf; }
+            .sel-note.done { color: #6dd58c; }
         }
     `;
 
@@ -4396,6 +4404,10 @@
     let selectionIsRtl = false;
     let selectionRequestId = 0;
     let selectionListenersAttached = false;
+    let selectionReplaceIntent = false;
+    let selectionReplacePlan = null;
+    let selectionUndoTarget = null;
+    const selectionNodeOriginals = new WeakMap();
 
     function watchSelectionPointer() {
         try {
@@ -4432,9 +4444,214 @@
         return svg;
     }
 
-    function showSelectionTranslation(rawText) {
+    function isInsideSkippedContainer(node) {
+        let el = node && node.nodeType !== Node.ELEMENT_NODE ? node.parentElement : node;
+        while (el && el.nodeType === Node.ELEMENT_NODE && el !== document.documentElement) {
+            if (INLINE_SKIP_TAGS.has(el.nodeName)) return true;
+            el = el.parentElement || (el.getRootNode?.() instanceof ShadowRoot ? el.getRootNode().host : null);
+        }
+        return false;
+    }
+
+    function isEligibleReplaceBlock(block) {
+        if (!block || !block.isConnected) return false;
+        const status = block.dataset ? block.dataset.translationStatus : undefined;
+        if (status === 'translated' || status === 'processing' || status === 'original') return false;
+        if (isFullyExcluded(block)) return false;
+        return true;
+    }
+
+    function selectionTextNodeIsRejected(node) {
+        return isInsideEditableHost(node) || isInsideSkippedContainer(node);
+    }
+
+    function blocksTouchedByRange(range) {
+        const blocks = [];
+        const seen = new Set();
+        if (!range) return blocks;
+        let root = range.commonAncestorContainer;
+        if (root && root.nodeType === Node.TEXT_NODE) root = root.parentNode;
+        if (!root || root.nodeType !== Node.ELEMENT_NODE) return blocks;
+        let walker;
+        try {
+            walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
+        } catch (e) {
+            return blocks;
+        }
+        let tn;
+        while (tn = walker.nextNode()) {
+            let intersects = false;
+            try { intersects = range.intersectsNode(tn); } catch (e) { intersects = false; }
+            if (!intersects) continue;
+            let sub = tn.nodeValue || '';
+            if (tn === range.startContainer && tn === range.endContainer) sub = sub.slice(range.startOffset, range.endOffset);
+            else if (tn === range.startContainer) sub = sub.slice(range.startOffset);
+            else if (tn === range.endContainer) sub = sub.slice(0, range.endOffset);
+            if (!isTranslatableText(sub)) continue;
+            if (selectionTextNodeIsRejected(tn)) continue;
+            const block = findBlockAncestor(tn);
+            if (!block || seen.has(block)) continue;
+            if (!isEligibleReplaceBlock(block)) continue;
+            seen.add(block);
+            blocks.push(block);
+        }
+        return blocks;
+    }
+
+    function classifySelectionForReplace(range) {
+        if (!range) return { kind: 'reject', reason: 'norange' };
+        let startContainer, endContainer;
+        try {
+            startContainer = range.startContainer;
+            endContainer = range.endContainer;
+        } catch (e) {
+            return { kind: 'reject', reason: 'norange' };
+        }
+        if (!startContainer || !endContainer) return { kind: 'reject', reason: 'norange' };
+        let startRoot = null, endRoot = null;
+        try { startRoot = startContainer.getRootNode(); } catch (e) { }
+        try { endRoot = endContainer.getRootNode(); } catch (e) { }
+        if (startRoot !== endRoot) return { kind: 'reject', reason: 'shadow' };
+        if (selectionTextNodeIsRejected(startContainer) || selectionTextNodeIsRejected(endContainer)) {
+            return { kind: 'reject', reason: 'editable' };
+        }
+        if (startContainer === endContainer && startContainer.nodeType === Node.TEXT_NODE) {
+            const startOffset = range.startOffset;
+            const endOffset = range.endOffset;
+            const value = startContainer.nodeValue || '';
+            const slice = value.slice(startOffset, endOffset);
+            if (endOffset > startOffset && isTranslatableText(slice)) {
+                return { kind: 'node', node: startContainer, startOffset, endOffset };
+            }
+        }
+        const blocks = blocksTouchedByRange(range);
+        if (blocks.length === 0) return { kind: 'reject', reason: 'noblocks' };
+        return { kind: 'blocks', blocks };
+    }
+
+    function replaceSingleTextNode(node, startOffset, endOffset, translation) {
+        if (!node || node.nodeType !== Node.TEXT_NODE || !node.isConnected) return false;
+        if (typeof translation !== 'string') return false;
+        const value = node.nodeValue || '';
+        if (startOffset < 0 || endOffset > value.length || endOffset <= startOffset) return false;
+        if (!selectionNodeOriginals.has(node)) selectionNodeOriginals.set(node, value);
+        node.nodeValue = value.slice(0, startOffset) + translation + value.slice(endOffset);
+        return true;
+    }
+
+    function restoreReplacedTextNode(node) {
+        if (!node || !selectionNodeOriginals.has(node)) return false;
+        const original = selectionNodeOriginals.get(node);
+        try {
+            if (node.isConnected) node.nodeValue = original;
+        } catch (e) {
+            return false;
+        }
+        selectionNodeOriginals.delete(node);
+        return true;
+    }
+
+    function requestSelectionBatch(batch) {
+        return new Promise(resolve => {
+            const payload = batch.map(tu => ({ id: tu.id, template: tu.template }));
+            sendRuntimeMessage({ action: 'translateBatch', batch: payload }, (response, failure) => {
+                if (failure) { resolve({ error: failure }); return; }
+                if (!response) { resolve({ error: 'noResponse' }); return; }
+                if (response.success) { resolve({ translations: response.translations || [] }); return; }
+                resolve({
+                    error: typeof response.error === 'string' ? response.error : 'failed',
+                    code: typeof response.code === 'string' ? response.code : '',
+                    cancelled: response.cancelled === true,
+                    fatal: response.fatal === true
+                });
+            });
+        });
+    }
+
+    async function runSelectionBlockReplace(blocks) {
+        const config = await new Promise(resolve => {
+            try {
+                chrome.storage.local.get(['targetLanguage', 'batchSize', 'maxToken', 'toggleBlueBackground'], resolve);
+            } catch (e) {
+                resolve({});
+            }
+        });
+        const lang = (config && config.targetLanguage) || 'en';
+        useSessionMemoForLanguage(lang);
+        try { applyStrings(lang); } catch (e) { }
+        highlightTranslated = config.toggleBlueBackground === true;
+        const maxBatchLength = Math.min(Math.floor((config.maxToken || DEFAULTS.maxToken) * 3), DEFAULTS.maxBatchLength);
+
+        const tus = [];
+        const byId = new Map();
+        let counter = 0;
+        for (const block of blocks) {
+            if (!isEligibleReplaceBlock(block)) continue;
+            const tu = buildTU(block);
+            if (!tu || !tu.hasTranslatableText) continue;
+            if (tu.template.length > maxBatchLength) continue;
+            tu.id = `sel_${Date.now()}_${counter++}`;
+            tus.push(tu);
+            byId.set(tu.id, tu);
+        }
+        if (tus.length === 0) return { total: 0, applied: 0, failed: 0, failure: null };
+
+        for (const tu of tus) {
+            try {
+                tu.block.dataset.translationStatus = 'processing';
+                tu.block.dataset.tuTemplate = tu.template;
+            } catch (e) { }
+        }
+
+        const batches = createBatches(tus, config.batchSize || DEFAULTS.batchSize, maxBatchLength);
+        const hadObservers = activeObservers.length > 0;
+        let failure = null;
+        disconnectAllObservers();
+        try {
+            for (const batch of batches) {
+                const result = await requestSelectionBatch(batch);
+                if (result.error) {
+                    if (!failure) failure = result;
+                    continue;
+                }
+                const returned = new Set();
+                for (const item of (result.translations || [])) {
+                    if (!item || typeof item.translatedTemplate !== 'string') continue;
+                    const tu = byId.get(item.id);
+                    if (!tu || !tu.block || !tu.block.isConnected) continue;
+                    returned.add(item.id);
+                    try { applyTranslation(tu, item.translatedTemplate, true); } catch (e) { }
+                }
+                for (const tu of batch) {
+                    if (returned.has(tu.id)) continue;
+                    if (tu.block && tu.block.dataset && tu.block.dataset.translationStatus === 'processing') {
+                        try { delete tu.block.dataset.translationStatus; } catch (e) { }
+                    }
+                }
+            }
+        } finally {
+            for (const tu of tus) {
+                if (tu.block && tu.block.dataset && tu.block.dataset.translationStatus === 'processing') {
+                    try { delete tu.block.dataset.translationStatus; } catch (e) { }
+                }
+            }
+            if (hadObservers) watchForNewContent();
+        }
+
+        let applied = 0;
+        for (const tu of tus) {
+            if (tu.block && tu.block.dataset && tu.block.dataset.translationStatus === 'translated') applied++;
+        }
+        if (applied > 0) saveCurrentTranslationToCache().catch(() => { });
+        return { total: tus.length, applied, failed: tus.length - applied, failure };
+    }
+
+    function showSelectionTranslation(rawText, replaceIntent) {
         const text = typeof rawText === 'string' ? rawText.trim() : '';
         if (!text) return;
+        selectionReplaceIntent = replaceIntent === true;
+        selectionReplacePlan = null;
+        selectionUndoTarget = null;
         captureSelectionAnchor();
         chrome.storage.local.get(['targetLanguage'], function (items) {
             const lang = (items && items.targetLanguage) || 'en';
@@ -4593,6 +4810,23 @@
         positionSelectionPopup();
     }
 
+    function appendSelectionNote(message) {
+        if (!selectionShadowRoot) return;
+        const body = selectionShadowRoot.getElementById('selPanelBody');
+        if (!body) return;
+        const note = document.createElement('p');
+        note.className = 'sel-note';
+        note.setAttribute('dir', 'auto');
+        note.textContent = message;
+        body.appendChild(note);
+    }
+
+    function selectionReplaceButtonLabel(plan) {
+        return plan.kind === 'node'
+            ? selectionLabel('selReplaceSelection', 'Replace selection')
+            : selectionLabel('selReplaceBlock', 'Replace paragraph');
+    }
+
     function renderSelectionResult(translation) {
         if (!selectionShadowRoot) return;
         clearSelectionActions();
@@ -4603,10 +4837,24 @@
         paragraph.textContent = translation;
         setSelectionBody(paragraph);
 
+        selectionReplacePlan = classifySelectionForReplace(selectionAnchorRange);
+        const canReplace = selectionReplacePlan && (selectionReplacePlan.kind === 'node' || selectionReplacePlan.kind === 'blocks');
+        if (!canReplace && selectionReplaceIntent) {
+            appendSelectionNote(selectionLabel('selReplaceUnavailable', 'This selection cannot be replaced here'));
+        }
+
         const actions = document.createElement('div');
         actions.className = 'sel-actions';
+        if (canReplace) {
+            const replaceBtn = document.createElement('button');
+            replaceBtn.className = 'sel-btn';
+            replaceBtn.type = 'button';
+            replaceBtn.textContent = selectionReplaceButtonLabel(selectionReplacePlan);
+            addUserClickListener(replaceBtn, function () { onSelectionReplaceClick(translation); });
+            actions.appendChild(replaceBtn);
+        }
         const copyBtn = document.createElement('button');
-        copyBtn.className = 'sel-btn';
+        copyBtn.className = canReplace ? 'sel-btn secondary' : 'sel-btn';
         copyBtn.type = 'button';
         copyBtn.textContent = selectionLabel('selCopy', 'Copy');
         addUserClickListener(copyBtn, function () { copySelectionTranslation(translation, copyBtn); });
@@ -4614,6 +4862,88 @@
         const card = selectionShadowRoot.querySelector('.sel-card');
         if (card) card.appendChild(actions);
         positionSelectionPopup();
+    }
+
+    function onSelectionReplaceClick(translation) {
+        const plan = selectionReplacePlan;
+        if (!plan) return;
+        if (plan.kind === 'node') {
+            if (replaceSingleTextNode(plan.node, plan.startOffset, plan.endOffset, translation)) {
+                selectionUndoTarget = { kind: 'node', node: plan.node };
+                renderSelectionReplaced(true);
+            } else {
+                renderSelectionReplaceFailure(null);
+            }
+            return;
+        }
+        if (plan.kind !== 'blocks') return;
+        const requestId = ++selectionRequestId;
+        renderSelectionReplacing();
+        runSelectionBlockReplace(plan.blocks).then(result => {
+            if (requestId !== selectionRequestId) return;
+            if (result && result.applied > 0) renderSelectionReplaced(false);
+            else renderSelectionReplaceFailure(result ? result.failure : null);
+        }).catch(() => {
+            if (requestId !== selectionRequestId) return;
+            renderSelectionReplaceFailure(null);
+        });
+    }
+
+    function renderSelectionReplacing() {
+        if (!selectionShadowRoot) return;
+        clearSelectionActions();
+        setSelectionTitle(selectionLabel('selTitle', 'Translation'), false);
+        const wrap = document.createElement('div');
+        wrap.className = 'sel-loading';
+        const spinner = document.createElement('span');
+        spinner.className = 'sel-spinner';
+        const label = document.createElement('span');
+        label.textContent = selectionLabel('selReplacing', 'Replacing…');
+        wrap.appendChild(spinner);
+        wrap.appendChild(label);
+        setSelectionBody(wrap);
+        positionSelectionPopup();
+    }
+
+    function renderSelectionReplaced(showUndo) {
+        if (!selectionShadowRoot) return;
+        clearSelectionActions();
+        setSelectionTitle(selectionLabel('selTitle', 'Translation'), false);
+        const box = document.createElement('p');
+        box.className = 'sel-note done';
+        box.setAttribute('dir', 'auto');
+        box.textContent = selectionLabel('selReplaced', 'Replaced');
+        setSelectionBody(box);
+        if (showUndo) {
+            const actions = document.createElement('div');
+            actions.className = 'sel-actions';
+            const undoBtn = document.createElement('button');
+            undoBtn.className = 'sel-btn';
+            undoBtn.type = 'button';
+            undoBtn.textContent = selectionLabel('selUndo', 'Undo');
+            addUserClickListener(undoBtn, function () { onSelectionUndoClick(); });
+            actions.appendChild(undoBtn);
+            const card = selectionShadowRoot.querySelector('.sel-card');
+            if (card) card.appendChild(actions);
+        }
+        positionSelectionPopup();
+    }
+
+    function renderSelectionReplaceFailure(failure) {
+        let message = selectionLabel('selReplaceFailed', 'Could not replace the selection');
+        if (failure) {
+            const localized = selectionErrorText(failure.code, failure.error);
+            if (localized) message = localized;
+        }
+        renderSelectionError(message);
+    }
+
+    function onSelectionUndoClick() {
+        if (selectionUndoTarget && selectionUndoTarget.kind === 'node') {
+            restoreReplacedTextNode(selectionUndoTarget.node);
+        }
+        selectionUndoTarget = null;
+        closeSelectionPopup();
     }
 
     function renderSelectionError(message) {
@@ -4736,6 +5066,9 @@
         selectionContainer = null;
         selectionShadowRoot = null;
         selectionAnchorRange = null;
+        selectionReplacePlan = null;
+        selectionReplaceIntent = false;
+        selectionUndoTarget = null;
     }
 
     function attachSelectionListeners() {
@@ -4860,7 +5193,7 @@
                         handleStreamingUpdate(request.batchId, request.translations);
                         return false;
                     case "showSelectionTranslation":
-                        showSelectionTranslation(request.text);
+                        showSelectionTranslation(request.text, request.replaceIntent === true);
                         sendResponse({ status: "showing" });
                         return false;
                     default:
