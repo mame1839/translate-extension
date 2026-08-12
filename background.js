@@ -1877,7 +1877,7 @@ async function runSelectionTranslation(key, rawText, sendResponse) {
     abortSelectionTranslation(key);
     const text = typeof rawText === 'string' ? rawText.trim() : '';
     if (!text) {
-        safeSendResponse(sendResponse, { success: false, error: errorMessages.emptyResponse });
+        safeSendResponse(sendResponse, { success: false, code: 'emptyResponse', error: errorMessages.emptyResponse });
         return;
     }
     const controller = new AbortController();
@@ -1891,6 +1891,7 @@ async function runSelectionTranslation(key, rawText, sendResponse) {
             success: false,
             cancelled: error?.name === 'AbortError',
             fatal: isFatalTranslationErrorMessage(message),
+            code: resolveTranslationErrorCode(error, message),
             error: message
         });
     } finally {
