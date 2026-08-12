@@ -511,6 +511,10 @@
         }
     }
 
+    function isExcludedSubframe() {
+        return !IS_TOP_FRAME && isCurrentUrlExcluded();
+    }
+
     function adoptSettingSnapshot(items) {
         autoTranslateNewContent = items.autoTranslateNewContent === true;
         hidePromptForAllSites = items.hidePromptAllSites === true;
@@ -4817,6 +4821,10 @@
                             sendResponse({ status: "alreadyTranslating" });
                             return false;
                         }
+                        if (isExcludedSubframe()) {
+                            sendResponse({ status: "excluded" });
+                            return false;
+                        }
                         removePrompt();
                         translationStarted = true;
                         rememberTranslatedDomain();
@@ -4826,6 +4834,10 @@
                     case "clearPageCacheAndRetranslate":
                         if (isTranslating) {
                             sendResponse({ status: "alreadyTranslating" });
+                            return false;
+                        }
+                        if (isExcludedSubframe()) {
+                            sendResponse({ status: "excluded" });
                             return false;
                         }
                         removePrompt();
