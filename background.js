@@ -20,7 +20,8 @@ let usageWriteChain = Promise.resolve();
 const PAGE_CACHE_DB_NAME = 'translationCache';
 const PAGE_CACHE_DB_VERSION = 1;
 const PAGE_CACHE_STORE = 'pages';
-const PAGE_CACHE_QUOTA_PRUNE_TARGET = 500;
+const PAGE_CACHE_QUOTA_EVICT_RATIO = 0.2;
+const PAGE_CACHE_QUOTA_EVICT_ROUNDS = 3;
 const PAGE_CACHE_SAMPLE_LIMIT = 24;
 const PAGE_CACHE_LIST_PAGE_SIZE = 25;
 
@@ -294,22 +295,22 @@ function handleContentScriptMessage(request, sender, sendResponse) {
 
     if (request.action === "pageCacheGet") {
         pageCacheGet(request.key)
-            .then(cache => sendResponse({ cache }))
-            .catch(() => sendResponse({ cache: null }));
+            .then(result => sendResponse({ cache: result.record, found: result.found, error: result.error }))
+            .catch(e => sendResponse({ cache: null, found: false, error: describeStorageFailure(e) }));
         return true;
     }
 
     if (request.action === "pageCacheSet") {
         pageCacheSet(request.key, request.cache)
-            .then(saved => sendResponse({ saved }))
-            .catch(() => sendResponse({ saved: false }));
+            .then(result => sendResponse({ saved: result.saved, error: result.error, quotaExhausted: result.quotaExhausted }))
+            .catch(e => sendResponse({ saved: false, error: describeStorageFailure(e), quotaExhausted: false }));
         return true;
     }
 
     if (request.action === "pageCacheDelete") {
         pageCacheDelete(request.key)
-            .then(() => sendResponse({ ok: true }))
-            .catch(() => sendResponse({ ok: false }));
+            .then(result => sendResponse({ removed: result.removed, error: result.error }))
+            .catch(e => sendResponse({ removed: false, error: describeStorageFailure(e) }));
         return true;
     }
 
@@ -2102,17 +2103,18 @@ function reqAsPromise(req) {
 }
 
 async function pageCacheGet(key) {
-    if (!key) return null;
+    if (!key) return { record: null, found: false, error: '' };
     let db;
-    try { db = await openPageCacheDB(); } catch (e) { return null; }
+    try { db = await openPageCacheDB(); } catch (e) { return { record: null, found: false, error: describeStorageFailure(e) }; }
     try {
         const tx = db.transaction(PAGE_CACHE_STORE, 'readonly');
         const store = tx.objectStore(PAGE_CACHE_STORE);
         let result = null;
-        try { result = await reqAsPromise(store.get(key)); } catch (e) { result = null; }
+        try { result = await reqAsPromise(store.get(key)); }
+        catch (e) { return { record: null, found: false, error: describeStorageFailure(e) }; }
         try { await awaitTransaction(tx); } catch (e) { }
-        return result || null;
-    } catch (e) { return null; }
+        return { record: result || null, found: !!result, error: '' };
+    } catch (e) { return { record: null, found: false, error: describeStorageFailure(e) }; }
     finally { try { db.close(); } catch (e) { } }
 }
 
@@ -2128,37 +2130,44 @@ async function pageCachePutRecord(db, record) {
 }
 
 async function pageCacheSet(key, cache) {
-    if (!key || !cache) return false;
+    if (!key || !cache) return { saved: false, error: '', quotaExhausted: false };
     let db;
-    try { db = await openPageCacheDB(); } catch (e) { return false; }
+    try { db = await openPageCacheDB(); } catch (e) { return { saved: false, error: describeStorageFailure(e), quotaExhausted: false }; }
     try {
         const record = { ...cache, key };
         if (!record.savedAt) record.savedAt = Date.now();
-        try {
-            await pageCachePutRecord(db, record);
-            return true;
-        } catch (e) {
-            if (!isQuotaExceededError(e)) return false;
+        let lastError = '';
+        for (let round = 0; round <= PAGE_CACHE_QUOTA_EVICT_ROUNDS; round++) {
+            try {
+                await pageCachePutRecord(db, record);
+                return { saved: true, error: '', quotaExhausted: false };
+            } catch (e) {
+                lastError = describeStorageFailure(e);
+                if (!isQuotaExceededError(e)) return { saved: false, error: lastError, quotaExhausted: false };
+            }
+            if (round === PAGE_CACHE_QUOTA_EVICT_ROUNDS) break;
+            let evicted = 0;
+            try { evicted = await pageCacheEvictForQuota(); } catch (e) { }
+            if (evicted === 0) break;
         }
-        try { await pageCachePrune(PAGE_CACHE_QUOTA_PRUNE_TARGET); } catch (e) { }
-        try {
-            await pageCachePutRecord(db, record);
-            return true;
-        } catch (e) { return false; }
-    } catch (e) { return false; }
+        return { saved: false, error: lastError, quotaExhausted: true };
+    } catch (e) { return { saved: false, error: describeStorageFailure(e), quotaExhausted: false }; }
     finally { try { db.close(); } catch (e) { } }
 }
 
 async function pageCacheDelete(key) {
-    if (!key) return;
+    if (!key) return { removed: false, error: '' };
     let db;
-    try { db = await openPageCacheDB(); } catch (e) { return; }
+    try { db = await openPageCacheDB(); } catch (e) { return { removed: false, error: describeStorageFailure(e) }; }
     try {
         const tx = db.transaction(PAGE_CACHE_STORE, 'readwrite');
         const store = tx.objectStore(PAGE_CACHE_STORE);
-        try { await reqAsPromise(store.delete(key)); } catch (e) { }
-        try { await awaitTransaction(tx); } catch (e) { }
-    } catch (e) { }
+        try { await reqAsPromise(store.delete(key)); }
+        catch (e) { return { removed: false, error: describeStorageFailure(e) }; }
+        try { await awaitTransaction(tx); }
+        catch (e) { return { removed: false, error: describeStorageFailure(e) }; }
+        return { removed: true, error: '' };
+    } catch (e) { return { removed: false, error: describeStorageFailure(e) }; }
     finally { try { db.close(); } catch (e) { } }
 }
 
@@ -2178,40 +2187,49 @@ function cleanupLegacyPageCache() {
     } catch (e) { }
 }
 
-async function pageCachePrune(maxEntries) {
-    const limit = Math.max(1, Number.isFinite(maxEntries) ? maxEntries : 500);
-    let db;
-    try { db = await openPageCacheDB(); } catch (e) { return; }
-    let total = 0;
+async function pageCacheDeleteOldest(db, count) {
+    if (!(count > 0)) return 0;
+    let deleted = 0;
+    let committed = true;
     try {
-        const txCount = db.transaction(PAGE_CACHE_STORE, 'readonly');
-        const storeCount = txCount.objectStore(PAGE_CACHE_STORE);
-        try { total = await reqAsPromise(storeCount.count()) || 0; } catch (e) { total = 0; }
-        try { await awaitTransaction(txCount); } catch (e) { }
-    } catch (e) { }
-    if (total <= limit) {
-        try { db.close(); } catch (e) { }
-        return;
-    }
-    const toDelete = total - limit;
-    try {
-        const txDel = db.transaction(PAGE_CACHE_STORE, 'readwrite');
-        const storeDel = txDel.objectStore(PAGE_CACHE_STORE);
-        const index = storeDel.index('savedAt');
+        const tx = db.transaction(PAGE_CACHE_STORE, 'readwrite');
+        const store = tx.objectStore(PAGE_CACHE_STORE);
+        const index = store.index('savedAt');
         await new Promise((resolve) => {
-            let deleted = 0;
-            const cursorReq = index.openCursor();
+            let cursorReq;
+            try { cursorReq = index.openCursor(); } catch (e) { resolve(); return; }
             cursorReq.onsuccess = (event) => {
                 const cursor = event.target.result;
-                if (!cursor || deleted >= toDelete) { resolve(); return; }
-                try { cursor.delete(); } catch (e) { }
-                deleted++;
+                if (!cursor || deleted >= count) { resolve(); return; }
+                try { cursor.delete(); deleted++; } catch (e) { }
                 cursor.continue();
             };
             cursorReq.onerror = (e) => { try { e.preventDefault(); } catch (err) { } resolve(); };
         });
-        try { await awaitTransaction(txDel); } catch (e) { }
-    } catch (e) { }
+        try { await awaitTransaction(tx); } catch (e) { committed = false; }
+    } catch (e) { return 0; }
+    return committed ? deleted : 0;
+}
+
+async function pageCachePrune(maxEntries) {
+    const limit = Math.max(1, Number.isFinite(maxEntries) ? maxEntries : 500);
+    let db;
+    try { db = await openPageCacheDB(); } catch (e) { return 0; }
+    try {
+        const total = await pageCacheCountEntries(db);
+        return await pageCacheDeleteOldest(db, total - limit);
+    } catch (e) { return 0; }
+    finally { try { db.close(); } catch (e) { } }
+}
+
+async function pageCacheEvictForQuota() {
+    let db;
+    try { db = await openPageCacheDB(); } catch (e) { return 0; }
+    try {
+        const total = await pageCacheCountEntries(db);
+        if (total <= 0) return 0;
+        return await pageCacheDeleteOldest(db, Math.max(1, Math.ceil(total * PAGE_CACHE_QUOTA_EVICT_RATIO)));
+    } catch (e) { return 0; }
     finally { try { db.close(); } catch (e) { } }
 }
 
@@ -2229,7 +2247,7 @@ async function pageCacheCountEntries(db) {
     return total;
 }
 
-function describeCacheFailure(e) {
+function describeStorageFailure(e) {
     if (!e) return 'unknown';
     const name = e.name || 'Error';
     const message = typeof e.message === 'string' ? e.message : '';
@@ -2240,9 +2258,9 @@ function pageCacheSampleBytes(db) {
     const tx = db.transaction(PAGE_CACHE_STORE, 'readonly');
     const store = tx.objectStore(PAGE_CACHE_STORE);
     return new Promise((resolve) => {
-        const sample = { records: 0, bytes: 0 };
+        const sample = { records: 0, bytes: 0, error: '' };
         let cursorReq;
-        try { cursorReq = store.openCursor(); } catch (e) { resolve(sample); return; }
+        try { cursorReq = store.openCursor(); } catch (e) { sample.error = describeStorageFailure(e); resolve(sample); return; }
         cursorReq.onsuccess = (event) => {
             const cursor = event.target.result;
             if (!cursor || sample.records >= PAGE_CACHE_SAMPLE_LIMIT) { resolve(sample); return; }
@@ -2250,25 +2268,32 @@ function pageCacheSampleBytes(db) {
             sample.records++;
             cursor.continue();
         };
-        cursorReq.onerror = (e) => { try { e.preventDefault(); } catch (err) { } resolve(sample); };
+        cursorReq.onerror = (e) => {
+            try { e.preventDefault(); } catch (err) { }
+            sample.error = describeStorageFailure(cursorReq.error);
+            resolve(sample);
+        };
     });
 }
 
 async function pageCacheStats() {
     let db;
-    try { db = await openPageCacheDB(); } catch (e) { return { entries: 0, bytes: 0, error: describeCacheFailure(e) }; }
+    try { db = await openPageCacheDB(); } catch (e) { return { entries: 0, bytes: 0, error: describeStorageFailure(e), bytesError: '' }; }
     let entries = 0;
     let bytes = 0;
     let error = '';
+    let bytesError = '';
     try {
         entries = await pageCacheCountEntries(db);
         if (entries > 0) {
             const sample = await pageCacheSampleBytes(db);
-            if (sample.records > 0) bytes = Math.round(sample.bytes / sample.records * entries);
+            if (sample.error) bytesError = sample.error;
+            else if (sample.records > 0) bytes = Math.round(sample.bytes / sample.records * entries);
+            else bytesError = 'EmptySample: no record could be measured';
         }
-    } catch (e) { error = describeCacheFailure(e); }
+    } catch (e) { error = describeStorageFailure(e); }
     finally { try { db.close(); } catch (e) { } }
-    return { entries, bytes, error };
+    return { entries, bytes, error, bytesError };
 }
 
 function pageCacheSummarize(record) {
@@ -2285,7 +2310,7 @@ async function pageCacheList(offset, limit) {
     const start = Math.max(0, Number.isFinite(offset) ? Math.floor(offset) : 0);
     const size = Math.min(PAGE_CACHE_LIST_PAGE_SIZE, Math.max(1, Number.isFinite(limit) ? Math.floor(limit) : PAGE_CACHE_LIST_PAGE_SIZE));
     let db;
-    try { db = await openPageCacheDB(); } catch (e) { return { pages: [], total: 0, offset: start, error: describeCacheFailure(e) }; }
+    try { db = await openPageCacheDB(); } catch (e) { return { pages: [], total: 0, offset: start, error: describeStorageFailure(e) }; }
     let total = 0;
     let error = '';
     const pages = [];
@@ -2298,7 +2323,7 @@ async function pageCacheList(offset, limit) {
             await new Promise((resolve) => {
                 let skipped = 0;
                 let cursorReq;
-                try { cursorReq = index.openCursor(null, 'prev'); } catch (e) { resolve(); return; }
+                try { cursorReq = index.openCursor(null, 'prev'); } catch (e) { error = describeStorageFailure(e); resolve(); return; }
                 cursorReq.onsuccess = (event) => {
                     const cursor = event.target.result;
                     if (!cursor || pages.length >= size) { resolve(); return; }
@@ -2310,11 +2335,15 @@ async function pageCacheList(offset, limit) {
                     try { pages.push(pageCacheSummarize(cursor.value)); } catch (e) { }
                     cursor.continue();
                 };
-                cursorReq.onerror = (e) => { try { e.preventDefault(); } catch (err) { } resolve(); };
+                cursorReq.onerror = (e) => {
+                    try { e.preventDefault(); } catch (err) { }
+                    error = describeStorageFailure(cursorReq.error);
+                    resolve();
+                };
             });
             try { await awaitTransaction(tx); } catch (e) { }
         }
-    } catch (e) { error = describeCacheFailure(e); }
+    } catch (e) { error = describeStorageFailure(e); }
     finally { try { db.close(); } catch (e) { } }
     return { pages, total, offset: start, error };
 }
@@ -2344,8 +2373,8 @@ function handleExtensionPageMessage(request, sender, sendResponse) {
 
     if (request.action === "usageStatsGet") {
         getUsageStatsSnapshot()
-            .then(stats => sendResponse({ stats, version: workerVersion() }))
-            .catch(() => sendResponse({ stats: null, version: workerVersion() }));
+            .then(stats => sendResponse({ stats, error: '', version: workerVersion() }))
+            .catch(e => sendResponse({ stats: null, error: describeStorageFailure(e), version: workerVersion() }));
         return true;
     }
 
@@ -2358,8 +2387,8 @@ function handleExtensionPageMessage(request, sender, sendResponse) {
 
     if (request.action === "pageCacheStats") {
         pageCacheStats()
-            .then(stats => sendResponse({ stats, version: workerVersion() }))
-            .catch(() => sendResponse({ stats: null, version: workerVersion() }));
+            .then(stats => sendResponse({ stats, error: '', version: workerVersion() }))
+            .catch(e => sendResponse({ stats: null, error: describeStorageFailure(e), version: workerVersion() }));
         return true;
     }
 
@@ -2373,14 +2402,14 @@ function handleExtensionPageMessage(request, sender, sendResponse) {
     if (request.action === "pageCacheList") {
         pageCacheList(request.offset, request.limit)
             .then(result => sendResponse(Object.assign({ version: workerVersion() }, result)))
-            .catch(() => sendResponse({ pages: [], total: 0, offset: 0, version: workerVersion() }));
+            .catch(e => sendResponse({ pages: [], total: 0, offset: 0, error: describeStorageFailure(e), version: workerVersion() }));
         return true;
     }
 
     if (request.action === "pageCacheRemove") {
         pageCacheDelete(request.key)
-            .then(() => sendResponse({ removed: true }))
-            .catch(() => sendResponse({ removed: false }));
+            .then(result => sendResponse({ removed: result.removed, error: result.error }))
+            .catch(e => sendResponse({ removed: false, error: describeStorageFailure(e) }));
         return true;
     }
 

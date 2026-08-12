@@ -64,6 +64,7 @@ let alwaysEntries = [];
 let saveTimer = null;
 let snackTimer = null;
 let usageStats = null;
+let usageFailureReason = '';
 let cacheStats = null;
 let cacheFailureReason = '';
 let backgroundUnreachable = false;
@@ -71,6 +72,7 @@ let backgroundVersion = null;
 let cachePages = [];
 let cachePagesTotal = 0;
 let cachePagesUnreadable = false;
+let cachePagesLoaded = false;
 
 function el(id) {
     return document.getElementById(id);
@@ -105,6 +107,7 @@ function applyI18n(t) {
     renderSiteLists();
     renderUsageStats();
     renderCacheStats();
+    renderCachePages();
     renderStaleBackgroundBanner();
 }
 
@@ -412,6 +415,19 @@ function buildUsageEmptyRow(t) {
     return row;
 }
 
+function buildUsageErrorRow(message) {
+    const row = document.createElement('div');
+    row.className = 'row';
+    const main = document.createElement('div');
+    main.className = 'row-main';
+    const desc = document.createElement('div');
+    desc.className = 'row-desc warn-text';
+    desc.textContent = message;
+    main.appendChild(desc);
+    row.appendChild(main);
+    return row;
+}
+
 function usedProviderNames(providers) {
     const used = Object.keys(providers).filter(name => {
         const entry = providers[name];
@@ -434,9 +450,20 @@ function renderUsageStats() {
     if (!container || !since) return;
     const t = currentT();
     const lang = getUiLang();
-    const providers = (usageStats && usageStats.providers) || {};
-    const names = usedProviderNames(providers);
     container.replaceChildren();
+    if (usageFailureReason) {
+        container.appendChild(buildUsageErrorRow(backgroundUnreachable
+            ? t.bgUnavailable + ' (' + usageFailureReason + ')'
+            : t.usageUnreadable.replace('{reason}', usageFailureReason)));
+        since.textContent = '';
+        return;
+    }
+    if (!usageStats) {
+        since.textContent = '';
+        return;
+    }
+    const providers = usageStats.providers || {};
+    const names = usedProviderNames(providers);
     if (names.length === 0) {
         container.appendChild(buildUsageEmptyRow(t));
         since.textContent = '';
@@ -455,24 +482,29 @@ function renderCacheStats() {
     const t = currentT();
     const lang = getUiLang();
     const readable = !!cacheStats && !cacheFailureReason;
+    const sizeReadable = readable && !cacheStats.bytesError;
     entriesNode.textContent = readable ? formatNumber(cacheStats.entries, lang) : '—';
-    sizeNode.textContent = readable ? formatBytes(cacheStats.bytes, lang) : '—';
+    sizeNode.textContent = sizeReadable ? formatBytes(cacheStats.bytes, lang) : '—';
     const errorRow = el('cacheErrorRow');
     const errorNode = el('cacheError');
     if (!errorRow || !errorNode) return;
-    errorRow.hidden = readable;
-    if (readable) { errorNode.textContent = ''; return; }
-    errorNode.textContent = backgroundUnreachable
-        ? t.bgUnavailable + (cacheFailureReason ? ' (' + cacheFailureReason + ')' : '')
-        : t.dataCacheUnreadable.replace('{reason}', cacheFailureReason);
+    errorRow.hidden = readable && sizeReadable;
+    if (readable && sizeReadable) { errorNode.textContent = ''; return; }
+    const reason = readable ? cacheStats.bytesError : cacheFailureReason;
+    errorNode.textContent = backgroundUnreachable && !readable
+        ? t.bgUnavailable + (reason ? ' (' + reason + ')' : '')
+        : t.dataCacheUnreadable.replace('{reason}', reason);
 }
 
 async function refreshUsageStats() {
     try {
         const response = await chrome.runtime.sendMessage({ action: 'usageStatsGet' });
-        usageStats = (response && response.stats) || null;
+        if (!response || !response.stats) throw new Error(describeResponseFailure(response));
+        usageStats = response.stats;
+        usageFailureReason = '';
     } catch (e) {
         usageStats = null;
+        usageFailureReason = describeBackgroundFailure(e) || 'unknown';
     }
     renderUsageStats();
 }
@@ -480,6 +512,10 @@ async function refreshUsageStats() {
 function describeBackgroundFailure(e) {
     const message = e && typeof e.message === 'string' ? e.message : '';
     return message ? message.slice(0, 200) : '';
+}
+
+function describeResponseFailure(response) {
+    return (response && typeof response.error === 'string' && response.error) ? response.error : '';
 }
 
 function pageVersion() {
@@ -523,7 +559,7 @@ async function checkBackgroundVersion() {
 async function refreshCacheStats() {
     try {
         const response = await chrome.runtime.sendMessage({ action: 'pageCacheStats' });
-        if (!response || !response.stats) throw new Error('');
+        if (!response || !response.stats) throw new Error(describeResponseFailure(response));
         cacheStats = response.stats;
         cacheFailureReason = typeof cacheStats.error === 'string' ? cacheStats.error : '';
         backgroundUnreachable = false;
@@ -552,6 +588,10 @@ function renderCachePages() {
     const t = currentT();
     const lang = getUiLang();
     container.replaceChildren();
+    if (!cachePagesLoaded) {
+        moreRow.hidden = true;
+        return;
+    }
     if (cachePages.length === 0) {
         const empty = document.createElement('div');
         empty.className = cachePagesUnreadable ? 'empty-list warn-text' : 'empty-list';
@@ -601,7 +641,7 @@ async function loadCachePages(append) {
     try {
         const offset = append ? cachePages.length : 0;
         const response = await chrome.runtime.sendMessage({ action: 'pageCacheList', offset });
-        if (!response || !Array.isArray(response.pages)) throw new Error('');
+        if (!response || !Array.isArray(response.pages)) throw new Error(describeResponseFailure(response));
         if (response.error) throw new Error(response.error);
         cachePagesTotal = Number.isFinite(response.total) ? response.total : response.pages.length;
         cachePages = append ? cachePages.concat(response.pages) : response.pages;
@@ -612,7 +652,9 @@ async function loadCachePages(append) {
             cachePagesTotal = 0;
         }
         cachePagesUnreadable = true;
+        if (append) showSnackbar(currentT().dataActionFailed, true);
     }
+    cachePagesLoaded = true;
     renderCachePages();
 }
 
@@ -663,6 +705,7 @@ async function clearPageCache() {
         cachePages = [];
         cachePagesTotal = 0;
         cachePagesUnreadable = false;
+        cachePagesLoaded = true;
         renderCacheStats();
         renderCachePages();
         showSnackbar(t.dataClearDone, false);
