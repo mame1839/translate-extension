@@ -610,7 +610,10 @@
 
                     const beginAutoTranslation = () => {
                         if (isExcluded) return;
-                        if (languageDecision.skipAutoTranslation) return;
+                        if (languageDecision.skipAutoTranslation) {
+                            if (languageDecision.skipAutoTranslationIsLowConfidence) showPromptIfNeeded(true);
+                            return;
+                        }
                         translationStarted = true;
                         setTimeout(translationStarter, 100);
                         setTimeout(translationStarter, 1500);
@@ -639,13 +642,12 @@
 
                     showPromptIfNeeded();
 
-                    function showPromptIfNeeded() {
+                    function showPromptIfNeeded(promptEvenIfTargetLanguage) {
                         if (!IS_TOP_FRAME) return;
                         if (isExcluded) return;
-                        if (!languageDecision.pageIsTargetLanguage) {
-                            if (items.hidePromptAllSites !== true) {
-                                createTranslationPrompt(false);
-                            }
+                        if (languageDecision.pageIsTargetLanguage && !promptEvenIfTargetLanguage) return;
+                        if (items.hidePromptAllSites !== true) {
+                            createTranslationPrompt(false);
                         }
                     }
                 }
@@ -1332,8 +1334,9 @@
         const skipAutoTranslation = detectionUsable
             ? (detected.confidence >= LANGUAGE_DETECTION_AUTO_SKIP_CONFIDENCE && detectedLanguageMatchesTarget(detected, chosenLang))
             : attributeSaysTargetLanguage;
+        const skipAutoTranslationIsLowConfidence = !detectionUsable && skipAutoTranslation;
         const detectedSourceLanguage = detectionUsable ? detectedLanguageTag(detected) : '';
-        return { pageIsTargetLanguage, skipAutoTranslation, detectedSourceLanguage };
+        return { pageIsTargetLanguage, skipAutoTranslation, skipAutoTranslationIsLowConfidence, detectedSourceLanguage };
     }
 
     const SVG_NS = 'http://www.w3.org/2000/svg';
