@@ -205,6 +205,8 @@ const TRANSLATIONS = {
         newContentTitle: 'New content is not translated yet',
         blocksTooLong: '{count} blocks are longer than the output token limit and were left untranslated. Raise the max output tokens in settings.',
         nothingTranslated: 'None of the text on this page could be translated. Try again.',
+        cacheSaveFailed: 'Could not save the translation for this page. It will be translated again next time.',
+        cacheStorageFull: 'Storage is full. The translation for this page was not saved.',
     },
     zh: {
         popupName: 'AI 翻译', popupSub: 'AI Website Translator',
@@ -388,6 +390,8 @@ const TRANSLATIONS = {
         newContentTitle: '新内容尚未翻译',
         blocksTooLong: '有 {count} 个文本块超过输出令牌上限，未被翻译。请在设置中提高最大输出令牌数。',
         nothingTranslated: '本页没有任何内容被翻译。请重试。',
+        cacheSaveFailed: '无法保存本页的翻译，下次打开时会重新翻译。',
+        cacheStorageFull: '存储空间已满，本页的翻译未能保存。',
     },
     'zh-Hant': {
         popupName: 'AI 翻譯', popupSub: 'AI Website Translator',
@@ -571,6 +575,8 @@ const TRANSLATIONS = {
         newContentTitle: '新內容尚未翻譯',
         blocksTooLong: '有 {count} 個文字區塊超過輸出權杖上限，未被翻譯。請在設定中提高最大輸出權杖數。',
         nothingTranslated: '本頁沒有任何內容被翻譯。請重試。',
+        cacheSaveFailed: '無法儲存本頁的翻譯，下次開啟時會重新翻譯。',
+        cacheStorageFull: '儲存空間已滿，本頁的翻譯未能儲存。',
     },
     hi: {
         popupName: 'AI अनुवादक', popupSub: 'AI Website Translator',
@@ -754,6 +760,8 @@ const TRANSLATIONS = {
         newContentTitle: 'नई सामग्री का अनुवाद अभी नहीं हुआ है',
         blocksTooLong: '{count} ब्लॉक आउटपुट टोकन सीमा से बड़े हैं, इसलिए उनका अनुवाद नहीं हुआ। सेटिंग में अधिकतम आउटपुट टोकन बढ़ाएँ।',
         nothingTranslated: 'इस पेज का कोई भी हिस्सा अनुवादित नहीं हुआ। फिर कोशिश करें।',
+        cacheSaveFailed: 'इस पेज का अनुवाद सहेजा नहीं जा सका। अगली बार यह फिर से अनुवाद होगा।',
+        cacheStorageFull: 'स्टोरेज भर गया है। इस पेज का अनुवाद सहेजा नहीं गया।',
     },
     es: {
         popupName: 'Traductor AI', popupSub: 'AI Website Translator',
@@ -937,6 +945,8 @@ const TRANSLATIONS = {
         newContentTitle: 'El contenido nuevo aún no está traducido',
         blocksTooLong: '{count} bloques superan el límite de tokens de salida y quedaron sin traducir. Aumenta los tokens de salida máximos en los ajustes.',
         nothingTranslated: 'No se pudo traducir ningún texto de esta página. Inténtalo de nuevo.',
+        cacheSaveFailed: 'No se pudo guardar la traducción de esta página. Se traducirá de nuevo la próxima vez.',
+        cacheStorageFull: 'El almacenamiento está lleno. No se guardó la traducción de esta página.',
     },
     fr: {
         popupName: 'Traducteur IA', popupSub: 'AI Website Translator',
@@ -1120,6 +1130,8 @@ const TRANSLATIONS = {
         newContentTitle: 'Le nouveau contenu n’est pas encore traduit',
         blocksTooLong: '{count} blocs dépassent la limite de jetons de sortie et n\'ont pas été traduits. Augmentez les jetons de sortie maximum dans les paramètres.',
         nothingTranslated: 'Aucun texte de cette page n\'a pu être traduit. Réessayez.',
+        cacheSaveFailed: 'Impossible d’enregistrer la traduction de cette page. Elle sera retraduite la prochaine fois.',
+        cacheStorageFull: 'Le stockage est plein. La traduction de cette page n’a pas été enregistrée.',
     },
     ar: {
         popupName: 'مترجم AI', popupSub: 'AI Website Translator',
@@ -1303,6 +1315,8 @@ const TRANSLATIONS = {
         newContentTitle: 'المحتوى الجديد لم يُترجم بعد',
         blocksTooLong: '{count} من الكتل تتجاوز حد رموز الإخراج ولم تُترجم. ارفع الحد الأقصى لرموز الإخراج في الإعدادات.',
         nothingTranslated: 'تعذّرت ترجمة أي نص في هذه الصفحة. أعد المحاولة.',
+        cacheSaveFailed: 'تعذّر حفظ ترجمة هذه الصفحة، وسيُعاد ترجمتها في المرة القادمة.',
+        cacheStorageFull: 'مساحة التخزين ممتلئة، لذلك لم يتم حفظ ترجمة هذه الصفحة.',
     },
     bn: {
         popupName: 'AI অনুবাদক', popupSub: 'AI Website Translator',
@@ -1486,6 +1500,8 @@ const TRANSLATIONS = {
         newContentTitle: 'নতুন কনটেন্ট এখনও অনুবাদ হয়নি',
         blocksTooLong: '{count}টি ব্লক আউটপুট টোকেন সীমার চেয়ে বড় হওয়ায় অনূদিত হয়নি। সেটিংসে সর্বোচ্চ আউটপুট টোকেন বাড়ান।',
         nothingTranslated: 'এই পেজের কোনো লেখাই অনুবাদ করা যায়নি। আবার চেষ্টা করুন।',
+        cacheSaveFailed: 'এই পৃষ্ঠার অনুবাদ সংরক্ষণ করা যায়নি। পরের বার আবার অনুবাদ করা হবে।',
+        cacheStorageFull: 'স্টোরেজ পূর্ণ, তাই এই পৃষ্ঠার অনুবাদ সংরক্ষণ করা হয়নি।',
     },
     ru: {
         popupName: 'AI Переводчик', popupSub: 'AI Website Translator',
@@ -1669,6 +1685,8 @@ const TRANSLATIONS = {
         newContentTitle: 'Новое содержимое ещё не переведено',
         blocksTooLong: '{count} блоков превышают лимит токенов вывода и остались без перевода. Увеличьте максимум токенов на вывод в настройках.',
         nothingTranslated: 'Не удалось перевести ни один фрагмент этой страницы. Повторите попытку.',
+        cacheSaveFailed: 'Не удалось сохранить перевод этой страницы. В следующий раз она будет переведена заново.',
+        cacheStorageFull: 'Хранилище заполнено, перевод этой страницы не сохранён.',
     },
     pt: {
         popupName: 'Tradutor AI', popupSub: 'AI Website Translator',
@@ -1852,6 +1870,8 @@ const TRANSLATIONS = {
         newContentTitle: 'O conteúdo novo ainda não foi traduzido',
         blocksTooLong: '{count} blocos excedem o limite de tokens de saída e não foram traduzidos. Aumente os tokens de saída máximos nas configurações.',
         nothingTranslated: 'Não foi possível traduzir nenhum texto desta página. Tente novamente.',
+        cacheSaveFailed: 'Não foi possível salvar a tradução desta página. Ela será traduzida novamente na próxima vez.',
+        cacheStorageFull: 'O armazenamento está cheio. A tradução desta página não foi salva.',
     },
     ur: {
         popupName: 'AI مترجم', popupSub: 'AI Website Translator',
@@ -2035,6 +2055,8 @@ const TRANSLATIONS = {
         newContentTitle: 'نئے مواد کا ابھی ترجمہ نہیں ہوا',
         blocksTooLong: '{count} بلاکس آؤٹ پٹ ٹوکن کی حد سے بڑے ہیں، اس لیے ان کا ترجمہ نہیں ہوا۔ ترتیبات میں زیادہ سے زیادہ آؤٹ پٹ ٹوکن بڑھائیں۔',
         nothingTranslated: 'اس صفحے کے کسی متن کا ترجمہ نہ ہو سکا۔ دوبارہ کوشش کریں۔',
+        cacheSaveFailed: 'اس صفحے کا ترجمہ محفوظ نہیں ہو سکا۔ اگلی بار یہ دوبارہ ترجمہ ہوگا۔',
+        cacheStorageFull: 'اسٹوریج بھر چکی ہے، اس لیے اس صفحے کا ترجمہ محفوظ نہیں ہوا۔',
     },
     id: {
         popupName: 'Penerjemah AI', popupSub: 'AI Website Translator',
@@ -2218,6 +2240,8 @@ const TRANSLATIONS = {
         newContentTitle: 'Konten baru belum diterjemahkan',
         blocksTooLong: '{count} blok melebihi batas token keluaran sehingga tidak diterjemahkan. Naikkan token keluaran maksimum di pengaturan.',
         nothingTranslated: 'Tidak ada teks di halaman ini yang bisa diterjemahkan. Coba lagi.',
+        cacheSaveFailed: 'Terjemahan halaman ini tidak dapat disimpan. Halaman akan diterjemahkan lagi lain kali.',
+        cacheStorageFull: 'Penyimpanan penuh, sehingga terjemahan halaman ini tidak tersimpan.',
     },
     de: {
         popupName: 'KI-Übersetzer', popupSub: 'AI Website Translator',
@@ -2401,6 +2425,8 @@ const TRANSLATIONS = {
         newContentTitle: 'Neue Inhalte sind noch nicht übersetzt',
         blocksTooLong: '{count} Blöcke überschreiten das Ausgabe-Token-Limit und blieben unübersetzt. Erhöhen Sie die max. Ausgabe-Tokens in den Einstellungen.',
         nothingTranslated: 'Kein Text auf dieser Seite konnte übersetzt werden. Versuchen Sie es erneut.',
+        cacheSaveFailed: 'Die Übersetzung dieser Seite konnte nicht gespeichert werden. Sie wird beim nächsten Mal erneut übersetzt.',
+        cacheStorageFull: 'Der Speicher ist voll. Die Übersetzung dieser Seite wurde nicht gespeichert.',
     },
     ja: {
         popupName: 'AI 翻訳', popupSub: 'AI Website Translator',
@@ -2584,6 +2610,8 @@ const TRANSLATIONS = {
         newContentTitle: '新しく表示された内容がまだ翻訳されていません',
         blocksTooLong: '{count} 個のブロックが出力トークン上限を超えるため翻訳していません。設定で最大出力トークンを増やしてください。',
         nothingTranslated: 'このページのテキストを 1 件も翻訳できませんでした。再試行してください。',
+        cacheSaveFailed: 'このページの翻訳を保存できませんでした。次に開いたときは翻訳し直しになります。',
+        cacheStorageFull: '保存領域がいっぱいで、このページの翻訳を保存できませんでした。',
     },
     sw: {
         popupName: 'Mtafsiri AI', popupSub: 'AI Website Translator',
@@ -2767,6 +2795,8 @@ const TRANSLATIONS = {
         newContentTitle: 'Maudhui mapya bado hayajatafsiriwa',
         blocksTooLong: 'Vizuizi {count} vinazidi kikomo cha tokeni za matokeo, kwa hivyo havikutafsiriwa. Ongeza tokeni za juu za matokeo katika mipangilio.',
         nothingTranslated: 'Hakuna maandishi ya ukurasa huu yaliyoweza kutafsiriwa. Jaribu tena.',
+        cacheSaveFailed: 'Tafsiri ya ukurasa huu haikuweza kuhifadhiwa. Itatafsiriwa upya wakati ujao.',
+        cacheStorageFull: 'Hifadhi imejaa, kwa hiyo tafsiri ya ukurasa huu haikuhifadhiwa.',
     },
     mr: {
         popupName: 'AI अनुवादक', popupSub: 'AI Website Translator',
@@ -2950,6 +2980,8 @@ const TRANSLATIONS = {
         newContentTitle: 'नवीन मजकुराचे भाषांतर अद्याप झालेले नाही',
         blocksTooLong: '{count} ब्लॉक आउटपुट टोकन मर्यादेपेक्षा मोठे असल्याने भाषांतरित झाले नाहीत. सेटिंग्जमध्ये कमाल आउटपुट टोकन वाढवा.',
         nothingTranslated: 'या पेजवरील कोणताही मजकूर भाषांतरित करता आला नाही. पुन्हा प्रयत्न करा.',
+        cacheSaveFailed: 'या पानाचे भाषांतर जतन करता आले नाही. पुढच्या वेळी ते पुन्हा भाषांतरित होईल.',
+        cacheStorageFull: 'साठवण भरली आहे, त्यामुळे या पानाचे भाषांतर जतन झाले नाही.',
     },
     te: {
         popupName: 'AI అనువాదకుడు', popupSub: 'AI Website Translator',
@@ -3133,6 +3165,8 @@ const TRANSLATIONS = {
         newContentTitle: 'కొత్త కంటెంట్ ఇంకా అనువదించబడలేదు',
         blocksTooLong: '{count} బ్లాక్‌లు అవుట్‌పుట్ టోకెన్ పరిమితిని మించడంతో అనువదించబడలేదు. సెట్టింగ్‌లలో గరిష్ట అవుట్‌పుట్ టోకెన్‌లను పెంచండి.',
         nothingTranslated: 'ఈ పేజీలోని ఏ వచనాన్నీ అనువదించలేకపోయాం. మళ్లీ ప్రయత్నించండి.',
+        cacheSaveFailed: 'ఈ పేజీ అనువాదాన్ని సేవ్ చేయలేకపోయాం. తదుపరిసారి మళ్లీ అనువదించబడుతుంది.',
+        cacheStorageFull: 'నిల్వ నిండిపోయింది, అందుకే ఈ పేజీ అనువాదం సేవ్ కాలేదు.',
     },
     tr: {
         popupName: 'AI Çevirmen', popupSub: 'AI Website Translator',
@@ -3316,6 +3350,8 @@ const TRANSLATIONS = {
         newContentTitle: 'Yeni içerik henüz çevrilmedi',
         blocksTooLong: '{count} blok, çıktı belirteci sınırını aştığı için çevrilmedi. Ayarlardan maksimum çıktı belirtecini artırın.',
         nothingTranslated: 'Bu sayfadaki hiçbir metin çevrilemedi. Yeniden deneyin.',
+        cacheSaveFailed: 'Bu sayfanın çevirisi kaydedilemedi. Bir dahaki sefere yeniden çevrilecek.',
+        cacheStorageFull: 'Depolama alanı dolu, bu sayfanın çevirisi kaydedilmedi.',
     },
     ta: {
         popupName: 'AI மொழிபெயர்ப்பாளர்', popupSub: 'AI Website Translator',
@@ -3499,6 +3535,8 @@ const TRANSLATIONS = {
         newContentTitle: 'புதிய உள்ளடக்கம் இன்னும் மொழிபெயர்க்கப்படவில்லை',
         blocksTooLong: '{count} தொகுதிகள் வெளியீட்டு டோக்கன் வரம்பை மீறுவதால் மொழிபெயர்க்கப்படவில்லை. அமைப்புகளில் அதிகபட்ச வெளியீட்டு டோக்கன்களை அதிகரிக்கவும்.',
         nothingTranslated: 'இந்தப் பக்கத்தில் எந்த உரையையும் மொழிபெயர்க்க முடியவில்லை. மீண்டும் முயலவும்.',
+        cacheSaveFailed: 'இந்தப் பக்கத்தின் மொழிபெயர்ப்பைச் சேமிக்க முடியவில்லை. அடுத்த முறை மீண்டும் மொழிபெயர்க்கப்படும்.',
+        cacheStorageFull: 'சேமிப்பு நிரம்பியுள்ளதால், இந்தப் பக்கத்தின் மொழிபெயர்ப்பு சேமிக்கப்படவில்லை.',
     },
     vi: {
         popupName: 'Dịch AI', popupSub: 'AI Website Translator',
@@ -3682,6 +3720,8 @@ const TRANSLATIONS = {
         newContentTitle: 'Nội dung mới chưa được dịch',
         blocksTooLong: '{count} khối vượt quá giới hạn token đầu ra nên không được dịch. Hãy tăng token đầu ra tối đa trong phần cài đặt.',
         nothingTranslated: 'Không dịch được văn bản nào trên trang này. Hãy thử lại.',
+        cacheSaveFailed: 'Không thể lưu bản dịch của trang này. Lần sau trang sẽ được dịch lại.',
+        cacheStorageFull: 'Bộ nhớ đã đầy nên bản dịch của trang này không được lưu.',
     },
     ko: {
         popupName: 'AI 번역기', popupSub: 'AI Website Translator',
@@ -3865,6 +3905,8 @@ const TRANSLATIONS = {
         newContentTitle: '새 내용이 아직 번역되지 않았습니다',
         blocksTooLong: '{count}개 블록이 출력 토큰 한도를 넘어 번역하지 않았습니다. 설정에서 최대 출력 토큰을 늘리세요.',
         nothingTranslated: '이 페이지의 텍스트를 하나도 번역하지 못했습니다. 다시 시도하세요.',
+        cacheSaveFailed: '이 페이지의 번역을 저장하지 못했습니다. 다음에 열면 다시 번역합니다.',
+        cacheStorageFull: '저장 공간이 가득 차서 이 페이지의 번역을 저장하지 못했습니다.',
     },
 };
 
