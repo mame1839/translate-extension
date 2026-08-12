@@ -476,6 +476,8 @@
     const POST_FINISH_SCAN_DELAYS = [3000];
     let autoTranslateNewContent = false;
     let hidePromptForAllSites = false;
+    let currentExcludeList = [];
+    let settingWatcherAttached = false;
     let autoRetranslateRounds = 0;
     const AUTO_RETRANSLATE_MAX_ROUNDS = 3;
     let continueNoticeShown = false;
@@ -486,10 +488,36 @@
         return autoRetranslateRounds < AUTO_RETRANSLATE_MAX_ROUNDS;
     }
 
+    function isCurrentUrlExcluded() {
+        try {
+            return siteListMatchesUrl(currentExcludeList, window.location.href);
+        } catch (e) {
+            return false;
+        }
+    }
+
+    function adoptSettingSnapshot(items) {
+        autoTranslateNewContent = items.autoTranslateNewContent === true;
+        hidePromptForAllSites = items.hidePromptAllSites === true;
+        currentExcludeList = Array.isArray(items.excludeList) ? items.excludeList : [];
+    }
+
+    function watchSettingChanges() {
+        if (settingWatcherAttached) return;
+        settingWatcherAttached = true;
+        chrome.storage.onChanged.addListener((changes, area) => {
+            if (area !== 'local') return;
+            if (changes.autoTranslateNewContent) autoTranslateNewContent = changes.autoTranslateNewContent.newValue === true;
+            if (changes.hidePromptAllSites) hidePromptForAllSites = changes.hidePromptAllSites.newValue === true;
+            if (changes.excludeList) currentExcludeList = Array.isArray(changes.excludeList.newValue) ? changes.excludeList.newValue : [];
+        });
+    }
+
     function canAutoTranslateNewContent() {
         if (!translationStarted) return false;
         if (translationCancelled || translationHasError) return false;
         if (!autoTranslateNewContent) return false;
+        if (isCurrentUrlExcluded()) return false;
         return autoTranslationBudgetLeft();
     }
 
@@ -516,12 +544,12 @@
                     try { watchUserInteractions(); } catch (e) { }
                     try { watchSpaUrlChanges(); } catch (e) { }
                     try { watchScrollForNewContent(); } catch (e) { }
+                    try { watchSettingChanges(); } catch (e) { }
 
                     const pageLang = getPageLanguage();
                     const chosenLang = items.targetLanguage || 'en';
                     applyStrings(chosenLang);
-                    autoTranslateNewContent = items.autoTranslateNewContent === true;
-                    hidePromptForAllSites = items.hidePromptAllSites === true;
+                    adoptSettingSnapshot(items);
 
                     const isReactSpa = isLikelyReactApp();
                     const currentUrl = window.location.href;
@@ -1263,9 +1291,9 @@
         const pageIsTargetLanguage = detectionUsable
             ? detectedLanguageMatchesTarget(detected, chosenLang)
             : attributeSaysTargetLanguage;
-        const skipAutoTranslation = !!(detected
-            && detected.confidence >= LANGUAGE_DETECTION_AUTO_SKIP_CONFIDENCE
-            && detectedLanguageMatchesTarget(detected, chosenLang));
+        const skipAutoTranslation = detectionUsable
+            ? (detected.confidence >= LANGUAGE_DETECTION_AUTO_SKIP_CONFIDENCE && detectedLanguageMatchesTarget(detected, chosenLang))
+            : attributeSaysTargetLanguage;
         const detectedSourceLanguage = detectionUsable ? detectedLanguageTag(detected) : '';
         return { pageIsTargetLanguage, skipAutoTranslation, detectedSourceLanguage };
     }
@@ -1515,6 +1543,7 @@
     function maybeShowContinueNotice() {
         if (!IS_TOP_FRAME) return;
         if (hidePromptForAllSites) return;
+        if (isCurrentUrlExcluded()) return;
         if (restoreNoticeContainer) return;
         if (Date.now() < continueNoticeCooldownUntil) return;
         continueNoticeShown = true;
@@ -4006,12 +4035,11 @@
                 if (postFinishScanCount >= POST_FINISH_MAX_SCANS) return;
                 try {
                     if (!hasUntranslatedTextInDocument()) return;
-                    if (!autoTranslationBudgetLeft()) {
+                    if (!canAutoTranslateNewContent()) {
                         maybeShowContinueNotice();
                         return;
                     }
                     postFinishScanCount++;
-                    translationHasError = false;
                     startAutoTranslation();
                 } catch (e) { }
             }, delay);

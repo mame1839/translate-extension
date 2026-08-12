@@ -20,13 +20,14 @@ function parseSiteUrl(value) {
 }
 
 const SITE_HOSTNAME_PATTERN = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*$/i;
+const SITE_SCHEME_PREFIX_PATTERN = /^[a-z][a-z0-9+.-]*:(?!\d)/i;
+const SITE_HTTP_URL_PATTERN = /^https?:\/\//i;
 
 function isUsableSiteEntry(value) {
     if (typeof value !== 'string') return false;
     const trimmed = value.trim();
     if (!trimmed || trimmed.startsWith('/')) return false;
-    const scheme = /^([a-z][a-z0-9+.-]*):(?!\d)/i.exec(trimmed);
-    if (scheme && !/^https?$/i.test(scheme[1])) return false;
+    if (SITE_SCHEME_PREFIX_PATTERN.test(trimmed) && !SITE_HTTP_URL_PATTERN.test(trimmed)) return false;
     const url = parseSiteUrl(trimmed);
     if (!url) return false;
     if (url.protocol !== 'http:' && url.protocol !== 'https:') return false;
