@@ -446,6 +446,7 @@
     let promptContainer = null;
     let promptShadowRoot = null;
     let minimizedDiv = null;
+    let minimizedShadowRoot = null;
     let domUpdateQueue = [];
     let isApplyingUpdates = false;
     let pendingApplyPromise = null;
@@ -1329,11 +1330,22 @@
         return button;
     }
 
+    function addUserClickListener(target, handler) {
+        target.addEventListener('click', function (event) {
+            if (!event || event.isTrusted !== true) return;
+            handler.call(this, event);
+        });
+    }
+
+    function attachUiShadowRoot(host) {
+        return host.attachShadow({ mode: 'closed' });
+    }
+
     function createTextButton(className, label, onClick, elementId) {
         const button = createUiElement('button', className, label);
         button.type = 'button';
         if (elementId) button.id = elementId;
-        if (onClick) button.addEventListener('click', onClick);
+        if (onClick) addUserClickListener(button, onClick);
         return button;
     }
 
@@ -1398,7 +1410,7 @@
         promptContainer.id = 'gemini-translator-prompt-container';
         promptContainer.dataset.geminiIgnore = 'true';
         promptContainer.style.cssText = 'position:fixed;top:0;right:0;z-index:2147483647;';
-        promptShadowRoot = promptContainer.attachShadow({ mode: 'open' });
+        promptShadowRoot = attachUiShadowRoot(promptContainer);
 
         const style = document.createElement('style');
         style.textContent = PROMPT_CSS;
@@ -1443,16 +1455,16 @@
         promptShadowRoot.appendChild(root);
         document.body.appendChild(promptContainer);
 
-        dismissButton.addEventListener('click', function () { removePrompt(); });
-        yesButton.addEventListener('click', function () {
+        addUserClickListener(dismissButton, function () { removePrompt(); });
+        addUserClickListener(yesButton, function () {
             removePrompt();
             translationStarted = true;
             rememberTranslatedDomain();
             startTranslation(true);
             sendRuntimeMessage({ action: 'startTranslationAllFrames' });
         });
-        noButton.addEventListener('click', function () { removePrompt(); });
-        neverButton.addEventListener('click', function () {
+        addUserClickListener(noButton, function () { removePrompt(); });
+        addUserClickListener(neverButton, function () {
             chrome.storage.local.get(['excludeList'], function (items) {
                 const excludeList = Array.isArray(items.excludeList) ? items.excludeList : [];
                 try {
@@ -1516,7 +1528,7 @@
         restoreNoticeContainer.id = 'gemini-translator-restore-container';
         restoreNoticeContainer.dataset.geminiIgnore = 'true';
         restoreNoticeContainer.style.cssText = 'position:fixed;top:0;right:0;z-index:2147483647;';
-        const shadow = restoreNoticeContainer.attachShadow({ mode: 'open' });
+        const shadow = attachUiShadowRoot(restoreNoticeContainer);
 
         const style = document.createElement('style');
         style.textContent = PROMPT_CSS;
@@ -1539,12 +1551,10 @@
         card.appendChild(head);
 
         const actions = [];
-        const continueButton = createTextButton('btn btn-text', st.translateRestButton);
-        continueButton.addEventListener('click', translateRemainingFromNotice);
+        const continueButton = createTextButton('btn btn-text', st.translateRestButton, translateRemainingFromNotice);
         actions.push(continueButton);
         if (offerRetranslate !== false) {
-            const retranslateButton = createTextButton('btn btn-text', st.retranslateButton);
-            retranslateButton.addEventListener('click', function () {
+            const retranslateButton = createTextButton('btn btn-text', st.retranslateButton, function () {
                 autoRetranslateRounds = 0;
                 continueNoticeShown = false;
                 clearPageCacheAndRetranslate().catch(() => { });
@@ -1557,7 +1567,7 @@
         shadow.appendChild(root);
         document.body.appendChild(restoreNoticeContainer);
 
-        dismissButton.addEventListener('click', removeCacheRestoreNotice);
+        addUserClickListener(dismissButton, removeCacheRestoreNotice);
         restoreNoticeTimer = setTimeout(removeCacheRestoreNotice, RESTORE_NOTICE_TIMEOUT_MS);
     }
 
@@ -3557,7 +3567,7 @@
         statusContainer.id = 'gemini-translator-status-container';
         statusContainer.dataset.geminiIgnore = 'true';
         statusContainer.style.cssText = 'position:fixed;bottom:0;right:0;z-index:2147483647;';
-        statusShadowRoot = statusContainer.attachShadow({ mode: 'open' });
+        statusShadowRoot = attachUiShadowRoot(statusContainer);
 
         const style = document.createElement('style');
         style.textContent = PANEL_CSS;
@@ -3691,10 +3701,10 @@
         }
 
         const closeStatusBtn = card.querySelector('#closeStatusBtn');
-        if (closeStatusBtn) closeStatusBtn.addEventListener('click', removeStatusIndicator);
+        if (closeStatusBtn) addUserClickListener(closeStatusBtn, removeStatusIndicator);
         const minimizeButton = card.querySelector('#minimizeStatusBtn');
         if (minimizeButton) {
-            minimizeButton.addEventListener('click', function (e) {
+            addUserClickListener(minimizeButton, function (e) {
                 e.stopPropagation();
                 minimizeStatusIndicator();
             });
@@ -3724,6 +3734,7 @@
             minimizedDiv.parentNode.removeChild(minimizedDiv);
         }
         minimizedDiv = null;
+        minimizedShadowRoot = null;
     }
 
     function removeStatusIndicator() {
@@ -3770,10 +3781,10 @@
     }
 
     function renderMiniProgress(percent) {
-        if (!minimizedDiv || !minimizedDiv.shadowRoot) return;
-        const label = minimizedDiv.shadowRoot.getElementById('minimizedProgressText');
+        if (!minimizedDiv || !minimizedShadowRoot) return;
+        const label = minimizedShadowRoot.getElementById('minimizedProgressText');
         if (label) label.textContent = percent.toFixed(0) + '%';
-        const ring = minimizedDiv.shadowRoot.getElementById('minimizedProgressRing');
+        const ring = minimizedShadowRoot.getElementById('minimizedProgressRing');
         if (ring) {
             const circumference = 2 * Math.PI * MINI_RING_RADIUS;
             const clamped = Math.max(0, Math.min(100, percent));
@@ -3789,7 +3800,7 @@
             minimizedDiv.id = 'gemini-translator-minimized-container';
             minimizedDiv.dataset.geminiIgnore = 'true';
             minimizedDiv.style.cssText = 'position:fixed;bottom:0;right:0;z-index:2147483647;';
-            const shadowRoot = minimizedDiv.attachShadow({ mode: 'open' });
+            minimizedShadowRoot = attachUiShadowRoot(minimizedDiv);
             const style = document.createElement('style');
             style.textContent = MINI_CSS;
             const root = createUiRoot();
@@ -3802,10 +3813,10 @@
             label.id = 'minimizedProgressText';
             miniButton.appendChild(label);
             root.appendChild(miniButton);
-            shadowRoot.appendChild(style);
-            shadowRoot.appendChild(root);
+            minimizedShadowRoot.appendChild(style);
+            minimizedShadowRoot.appendChild(root);
             document.body.appendChild(minimizedDiv);
-            miniButton.addEventListener('click', function () {
+            addUserClickListener(miniButton, function () {
                 if (statusContainer) statusContainer.style.display = 'block';
                 removeMinimizedIndicator();
             });
@@ -4192,6 +4203,15 @@
         } catch (e) { }
     }
 
+    function selectionErrorText(code, rawMessage) {
+        const messageKey = ERROR_CODE_MESSAGE_KEYS[code];
+        if (messageKey) {
+            const localized = selectionLabel(messageKey, '');
+            if (localized) return localized;
+        }
+        return rawMessage;
+    }
+
     function requestSelectionTranslation(text) {
         const requestId = ++selectionRequestId;
         const genericError = selectionLabel('error', 'An error occurred');
@@ -4208,7 +4228,7 @@
                 renderSelectionResult(typeof response.translation === 'string' ? response.translation : '');
                 return;
             }
-            handleFailure(response.error);
+            handleFailure(selectionErrorText(response.code, response.error));
         });
     }
 
@@ -4220,7 +4240,7 @@
         selectionContainer.id = SELECTION_CONTAINER_ID;
         selectionContainer.dataset.geminiIgnore = 'true';
         selectionContainer.style.cssText = 'position:fixed!important;top:0!important;left:0!important;margin:0!important;padding:0!important;border:none!important;display:block!important;z-index:2147483647!important;';
-        selectionShadowRoot = selectionContainer.attachShadow({ mode: 'open' });
+        selectionShadowRoot = attachUiShadowRoot(selectionContainer);
 
         const style = document.createElement('style');
         style.textContent = SELECTION_CSS;
@@ -4259,7 +4279,7 @@
             ['line', { x1: '6', y1: '6', x2: '18', y2: '18' }],
             ['line', { x1: '18', y1: '6', x2: '6', y2: '18' }]
         ]));
-        closeBtn.addEventListener('click', function () { closeSelectionPopup(); });
+        addUserClickListener(closeBtn, function () { closeSelectionPopup(); });
 
         head.appendChild(badge);
         head.appendChild(title);
@@ -4330,7 +4350,7 @@
         copyBtn.className = 'sel-btn';
         copyBtn.type = 'button';
         copyBtn.textContent = selectionLabel('selCopy', 'Copy');
-        copyBtn.addEventListener('click', function () { copySelectionTranslation(translation, copyBtn); });
+        addUserClickListener(copyBtn, function () { copySelectionTranslation(translation, copyBtn); });
         actions.appendChild(copyBtn);
         const card = selectionShadowRoot.querySelector('.sel-card');
         if (card) card.appendChild(actions);
