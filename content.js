@@ -466,8 +466,8 @@
     let streamingEnabled = false;
     let streamingActive = false;
     const streamingBatchSeed = Math.random().toString(36).slice(2, 10);
-    let pendingRetranslation = false;
-    const PENDING_RETRANSLATION_NEW_CONTENT = 'newContent';
+    let pendingNewContentRetranslation = false;
+    let pendingAuthorizedRetranslation = false;
     let cacheRestoreMap = null;
     let cacheRestoreActive = false;
     const sessionTranslationMemo = new Map();
@@ -496,6 +496,11 @@
 
     function autoTranslationBudgetLeft() {
         return autoRetranslateRounds < AUTO_RETRANSLATE_MAX_ROUNDS;
+    }
+
+    function clearPendingRetranslation() {
+        pendingNewContentRetranslation = false;
+        pendingAuthorizedRetranslation = false;
     }
 
     function isCurrentUrlExcluded() {
@@ -586,7 +591,7 @@
                             if (optedIntoAutoTranslation) {
                                 translationStarted = true;
                                 rememberTranslatedDomain();
-                                pendingRetranslation = true;
+                                pendingAuthorizedRetranslation = true;
                                 scheduleRetranslationIfNeeded();
                             }
                             return;
@@ -723,7 +728,7 @@
         if (extensionContextLost) return;
         extensionContextLost = true;
         translationHasError = true;
-        pendingRetranslation = false;
+        clearPendingRetranslation();
         if (progressInterval) {
             clearInterval(progressInterval);
             progressInterval = null;
@@ -1164,7 +1169,7 @@
             clearTimeout(pendingStartTimer);
             pendingStartTimer = null;
         }
-        pendingRetranslation = false;
+        clearPendingRetranslation();
         lastScrollScanHeight = -1;
         autoRetranslateRounds = 0;
         continueNoticeShown = false;
@@ -1679,7 +1684,7 @@
             if (!canAutoTranslateNewContent()) {
                 maybeShowContinueNotice();
             } else if (isTranslating || isApplyingUpdates) {
-                pendingRetranslation = PENDING_RETRANSLATION_NEW_CONTENT;
+                pendingNewContentRetranslation = true;
             } else {
                 clearTimeout(observerDebounceTimer);
                 observerDebounceTimer = setTimeout(() => {
@@ -1875,7 +1880,7 @@
                 cacheRestoreActive = false;
                 clearTimeout(observerDebounceTimer);
                 clearTimeout(userInteractionTimer);
-                pendingRetranslation = false;
+                clearPendingRetranslation();
             } catch (err) { }
         };
         const handler = () => {
@@ -1888,7 +1893,7 @@
                 if (translationCancelled || translationHasError) return;
                 if (Date.now() < postNavigationCooldownUntil) return;
                 if (isTranslating || isApplyingUpdates) {
-                    if (canAutoTranslateNewContent()) pendingRetranslation = PENDING_RETRANSLATION_NEW_CONTENT;
+                    if (canAutoTranslateNewContent()) pendingNewContentRetranslation = true;
                     return;
                 }
                 if (!cacheRestoreActive && !hasUntranslatedTextInDocument()) return;
@@ -1933,7 +1938,7 @@
         }
         const cooldownRemaining = postNavigationCooldownUntil - Date.now();
         if (cooldownRemaining > 0) {
-            pendingRetranslation = true;
+            pendingAuthorizedRetranslation = true;
             clearTimeout(pendingStartTimer);
             pendingStartIsUserInitiated = userInitiated || pendingStartIsUserInitiated;
             pendingStartTimer = setTimeout(() => {
@@ -1951,7 +1956,7 @@
         await waitForPendingApply();
         const runGeneration = ++translationRunGeneration;
         subframeFailures = [];
-        pendingRetranslation = false;
+        clearPendingRetranslation();
         translationCancelled = false;
         translationHasError = false;
         fatalErrorCancelPending = false;
@@ -2109,10 +2114,11 @@
         if (!translationStarted) return;
         if (translationCancelled || translationHasError) return;
         if (isTranslating || isApplyingUpdates) return;
-        if (!pendingRetranslation) return;
-        const pendingWasNewContent = pendingRetranslation === PENDING_RETRANSLATION_NEW_CONTENT;
-        pendingRetranslation = false;
-        if (!(pendingWasNewContent ? canAutoTranslateNewContent() : autoTranslationBudgetLeft())) {
+        if (!pendingNewContentRetranslation && !pendingAuthorizedRetranslation) return;
+        const authorized = (pendingAuthorizedRetranslation && autoTranslationBudgetLeft())
+            || (pendingNewContentRetranslation && canAutoTranslateNewContent());
+        clearPendingRetranslation();
+        if (!authorized) {
             maybeShowContinueNotice();
             return;
         }
