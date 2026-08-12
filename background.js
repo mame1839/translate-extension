@@ -156,6 +156,13 @@ function cancelFrameByKey(key) {
     }
 }
 
+function discardFramesForTab(tabId) {
+    for (const key of frameKeysForTab(tabId)) {
+        cancelFrameByKey(key);
+        frameStates.delete(key);
+    }
+}
+
 function frameKeysForTab(tabId) {
     const prefix = `${tabId}:`;
     const keys = new Set();
@@ -272,8 +279,25 @@ function handleContentScriptMessage(request, sender, sendResponse) {
         return false;
     }
 
+    if (request.action === "translationError") {
+        relayToTopFrame(tabId, sender, {
+            action: "subframeTranslationFailed",
+            error: request.error,
+            code: request.code
+        });
+        return false;
+    }
+
+    if (request.action === "frameTranslationState") {
+        relayToTopFrame(tabId, sender, {
+            action: "subframeTranslationState",
+            translating: request.translating === true
+        });
+        return false;
+    }
+
     if (request.action === "sessionMarkTranslated") {
-        const hostname = getHostnameFromUrl(sender.tab?.url);
+        const hostname = topFrameHostname(sender);
         if (hostname) {
             markSessionTranslated(tabId, hostname).catch(() => { });
         }
@@ -282,7 +306,7 @@ function handleContentScriptMessage(request, sender, sendResponse) {
     }
 
     if (request.action === "sessionIsDomainKnown") {
-        const hostname = getHostnameFromUrl(sender.tab?.url);
+        const hostname = topFrameHostname(sender);
         if (!hostname) { sendResponse({ known: false }); return false; }
         isSessionDomainKnown(hostname).then(known => {
             if (known) {
@@ -327,6 +351,21 @@ function handleContentScriptMessage(request, sender, sendResponse) {
 function getHostnameFromUrl(url) {
     if (!url) return '';
     try { return new URL(url).hostname; } catch (e) { return ''; }
+}
+
+function senderFrameId(sender) {
+    return Number.isInteger(sender?.frameId) ? sender.frameId : 0;
+}
+
+function topFrameHostname(sender) {
+    if (senderFrameId(sender) !== 0) return '';
+    return getHostnameFromUrl(sender?.url || sender?.tab?.url);
+}
+
+function relayToTopFrame(tabId, sender, message) {
+    const frameId = senderFrameId(sender);
+    if (frameId === 0) return;
+    sendTabMessage(tabId, Object.assign({ frameId }, message), { frameId: 0 });
 }
 
 let sessionMutex = Promise.resolve();
@@ -426,20 +465,16 @@ try {
 
 try {
     chrome.tabs.onRemoved.addListener(function (tabId) {
-        for (const key of frameKeysForTab(tabId)) {
-            const state = frameStates.get(key);
-            if (state && !state.abortController.signal.aborted) {
-                state.abortController.abort();
-            }
-            frameStates.delete(key);
-            globalRequestQueue.delete(key);
-        }
+        discardFramesForTab(tabId);
         untrackSessionTab(tabId).catch(() => { });
     });
 } catch (e) { }
 
 try {
     chrome.tabs.onUpdated.addListener(function (tabId, changeInfo) {
+        if (changeInfo.status === 'loading') {
+            discardFramesForTab(tabId);
+        }
         if (changeInfo.url) {
             handleTabUrlChange(tabId, changeInfo.url).catch(() => { });
         }
