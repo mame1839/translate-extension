@@ -460,6 +460,7 @@
     let streamingActive = false;
     const streamingBatchSeed = Math.random().toString(36).slice(2, 10);
     let pendingRetranslation = false;
+    const PENDING_RETRANSLATION_NEW_CONTENT = 'newContent';
     let cacheRestoreMap = null;
     let cacheRestoreActive = false;
     const sessionTranslationMemo = new Map();
@@ -1646,7 +1647,7 @@
             if (!canAutoTranslateNewContent()) {
                 maybeShowContinueNotice();
             } else if (isTranslating || isApplyingUpdates) {
-                pendingRetranslation = true;
+                pendingRetranslation = PENDING_RETRANSLATION_NEW_CONTENT;
             } else {
                 clearTimeout(observerDebounceTimer);
                 observerDebounceTimer = setTimeout(() => {
@@ -1855,7 +1856,7 @@
                 if (translationCancelled || translationHasError) return;
                 if (Date.now() < postNavigationCooldownUntil) return;
                 if (isTranslating || isApplyingUpdates) {
-                    if (canAutoTranslateNewContent()) pendingRetranslation = true;
+                    if (canAutoTranslateNewContent()) pendingRetranslation = PENDING_RETRANSLATION_NEW_CONTENT;
                     return;
                 }
                 if (!cacheRestoreActive && !hasUntranslatedTextInDocument()) return;
@@ -2072,8 +2073,9 @@
         if (translationCancelled || translationHasError) return;
         if (isTranslating || isApplyingUpdates) return;
         if (!pendingRetranslation) return;
+        const pendingWasNewContent = pendingRetranslation === PENDING_RETRANSLATION_NEW_CONTENT;
         pendingRetranslation = false;
-        if (!autoTranslationBudgetLeft()) {
+        if (!(pendingWasNewContent ? canAutoTranslateNewContent() : autoTranslationBudgetLeft())) {
             maybeShowContinueNotice();
             return;
         }
