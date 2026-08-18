@@ -1809,31 +1809,6 @@
         return false;
     }
 
-    function hasUntranslatedTextInDocument() {
-        return withScanCache(hasUntranslatedTextInDocumentScan);
-    }
-
-    function hasUntranslatedTextInDocumentScan() {
-        if (!document.body) return false;
-        const queue = [document.body];
-        const visited = new WeakSet();
-        while (queue.length > 0) {
-            const root = queue.shift();
-            if (!root || visited.has(root)) continue;
-            visited.add(root);
-            if (hasUntranslatedDescendant(root)) return true;
-            try {
-                const elements = root.querySelectorAll ? root.querySelectorAll('*') : [];
-                for (const el of elements) {
-                    if (el.shadowRoot && !visited.has(el.shadowRoot)) {
-                        queue.push(el.shadowRoot);
-                    }
-                }
-            } catch (e) { }
-        }
-        return false;
-    }
-
     function hasTranslatableUnitsInDocument() {
         return withScanCache(hasTranslatableUnitsInDocumentScan);
     }
