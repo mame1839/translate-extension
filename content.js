@@ -1625,6 +1625,7 @@
         if (isCurrentUrlExcluded()) return;
         if (restoreNoticeContainer) return;
         if (Date.now() < continueNoticeCooldownUntil) return;
+        if (!hasTranslatableUnitsInDocument()) return;
         continueNoticeShown = true;
         continueNoticeCooldownUntil = Date.now() + CONTINUE_NOTICE_COOLDOWN_MS;
         showCacheRestoreNotice(st.newContentTitle, false);
@@ -1830,6 +1831,32 @@
                 }
             } catch (e) { }
         }
+        return false;
+    }
+
+    function hasTranslatableUnitsInDocument() {
+        return withScanCache(hasTranslatableUnitsInDocumentScan);
+    }
+
+    function hasTranslatableUnitsInDocumentScan() {
+        const blocks = collectBlocksAcrossRoots((node) => {
+            if (node.dataset?.translationStatus === 'translated') return NodeFilter.FILTER_REJECT;
+            if (node.dataset?.translationStatus === 'original') return NodeFilter.FILTER_REJECT;
+            if (node.dataset?.translationStatus === 'failed') return NodeFilter.FILTER_REJECT;
+            if (node.dataset?.translationWrapper === 'true') return NodeFilter.FILTER_REJECT;
+            return 0;
+        });
+
+        for (const block of blocks) {
+            if (!block || !block.isConnected) continue;
+            if (block.dataset?.translationStatus === 'translated') continue;
+            if (block.dataset?.translationStatus === 'processing') continue;
+            if (block.dataset?.translationStatus === 'original') continue;
+            if (block.dataset?.translationStatus === 'failed') continue;
+            const tu = buildTU(block);
+            if (tu && tu.hasTranslatableText) return true;
+        }
+
         return false;
     }
 
@@ -4311,7 +4338,7 @@
         const now = Date.now();
         if (now - popupRemainingMemo.ts < 1500) return popupRemainingMemo.value;
         let remaining = false;
-        try { remaining = hasUntranslatedTextInDocument(); } catch (e) { remaining = false; }
+        try { remaining = hasTranslatableUnitsInDocument(); } catch (e) { remaining = false; }
         popupRemainingMemo = { ts: now, value: remaining };
         return remaining;
     }
