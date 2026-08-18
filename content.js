@@ -1180,7 +1180,7 @@
                 lastScrollScanHeight = scrollHeight;
                 domChangedSinceScrollScan = false;
                 try {
-                    if (!hasUntranslatedTextInDocument()) return;
+                    if (!hasTranslatableUnitsInDocument()) return;
                     if (canAutoTranslateNewContent()) {
                         startAutoTranslation();
                     } else {
@@ -1964,7 +1964,7 @@
                     if (canAutoTranslateNewContent()) pendingNewContentRetranslation = true;
                     return;
                 }
-                if (!cacheRestoreActive && !hasUntranslatedTextInDocument()) return;
+                if (!cacheRestoreActive && !hasTranslatableUnitsInDocument()) return;
                 if (canAutoTranslateNewContent()) {
                     startAutoTranslation();
                 } else {
@@ -4321,7 +4321,7 @@
                 if (Date.now() < postNavigationCooldownUntil) return;
                 if (postFinishScanCount >= POST_FINISH_MAX_SCANS) return;
                 try {
-                    if (!hasUntranslatedTextInDocument()) return;
+                    if (!hasTranslatableUnitsInDocument()) return;
                     if (!canAutoTranslateNewContent()) {
                         maybeShowContinueNotice();
                         return;
