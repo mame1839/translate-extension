@@ -19,11 +19,15 @@ Google Gemini・OpenAI・Anthropic などの AI API を使ってウェブペー�
 - **4 つの AI プロバイダー対応** — Gemini、OpenAI、Anthropic、OpenAI 互換エンドポイント
 - **21 言語に翻訳可能** — 英語・日本語・中国語・韓国語・アラビア語・ロシア語など
 - **ページ構造を保持** — リンク・太字・見出しなどの書式をそのまま維持
+- **適用結果を検証** — 訳文を正しく表示できない箇所は原文のまま残し、レイアウトを崩さない
 - **バッチ処理 & 並列リクエスト** — 大きなページも高速に翻訳
-- **リアルタイム監視** — 動的に追加されたコンテンツも自動翻訳
+- **言語別のページキャッシュ** — 翻訳結果を翻訳先の言語ごとに保存し、ページ単位で削除可能
+- **キャッシュから無料で復元** — キャッシュのあるページも勝手には復元せず、ポップアップで「キャッシュから復元（無料）」と「翻訳（API）」を選べる。復元できる割合も表示
+- **失敗箇所だけを再翻訳** — 翻訳に失敗した箇所の件数を表示し、その箇所だけを再翻訳可能
+- **選択範囲の翻訳** — 右クリックから選択したテキストを翻訳し、その場で置き換えることも可能
 - **翻訳の切り替え** — 翻訳済みと原文をワンクリックで切り替え
 - **除外リスト** — 特定サイトを翻訳対象から除外
-- **自動翻訳** — ページ読み込み時に自動で翻訳開始
+- **自動翻訳は既定でオフ** — ページ読み込み時や動的に追加されたコンテンツの自動翻訳は、設定で有効にした場合のみ上限の範囲で動作
 
 ### インストール
 
@@ -86,11 +90,15 @@ A Chrome extension that translates web pages in place using AI APIs — Google G
 - **4 AI providers** — Gemini, OpenAI, Anthropic, and OpenAI-compatible endpoints
 - **21 target languages** — English, Japanese, Chinese, Korean, Arabic, Russian, and more
 - **Structure-preserving** — keeps links, bold text, headings, and layout intact
+- **Verified application** — spots where the translation cannot be rendered correctly keep their original text, so the layout never breaks
 - **Batch processing & concurrency** — translates large pages quickly
-- **Real-time monitoring** — automatically translates dynamically loaded content
+- **Per-language page cache** — translations are stored per target language and can be deleted page by page
+- **Free restore from cache** — cached pages are never restored unasked; the popup offers "Restore from cache (free)" and "Translate (API)" separately and shows how much can be restored
+- **Retry only failed parts** — shows how many parts failed to translate and re-translates just those
+- **Selection translation** — translate selected text from the right-click menu, optionally replacing it in place
 - **Toggle translations** — switch between translated and original text with one click
 - **Exclusion list** — skip translation on specified sites
-- **Auto-translate** — start translation automatically on page load
+- **Auto-translate off by default** — automatic translation on page load and for dynamically added content runs only when enabled in settings, within per-page limits
 
 ### Installation
 
@@ -153,11 +161,15 @@ Copyright (C) 2026 mame1839
 - **支持 4 种 AI 提供商** — Gemini、OpenAI、Anthropic 及 OpenAI 兼容端点
 - **支持 21 种目标语言** — 英语、日语、中文、韩语、阿拉伯语、俄语等
 - **保留页面结构** — 保持链接、粗体、标题和布局不变
+- **校验应用结果** — 无法正确显示译文的部分保留原文，不破坏页面布局
 - **批量处理 & 并发请求** — 快速翻译大型页面
-- **实时监控** — 自动翻译动态加载的内容
+- **按语言保存页面缓存** — 按目标语言分别保存翻译结果，并可按页面删除
+- **从缓存免费恢复** — 有缓存的页面不会被擅自恢复；弹出窗口分别提供“从缓存恢复（免费）”和“翻译（API）”，并显示可恢复的比例
+- **仅重译失败部分** — 显示翻译失败部分的数量，并可只重新翻译这些部分
+- **翻译选中文本** — 通过右键菜单翻译选中的文本，也可就地替换
 - **切换翻译** — 一键在翻译版本和原文之间切换
 - **排除列表** — 指定不翻译的网站
-- **自动翻译** — 页面加载时自动开始翻译
+- **自动翻译默认关闭** — 页面加载时和动态加载内容的自动翻译，仅在设置中启用后才会在上限范围内运行
 
 ### 安装方法
 
@@ -220,11 +232,15 @@ Google Gemini, OpenAI, Anthropic 또는 OpenAI 호환 엔드포인트 등의 AI 
 - **4가지 AI 공급자 지원** — Gemini, OpenAI, Anthropic, OpenAI 호환 엔드포인트
 - **21개 대상 언어** — 영어, 일본어, 중국어, 한국어, 아랍어, 러시아어 등
 - **페이지 구조 유지** — 링크, 굵은 글씨, 제목, 레이아웃 그대로 유지
+- **적용 결과 검증** — 번역문을 올바르게 표시할 수 없는 부분은 원문을 유지하여 레이아웃이 깨지지 않음
 - **배치 처리 & 병렬 요청** — 대형 페이지도 빠르게 번역
-- **실시간 모니터링** — 동적으로 추가된 콘텐츠 자동 번역
+- **언어별 페이지 캐시** — 번역 결과를 대상 언어별로 저장하고 페이지 단위로 삭제 가능
+- **캐시에서 무료 복원** — 캐시가 있는 페이지도 자동으로 복원하지 않으며, 팝업에서 "캐시에서 복원(무료)"과 "번역(API)"을 따로 선택. 복원 가능한 비율도 표시
+- **실패한 부분만 재번역** — 번역에 실패한 부분의 개수를 표시하고 그 부분만 다시 번역 가능
+- **선택 영역 번역** — 우클릭 메뉴에서 선택한 텍스트를 번역하고 그 자리에서 교체도 가능
 - **번역 전환** — 번역문과 원문을 클릭 한 번으로 전환
 - **제외 목록** — 특정 사이트 번역 제외 설정
-- **자동 번역** — 페이지 로드 시 자동으로 번역 시작
+- **자동 번역 기본 꺼짐** — 페이지 로드 시 및 동적으로 추가된 콘텐츠의 자동 번역은 설정에서 켠 경우에만 상한 범위 내에서 동작
 
 ### 설치 방법
 
@@ -287,11 +303,15 @@ Copyright (C) 2026 mame1839
 - **4 провайдера AI** — Gemini, OpenAI, Anthropic и совместимые с OpenAI эндпоинты
 - **21 язык перевода** — английский, японский, китайский, корейский, арабский, русский и другие
 - **Сохранение структуры** — ссылки, жирный текст, заголовки и разметка остаются нетронутыми
+- **Проверка результата применения** — участки, где перевод не удаётся отобразить корректно, остаются на языке оригинала, поэтому вёрстка не ломается
 - **Пакетная обработка и параллельные запросы** — быстрый перевод больших страниц
-- **Мониторинг в реальном времени** — автоматический перевод динамически добавляемого контента
+- **Кэш страниц по языкам** — переводы хранятся отдельно для каждого целевого языка и удаляются постранично
+- **Бесплатное восстановление из кэша** — страницы с кэшем не восстанавливаются без спроса: во всплывающем окне есть отдельные кнопки «Восстановить из кэша (бесплатно)» и «Перевести (API)», а также показывается доля восстановимого
+- **Повторный перевод только неудачных мест** — показывает число участков, которые не удалось перевести, и переводит заново только их
+- **Перевод выделенного текста** — переводит выделенный фрагмент через контекстное меню, при желании заменяя его на месте
 - **Переключение перевода** — одним кликом переключаться между переводом и оригиналом
 - **Список исключений** — отключить перевод для выбранных сайтов
-- **Автоперевод** — автоматически начинать перевод при загрузке страницы
+- **Автоперевод по умолчанию выключен** — автоматический перевод при загрузке страницы и динамически добавляемого контента работает только если включён в настройках, в пределах лимита
 
 ### Установка
 
