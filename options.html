@@ -4,179 +4,522 @@
 <head>
   <meta charset="utf-8">
   <meta name="color-scheme" content="light dark">
-  <title>AI Website Translator</title>
+  <title>AI Website Translator – Settings</title>
   <link rel="stylesheet" href="options.css">
 </head>
 
 <body>
-  <div class="container">
-    <h1 id="header" data-i18n="pageHeader">AI Website Translator</h1>
-    <p class="app-subtitle" data-i18n="pageSubtitle">Settings for AI-powered page translation</p>
+  <header class="appbar">
+    <div class="app-icon" aria-hidden="true">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round">
+        <path d="m5 8 6 6"></path>
+        <path d="m4 14 6-6 2-3"></path>
+        <path d="M2 5h12"></path>
+        <path d="M7 2h1"></path>
+        <path d="m22 22-5-10-5 10"></path>
+        <path d="M14 18h6"></path>
+      </svg>
+    </div>
+    <h1 data-i18n="optionsBtn">Settings</h1>
+  </header>
 
-    <section class="settings-section">
-      <div class="section-header">
-        <div class="section-header-text">
-          <h2 data-i18n="targetLangSection">Language</h2>
-          <span class="section-desc" data-i18n="targetLangDesc">Language to translate pages into</span>
-        </div>
-        <button class="btn-reset" type="button" data-reset="language" data-i18n="resetBtn">Reset</button>
-      </div>
-      <div class="settings-card">
-        <div class="form-group">
-          <label for="targetLanguage"><span data-i18n="targetLangLabel">Target language</span><span class="help-icon" tabindex="0" role="img" aria-label="help" data-i18n-tip="tip_targetLanguage"></span></label>
-          <select id="targetLanguage"><!-- populated by JS --></select>
-        </div>
-      </div>
-    </section>
+  <div class="shell">
+    <nav class="nav" id="nav">
+      <button class="nav-item" type="button" data-section="general">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"></circle>
+          <path d="M2 12h20"></path>
+          <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+        </svg>
+        <span class="nav-label" data-i18n="navGeneral">General</span>
+      </button>
+      <button class="nav-item" type="button" data-section="provider">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0 3 3L22 7l-3-3m-3.5 3.5L19 4"></path>
+        </svg>
+        <span class="nav-label" data-i18n="navProvider">AI provider</span>
+      </button>
+      <button class="nav-item" type="button" data-section="behavior">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+        </svg>
+        <span class="nav-label" data-i18n="navBehavior">Behavior</span>
+      </button>
+      <button class="nav-item" type="button" data-section="style">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="4 7 4 4 20 4 20 7"></polyline>
+          <line x1="9" y1="20" x2="15" y2="20"></line>
+          <line x1="12" y1="4" x2="12" y2="20"></line>
+        </svg>
+        <span class="nav-label" data-i18n="navStyle">Translation style</span>
+      </button>
+      <button class="nav-item" type="button" data-section="sites">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="3" width="18" height="18" rx="2"></rect>
+          <path d="M3 9h18"></path>
+          <path d="M9 21V9"></path>
+        </svg>
+        <span class="nav-label" data-i18n="navSites">Sites</span>
+      </button>
+      <button class="nav-item" type="button" data-section="advanced">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="4" y1="21" x2="4" y2="14"></line>
+          <line x1="4" y1="10" x2="4" y2="3"></line>
+          <line x1="12" y1="21" x2="12" y2="12"></line>
+          <line x1="12" y1="8" x2="12" y2="3"></line>
+          <line x1="20" y1="21" x2="20" y2="16"></line>
+          <line x1="20" y1="12" x2="20" y2="3"></line>
+          <line x1="1" y1="14" x2="7" y2="14"></line>
+          <line x1="9" y1="8" x2="15" y2="8"></line>
+          <line x1="17" y1="16" x2="23" y2="16"></line>
+        </svg>
+        <span class="nav-label" data-i18n="navAdvanced">Advanced</span>
+      </button>
+      <button class="nav-item" type="button" data-section="data">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <ellipse cx="12" cy="5" rx="8" ry="3"></ellipse>
+          <path d="M4 5v6c0 1.66 3.58 3 8 3s8-1.34 8-3V5"></path>
+          <path d="M4 11v6c0 1.66 3.58 3 8 3s8-1.34 8-3v-6"></path>
+        </svg>
+        <span class="nav-label" data-i18n="navData">Data &amp; cache</span>
+      </button>
+    </nav>
 
-    <section class="settings-section">
-      <div class="section-header">
-        <div class="section-header-text">
-          <h2 data-i18n="apiSection">API</h2>
-          <span class="section-desc" data-i18n="apiDesc">AI connection settings</span>
-        </div>
-        <button class="btn-reset" type="button" data-reset="api" data-i18n="resetBtn">Reset</button>
+    <main id="main">
+      <div class="stale-banner" id="staleBackgroundBanner" role="alert" hidden>
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+          <path d="M12 9v4"></path>
+          <path d="M12 17h.01"></path>
+        </svg>
+        <span id="staleBackgroundText"></span>
       </div>
-      <div class="settings-card">
-        <div class="form-group">
-          <label for="apiProvider"><span data-i18n="providerLabel">Provider</span><span class="help-icon" tabindex="0" role="img" aria-label="help" data-i18n-tip="tip_apiProvider"></span></label>
-          <select id="apiProvider">
-            <option value="gemini">Google (Gemini)</option>
-            <option value="openai">OpenAI (ChatGPT)</option>
-            <option value="anthropic">Anthropic (Claude)</option>
-            <option value="openai-compatible">OpenAI Compatible</option>
-          </select>
+      <section data-panel="general">
+        <div class="section-head">
+          <div>
+            <h2 data-i18n="navGeneral">General</h2>
+            <p data-i18n="optGeneralDesc">Target language and appearance</p>
+          </div>
+          <button class="btn-text" type="button" data-reset="general" data-i18n="resetBtn">Reset</button>
         </div>
-        <div class="form-group" id="endpointGroup" style="display:none">
-          <label for="endpointUrl"><span data-i18n="endpointLabel">Endpoint URL</span><span class="help-icon" tabindex="0" role="img" aria-label="help" data-i18n-tip="tip_endpointUrl"></span></label>
-          <input type="text" id="endpointUrl" placeholder="https://api.example.com/v1/chat/completions" autocomplete="off" spellcheck="false">
+        <div class="card">
+          <div class="row">
+            <div class="row-main">
+              <label class="row-label" for="targetLanguage" data-i18n="targetLangLabel">Target language</label>
+              <div class="row-desc" data-i18n="optTargetLangDesc"></div>
+            </div>
+            <div class="row-control">
+              <select id="targetLanguage"></select>
+            </div>
+          </div>
+          <div class="row">
+            <div class="row-main">
+              <label class="row-label" for="toggleBlueBackground" data-i18n="showHighlightLabel">Show translation highlight</label>
+              <div class="row-desc" data-i18n="optHighlightDesc"></div>
+            </div>
+            <div class="row-control">
+              <span class="switch">
+                <input type="checkbox" id="toggleBlueBackground">
+                <span class="track"></span>
+              </span>
+            </div>
+          </div>
         </div>
-        <div class="form-group">
-          <label for="apiKey"><span data-i18n="apiKeyLabel">API Key</span><span class="help-icon" tabindex="0" role="img" aria-label="help" data-i18n-tip="tip_apiKey"></span></label>
-          <input type="password" id="apiKey" placeholder="" autocomplete="off" spellcheck="false">
-        </div>
-        <div class="form-group">
-          <label for="aiModel"><span data-i18n="aiModelLabel">AI Model</span><span class="help-icon" tabindex="0" role="img" aria-label="help" data-i18n-tip="tip_aiModel"></span></label>
-          <input type="text" id="aiModel" placeholder="" autocomplete="off" spellcheck="false">
-        </div>
-      </div>
-    </section>
+      </section>
 
-    <section class="settings-section">
-      <div class="section-header">
-        <div class="section-header-text">
-          <h2 data-i18n="batchSection">Output</h2>
-          <span class="section-desc" data-i18n="batchDesc">Max tokens the AI can output per request</span>
+      <section data-panel="provider" hidden>
+        <div class="section-head">
+          <div>
+            <h2 data-i18n="navProvider">AI provider</h2>
+            <p data-i18n="optProviderDesc"></p>
+          </div>
+          <button class="btn-text" type="button" data-reset="provider" data-i18n="resetBtn">Reset</button>
         </div>
-        <button class="btn-reset" type="button" data-reset="output" data-i18n="resetBtn">Reset</button>
-      </div>
-      <div class="settings-card">
-        <div class="form-group">
-          <label for="maxToken"><span data-i18n="maxTokenLabel">Max output tokens</span><span class="help-icon" tabindex="0" role="img" aria-label="help" data-i18n-tip="tip_maxToken"></span></label>
-          <input type="number" id="maxToken" min="1" max="1000000" placeholder="65536">
+        <div class="card">
+          <div class="row">
+            <div class="row-main">
+              <label class="row-label" for="apiProvider" data-i18n="providerLabel">Provider</label>
+            </div>
+            <div class="row-control">
+              <select id="apiProvider">
+                <option value="gemini">Google (Gemini)</option>
+                <option value="openai">OpenAI (ChatGPT)</option>
+                <option value="anthropic">Anthropic (Claude)</option>
+                <option value="openai-compatible">OpenAI Compatible</option>
+              </select>
+            </div>
+          </div>
+          <div class="row stack" id="endpointGroup">
+            <div class="row-main">
+              <label class="row-label" for="endpointUrl" data-i18n="endpointLabel">Endpoint URL</label>
+              <div class="row-desc" data-i18n="optEndpointDesc"></div>
+            </div>
+            <div class="row-control field-wide">
+              <input type="text" id="endpointUrl" class="ltr-input" placeholder="https://api.example.com/v1/chat/completions" autocomplete="off" spellcheck="false">
+            </div>
+          </div>
+          <div class="row stack" id="apiKeyGroup">
+            <div class="row-main">
+              <label class="row-label" for="apiKey" data-i18n="apiKeyLabel">API Key</label>
+              <div class="row-desc" id="apiKeyDesc" data-i18n="optApiKeyDesc"></div>
+            </div>
+            <div class="row-control field-wide">
+              <input type="password" id="apiKey" class="ltr-input" autocomplete="off" spellcheck="false">
+              <button class="icon-btn" type="button" id="toggleKeyVisibility" data-i18n-title="optRevealKey">
+                <svg id="eyeShow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                  <circle cx="12" cy="12" r="3"></circle>
+                </svg>
+                <svg id="eyeHide" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" hidden>
+                  <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"></path>
+                  <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"></path>
+                  <line x1="1" y1="1" x2="23" y2="23"></line>
+                </svg>
+              </button>
+            </div>
+          </div>
+          <div class="row stack" id="modelGroup">
+            <div class="row-main">
+              <label class="row-label" for="aiModel" data-i18n="aiModelLabel">AI Model</label>
+              <div class="row-desc" id="aiModelDesc" data-i18n="optModelDesc"></div>
+            </div>
+            <div class="row-control field-wide">
+              <input type="text" id="aiModel" class="ltr-input" autocomplete="off" spellcheck="false">
+            </div>
+          </div>
         </div>
-      </div>
-    </section>
+      </section>
 
-    <section class="settings-section">
-      <div class="section-header">
-        <div class="section-header-text">
-          <h2 data-i18n="networkSection">Network</h2>
-          <span class="section-desc" data-i18n="networkDesc">Concurrency and retries</span>
+      <section data-panel="behavior" hidden>
+        <div class="section-head">
+          <div>
+            <h2 data-i18n="navBehavior">Behavior</h2>
+            <p data-i18n="optBehaviorDesc"></p>
+          </div>
+          <button class="btn-text" type="button" data-reset="behavior" data-i18n="resetBtn">Reset</button>
         </div>
-        <button class="btn-reset" type="button" data-reset="network" data-i18n="resetBtn">Reset</button>
-      </div>
-      <div class="settings-card">
-        <div class="form-group">
-          <label for="delayBetweenRequests"><span data-i18n="delayLabel">Delay between requests (s)</span><span class="help-icon" tabindex="0" role="img" aria-label="help" data-i18n-tip="tip_delayBetweenRequests"></span></label>
-          <input type="number" id="delayBetweenRequests" min="0" max="3600" placeholder="10">
+        <div class="card">
+          <div class="card-caption" data-i18n="optCapStart"></div>
+          <div class="row">
+            <div class="row-main">
+              <label class="row-label" for="realTimeTranslation" data-i18n="autoTranslateLabel">Auto translate</label>
+              <div class="row-desc" data-i18n="optAutoTranslateDesc"></div>
+            </div>
+            <div class="row-control">
+              <span class="switch">
+                <input type="checkbox" id="realTimeTranslation">
+                <span class="track"></span>
+              </span>
+            </div>
+          </div>
+          <div class="row">
+            <div class="row-main">
+              <label class="row-label" for="autoRetranslateDomain" data-i18n="autoRetranslateDomainLabel">Continue on the rest of the site</label>
+              <div class="row-desc" data-i18n="optAutoRetranslateDesc"></div>
+            </div>
+            <div class="row-control">
+              <span class="switch">
+                <input type="checkbox" id="autoRetranslateDomain">
+                <span class="track"></span>
+              </span>
+            </div>
+          </div>
+          <div class="row">
+            <div class="row-main">
+              <label class="row-label" for="hidePromptAllSites" data-i18n="hidePromptLabel">Never ask before translating</label>
+              <div class="row-desc" data-i18n="optNeverAskDesc"></div>
+            </div>
+            <div class="row-control">
+              <span class="switch">
+                <input type="checkbox" id="hidePromptAllSites">
+                <span class="track"></span>
+              </span>
+            </div>
+          </div>
         </div>
-        <div class="form-group">
-          <label for="concurrencyLimit"><span data-i18n="concurrencyLabel">Concurrency limit</span><span class="help-icon" tabindex="0" role="img" aria-label="help" data-i18n-tip="tip_concurrencyLimit"></span></label>
-          <input type="number" id="concurrencyLimit" min="1" max="50" placeholder="10">
+        <div class="card">
+          <div class="card-caption" data-i18n="optCapDuring"></div>
+          <div class="row">
+            <div class="row-main">
+              <label class="row-label" for="streamingTranslation" data-i18n="streamingLabel">Streaming translation</label>
+              <div class="row-desc" data-i18n="optStreamingDesc"></div>
+            </div>
+            <div class="row-control">
+              <span class="switch">
+                <input type="checkbox" id="streamingTranslation">
+                <span class="track"></span>
+              </span>
+            </div>
+          </div>
+          <div class="row">
+            <div class="row-main">
+              <label class="row-label" for="showProgressPopup" data-i18n="showProgressLabel">Show progress popup</label>
+              <div class="row-desc" data-i18n="optProgressDesc"></div>
+            </div>
+            <div class="row-control">
+              <span class="switch">
+                <input type="checkbox" id="showProgressPopup">
+                <span class="track"></span>
+              </span>
+            </div>
+          </div>
         </div>
-        <div class="form-group">
-          <label for="maxRetries"><span data-i18n="maxRetriesLabel">Max retries on error</span><span class="help-icon" tabindex="0" role="img" aria-label="help" data-i18n-tip="tip_maxRetries"></span></label>
-          <input type="number" id="maxRetries" min="0" max="10" placeholder="3">
+        <div class="card">
+          <div class="card-caption" data-i18n="optCapPage"></div>
+          <div class="row">
+            <div class="row-main">
+              <label class="row-label" for="autoTranslateNewContent" data-i18n="autoTranslateNewContentLabel">Auto-translate newly loaded content</label>
+              <div class="row-desc" data-i18n="optAutoTranslateNewContentDesc"></div>
+            </div>
+            <div class="row-control">
+              <span class="switch">
+                <input type="checkbox" id="autoTranslateNewContent">
+                <span class="track"></span>
+              </span>
+            </div>
+          </div>
+          <div class="row">
+            <div class="row-main">
+              <label class="row-label" for="showContextMenu" data-i18n="showContextMenuLabel">Show right-click menu items</label>
+              <div class="row-desc" data-i18n="optContextMenuDesc"></div>
+            </div>
+            <div class="row-control">
+              <span class="switch">
+                <input type="checkbox" id="showContextMenu">
+                <span class="track"></span>
+              </span>
+            </div>
+          </div>
         </div>
-        <div class="form-group">
-          <label for="timeout"><span data-i18n="timeoutLabel">API timeout (seconds)</span><span class="help-icon" tabindex="0" role="img" aria-label="help" data-i18n-tip="tip_timeout"></span></label>
-          <input type="number" id="timeout" min="1" max="600" placeholder="180">
-        </div>
-      </div>
-    </section>
+      </section>
 
-    <section class="settings-section">
-      <div class="section-header">
-        <div class="section-header-text">
-          <h2 data-i18n="displaySection">Display & Behavior</h2>
+      <section data-panel="style" hidden>
+        <div class="section-head">
+          <div>
+            <h2 data-i18n="navStyle">Translation style</h2>
+            <p data-i18n="optStyleDesc"></p>
+          </div>
+          <button class="btn-text" type="button" data-reset="style" data-i18n="resetBtn">Reset</button>
         </div>
-        <button class="btn-reset" type="button" data-reset="display" data-i18n="resetBtn">Reset</button>
-      </div>
-      <div class="settings-card">
-        <label class="toggle-group" for="toggleBlueBackground">
-          <span><span data-i18n="showHighlightLabel">Show translation highlight</span><span class="help-icon" tabindex="0" role="img" aria-label="help" data-i18n-tip="tip_toggleBlueBackground"></span></span>
-          <input type="checkbox" id="toggleBlueBackground">
-          <span class="toggle-switch" aria-hidden="true"></span>
-        </label>
-        <label class="toggle-group" for="realTimeTranslation">
-          <span><span data-i18n="autoTranslateLabel">Auto translate</span><span class="help-icon" tabindex="0" role="img" aria-label="help" data-i18n-tip="tip_realTimeTranslation"></span></span>
-          <input type="checkbox" id="realTimeTranslation">
-          <span class="toggle-switch" aria-hidden="true"></span>
-        </label>
-        <label class="toggle-group" for="showProgressPopup">
-          <span><span data-i18n="showProgressLabel">Show progress popup</span><span class="help-icon" tabindex="0" role="img" aria-label="help" data-i18n-tip="tip_showProgressPopup"></span></span>
-          <input type="checkbox" id="showProgressPopup">
-          <span class="toggle-switch" aria-hidden="true"></span>
-        </label>
-        <label class="toggle-group" for="hidePromptAllSites">
-          <span><span data-i18n="hidePromptLabel">Never ask before translating</span><span class="help-icon" tabindex="0" role="img" aria-label="help" data-i18n-tip="tip_hidePromptAllSites"></span></span>
-          <input type="checkbox" id="hidePromptAllSites">
-          <span class="toggle-switch" aria-hidden="true"></span>
-        </label>
-        <label class="toggle-group" for="showContextMenu">
-          <span><span data-i18n="showContextMenuLabel">Show toggle in context menu</span><span class="help-icon" tabindex="0" role="img" aria-label="help" data-i18n-tip="tip_showContextMenu"></span></span>
-          <input type="checkbox" id="showContextMenu">
-          <span class="toggle-switch" aria-hidden="true"></span>
-        </label>
-        <label class="toggle-group" for="autoRetranslateDomain">
-          <span><span data-i18n="autoRetranslateDomainLabel">Auto re-translate within domain</span><span class="help-icon" tabindex="0" role="img" aria-label="help" data-i18n-tip="tip_autoRetranslateDomain"></span></span>
-          <input type="checkbox" id="autoRetranslateDomain">
-          <span class="toggle-switch" aria-hidden="true"></span>
-        </label>
-      </div>
-    </section>
+        <div class="card">
+          <div class="row">
+            <div class="row-main">
+              <label class="row-label" for="translationStyle" data-i18n="stylePresetLabel">Writing style</label>
+              <div class="row-desc" data-i18n="optStylePresetDesc"></div>
+            </div>
+            <div class="row-control">
+              <select id="translationStyle">
+                <option value="" data-i18n="styleDefault">Match the source</option>
+                <option value="formal" data-i18n="styleFormal">Polite and formal</option>
+                <option value="casual" data-i18n="styleCasual">Casual</option>
+                <option value="technical" data-i18n="styleTechnical">Technical documentation</option>
+              </select>
+            </div>
+          </div>
+          <div class="row stack">
+            <div class="row-main">
+              <label class="row-label" for="customInstruction" data-i18n="styleCustomLabel">Additional instructions</label>
+              <div class="row-desc" data-i18n="optStyleCustomDesc"></div>
+            </div>
+            <div class="row-control field-wide">
+              <input type="text" id="customInstruction" data-i18n-placeholder="styleCustomPlaceholder" autocomplete="off">
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="row stack">
+            <div class="row-main">
+              <label class="row-label" for="glossaryText" data-i18n="glossaryLabel">Glossary</label>
+              <div class="row-desc" data-i18n="optGlossaryDesc"></div>
+            </div>
+            <div class="row-control field-wide">
+              <textarea id="glossaryText" rows="6" data-i18n-placeholder="glossaryPlaceholder" spellcheck="false"></textarea>
+            </div>
+          </div>
+        </div>
+      </section>
 
-    <section class="settings-section">
-      <div class="section-header">
-        <div class="section-header-text">
-          <h2 data-i18n="excludeSection">Excluded Sites</h2>
-          <span class="section-desc" data-i18n="excludeDesc">URLs to skip auto-translation (one per line)</span>
+      <section data-panel="sites" hidden>
+        <div class="section-head">
+          <div>
+            <h2 data-i18n="navSites">Sites</h2>
+            <p data-i18n="optSitesDesc"></p>
+          </div>
         </div>
-        <button class="btn-reset" type="button" data-reset="exclude" data-i18n="resetBtn">Reset</button>
-      </div>
-      <div class="settings-card">
-        <div class="form-group">
-          <label for="excludeList"><span data-i18n="excludeListLabel">Sites to exclude</span><span class="help-icon" tabindex="0" role="img" aria-label="help" data-i18n-tip="tip_excludeList"></span></label>
-          <textarea id="excludeList" rows="5" placeholder="https://example.com&#10;https://www.example.org" spellcheck="false"></textarea>
+        <div class="card">
+          <div class="row stack">
+            <div class="row-main">
+              <div class="row-label" data-i18n="alwaysSection">Always Translated Sites</div>
+              <div class="row-desc" data-i18n="alwaysListDesc"></div>
+            </div>
+            <div class="row-control chip-list" id="alwaysRows"></div>
+            <div class="row-control add-row">
+              <input type="text" id="alwaysInput" class="ltr-input" placeholder="example.com" autocomplete="off" spellcheck="false">
+              <button class="btn-tonal" type="button" id="alwaysAddBtn" data-i18n="optAdd">Add</button>
+            </div>
+          </div>
         </div>
-      </div>
-    </section>
+        <div class="card">
+          <div class="row stack">
+            <div class="row-main">
+              <div class="row-label" data-i18n="excludeSection">Excluded Sites</div>
+              <div class="row-desc" data-i18n="optExcludeListDesc"></div>
+            </div>
+            <div class="row-control chip-list" id="excludeRows"></div>
+            <div class="row-control add-row">
+              <input type="text" id="excludeInput" class="ltr-input" placeholder="example.com" autocomplete="off" spellcheck="false">
+              <button class="btn-tonal" type="button" id="excludeAddBtn" data-i18n="optAdd">Add</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section data-panel="advanced" hidden>
+        <div class="section-head">
+          <div>
+            <h2 data-i18n="navAdvanced">Advanced</h2>
+            <p data-i18n="optAdvancedDesc"></p>
+          </div>
+          <button class="btn-text" type="button" data-reset="advanced" data-i18n="resetBtn">Reset</button>
+        </div>
+        <div class="card">
+          <div class="row">
+            <div class="row-main">
+              <label class="row-label" for="maxToken" data-i18n="maxTokenLabel">Max output tokens</label>
+              <div class="row-desc" id="maxTokenDesc" data-i18n="optMaxTokenDesc"></div>
+            </div>
+            <div class="row-control">
+              <input type="number" id="maxToken" min="1" max="1000000" placeholder="65536">
+              <span class="unit" data-i18n="optUnitTokens"></span>
+            </div>
+          </div>
+          <div class="row">
+            <div class="row-main">
+              <label class="row-label" for="delayBetweenRequests" data-i18n="optDelayLabel">Delay between requests</label>
+              <div class="row-desc" data-i18n="optDelayDesc"></div>
+            </div>
+            <div class="row-control">
+              <input type="number" id="delayBetweenRequests" min="0" max="3600" placeholder="10">
+              <span class="unit" data-i18n="optUnitSeconds"></span>
+            </div>
+          </div>
+          <div class="row">
+            <div class="row-main">
+              <label class="row-label" for="concurrencyLimit" data-i18n="concurrencyLabel">Concurrency limit</label>
+              <div class="row-desc" data-i18n="optConcurrencyDesc"></div>
+            </div>
+            <div class="row-control">
+              <input type="number" id="concurrencyLimit" min="1" max="50" placeholder="10">
+              <span class="unit" data-i18n="optUnitRequests"></span>
+            </div>
+          </div>
+          <div class="row">
+            <div class="row-main">
+              <label class="row-label" for="maxRetries" data-i18n="maxRetriesLabel">Max retries on error</label>
+              <div class="row-desc" data-i18n="optRetriesDesc"></div>
+            </div>
+            <div class="row-control">
+              <input type="number" id="maxRetries" min="0" max="10" placeholder="3">
+              <span class="unit" data-i18n="optUnitTimes"></span>
+            </div>
+          </div>
+          <div class="row">
+            <div class="row-main">
+              <label class="row-label" for="timeout" data-i18n="optTimeoutLabel">Timeout</label>
+              <div class="row-desc" data-i18n="optTimeoutDesc"></div>
+            </div>
+            <div class="row-control">
+              <input type="number" id="timeout" min="1" max="600" placeholder="180">
+              <span class="unit" data-i18n="optUnitSeconds"></span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section data-panel="data" hidden>
+        <div class="section-head">
+          <div>
+            <h2 data-i18n="navData">Data &amp; cache</h2>
+            <p data-i18n="dataDesc"></p>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-caption" data-i18n="usageCaption"></div>
+          <div class="usage-body" id="usageBody"></div>
+          <div class="row">
+            <div class="row-main">
+              <div class="row-desc" id="usageSince"></div>
+            </div>
+            <div class="row-control">
+              <button class="btn-text" type="button" id="usageResetBtn" data-i18n="usageResetBtn">Reset usage</button>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-caption" data-i18n="dataCacheCaption"></div>
+          <div class="row stack">
+            <div class="row-main">
+              <div class="row-label" data-i18n="dataCacheLabel">Page cache</div>
+              <div class="row-desc" data-i18n="dataCacheDesc"></div>
+            </div>
+            <div class="row-control stat-row">
+              <div class="stat">
+                <div class="stat-label" data-i18n="dataCacheEntriesLabel"></div>
+                <div class="stat-value" id="cacheEntries">—</div>
+              </div>
+              <div class="stat">
+                <div class="stat-label" data-i18n="dataCacheSizeLabel"></div>
+                <div class="stat-value" id="cacheSize">—</div>
+              </div>
+            </div>
+          </div>
+          <div class="row" id="cacheErrorRow" hidden>
+            <div class="row-main">
+              <div class="row-desc warn-text" id="cacheError"></div>
+            </div>
+          </div>
+          <div class="row">
+            <div class="row-main"></div>
+            <div class="row-control">
+              <button class="btn-danger-tonal" type="button" id="cacheClearBtn" data-i18n="dataClearBtn">Delete cache</button>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-caption" data-i18n="dataCachePagesCaption">Cached pages</div>
+          <div class="row stack">
+            <div class="row-main">
+              <div class="row-desc" data-i18n="dataCachePagesDesc"></div>
+            </div>
+            <div class="row-control">
+              <div class="chip-list" id="cacheRows"></div>
+            </div>
+          </div>
+          <div class="row" id="cacheMoreRow" hidden>
+            <div class="row-main"></div>
+            <div class="row-control">
+              <button class="btn-text" type="button" id="cacheMoreBtn" data-i18n="dataCacheMore">Show more</button>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
   </div>
 
-  <div class="save-bar">
-    <button id="saveBtn" type="button">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
-        <polyline points="17 21 17 13 7 13 7 21"></polyline>
-        <polyline points="7 3 7 8 15 8"></polyline>
-      </svg>
-      <span data-i18n="saveBtn">Save settings</span>
-    </button>
-    <div id="status" role="status" aria-live="polite"></div>
+  <div class="snackbar" id="snackbar" role="status" aria-live="polite">
+    <svg class="snack-ok" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M20 6 9 17l-5-5"></path>
+    </svg>
+    <svg class="snack-err" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="9"></circle>
+      <line x1="12" y1="8" x2="12" y2="12.5"></line>
+      <line x1="12" y1="16" x2="12.01" y2="16"></line>
+    </svg>
+    <span id="snackbarText"></span>
   </div>
 
   <script src="translations.js"></script>
+  <script src="sitematch.js"></script>
   <script src="options.js"></script>
 </body>
 
