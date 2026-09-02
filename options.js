@@ -1,9 +1,13 @@
 const DEFAULTS = Object.freeze({
     apiProvider: 'gemini',
-    geminiModel: 'gemini-3.1-flash-lite',
-    openaiModel: 'gpt-5.4-nano-2026-03-17',
+    geminiModel: 'gemini-3.5-flash-lite',
+    openaiModel: 'gpt-5.6-luna',
     anthropicModel: 'claude-haiku-4-5-20251001',
     compatibleModel: '',
+    geminiReasoning: '',
+    openaiReasoning: 'off',
+    anthropicReasoning: '',
+    compatibleReasoning: '',
     batchSize: 500,
     maxBatchLength: 65535,
     delayBetweenRequests: 10000,
@@ -20,7 +24,15 @@ const MODEL_PLACEHOLDERS = {
     'openai-compatible': DEFAULTS.compatibleModel
 };
 
-const ANTHROPIC_MAX_OUTPUT_TOKENS = 64000;
+const REASONING_LEVEL_LABEL_KEYS = {
+    off: 'reasoningOff',
+    minimal: 'reasoningMinimal',
+    low: 'reasoningLow',
+    medium: 'reasoningMedium',
+    high: 'reasoningHigh',
+    xhigh: 'reasoningXhigh',
+    max: 'reasoningMax'
+};
 
 const PROVIDER_ROW_DESCS = {
     apiKeyDesc: { base: 'optApiKeyDesc', 'openai-compatible': 'optCompatibleApiKeyDesc' },
@@ -29,10 +41,10 @@ const PROVIDER_ROW_DESCS = {
 };
 
 const providerSettings = {
-    gemini: { apiKey: '', model: DEFAULTS.geminiModel },
-    openai: { apiKey: '', model: DEFAULTS.openaiModel },
-    anthropic: { apiKey: '', model: DEFAULTS.anthropicModel },
-    'openai-compatible': { apiKey: '', model: DEFAULTS.compatibleModel, endpoint: '' }
+    gemini: { apiKey: '', model: DEFAULTS.geminiModel, reasoning: DEFAULTS.geminiReasoning },
+    openai: { apiKey: '', model: DEFAULTS.openaiModel, reasoning: DEFAULTS.openaiReasoning },
+    anthropic: { apiKey: '', model: DEFAULTS.anthropicModel, reasoning: DEFAULTS.anthropicReasoning },
+    'openai-compatible': { apiKey: '', model: DEFAULTS.compatibleModel, reasoning: DEFAULTS.compatibleReasoning, endpoint: '', extraParams: {} }
 };
 
 const RTL_LANGS = new Set(['ar', 'ur', 'he', 'fa']);
@@ -59,6 +71,9 @@ const NUMBER_FIELDS = {
 };
 
 let currentProvider = DEFAULTS.apiProvider;
+let extraParamsMode = 'list';
+let extraParamsErrorKind = '';
+let extraParamsErrorDetail = '';
 let excludeEntries = [];
 let alwaysEntries = [];
 let saveTimer = null;
@@ -104,6 +119,8 @@ function applyI18n(t) {
         if (t[key] !== undefined) node.placeholder = t[key];
     });
     updateProviderRowDescs(currentProvider);
+    renderReasoningControl();
+    renderExtraParams();
     renderSiteLists();
     renderUsageStats();
     renderCacheStats();
@@ -132,18 +149,218 @@ function normalizeProvider(provider) {
     return Object.prototype.hasOwnProperty.call(providerSettings, provider) ? provider : DEFAULTS.apiProvider;
 }
 
+function modelIdFor(provider) {
+    return el('aiModel').value.trim() || MODEL_PLACEHOLDERS[provider] || '';
+}
+
+function modelCapsFor(provider) {
+    return resolveModelCapabilities(provider, modelIdFor(provider));
+}
+
 function updateProviderRowDescs(provider) {
     const t = currentT();
     const lang = getUiLang();
+    const outputLimit = modelCapsFor(provider).maxOutputTokens ?? ANTHROPIC_MAX_OUTPUT_TOKENS;
     Object.keys(PROVIDER_ROW_DESCS).forEach(id => {
         const variants = PROVIDER_ROW_DESCS[id];
         const key = variants[provider] || variants.base;
         const node = el(id);
         node.dataset.i18n = key;
         if (t[key] !== undefined) {
-            node.textContent = t[key].replace('{limit}', formatNumber(ANTHROPIC_MAX_OUTPUT_TOKENS, lang));
+            node.textContent = t[key].replace('{limit}', formatNumber(outputLimit, lang));
         }
     });
+}
+
+function reasoningLevelLabel(t, level) {
+    const key = REASONING_LEVEL_LABEL_KEYS[level];
+    return key && t[key] !== undefined ? t[key] : level;
+}
+
+function renderReasoningControl() {
+    const select = el('reasoningLevel');
+    const desc = el('reasoningDesc');
+    const stale = el('reasoningStale');
+    if (!select || !desc || !stale) return;
+    const t = currentT();
+    const caps = modelCapsFor(currentProvider);
+    const settings = providerSettings[currentProvider] || providerSettings.gemini;
+    const stored = typeof settings.reasoning === 'string' ? settings.reasoning : '';
+    const storedSupported = caps.levels.includes(stored);
+    select.replaceChildren();
+    const defaultOption = document.createElement('option');
+    defaultOption.value = '';
+    defaultOption.textContent = REASONING_LEVEL_LABEL_KEYS[caps.defaultLevel]
+        ? t.reasoningDefaultIs.replace('{level}', reasoningLevelLabel(t, caps.defaultLevel))
+        : t.reasoningDefault;
+    select.appendChild(defaultOption);
+    caps.levels.forEach(level => {
+        const option = document.createElement('option');
+        option.value = level;
+        option.textContent = reasoningLevelLabel(t, level);
+        select.appendChild(option);
+    });
+    select.disabled = caps.levels.length === 0;
+    select.value = storedSupported ? stored : '';
+    if (caps.levels.length === 0) {
+        desc.textContent = t.optReasoningNotSent;
+    } else {
+        desc.textContent = currentProvider === 'openai-compatible' ? t.optReasoningCompatibleDesc : t.optReasoningDesc;
+    }
+    const showStale = caps.levels.length > 0 && stored !== '' && !storedSupported;
+    stale.hidden = !showStale;
+    stale.textContent = showStale
+        ? t.optReasoningStale.replace('{level}', reasoningLevelLabel(t, stored)).replace('{model}', modelIdFor(currentProvider))
+        : '';
+}
+
+function isPlainObject(value) {
+    return Object.prototype.toString.call(value) === '[object Object]';
+}
+
+function acceptsExtraParams(candidate) {
+    try {
+        applyExtraParams({}, candidate);
+        return true;
+    } catch (e) {
+        return false;
+    }
+}
+
+function parseExtraParamValue(raw) {
+    const text = String(raw || '').trim();
+    try {
+        return JSON.parse(text);
+    } catch (e) {
+        return text;
+    }
+}
+
+function setExtraParamsError(kind, detail) {
+    extraParamsErrorKind = kind || '';
+    extraParamsErrorDetail = detail || '';
+    renderExtraParamsError();
+}
+
+function renderExtraParamsError() {
+    const node = el('extraParamError');
+    if (!node) return;
+    const t = currentT();
+    let text = '';
+    if (extraParamsErrorKind === 'reserved') {
+        text = t.optExtraParamReserved;
+    } else if (extraParamsErrorKind === 'invalid') {
+        text = extraParamsErrorDetail ? t.optExtraParamInvalid + ' ' + extraParamsErrorDetail : t.optExtraParamInvalid;
+    }
+    node.hidden = !text;
+    node.textContent = text;
+}
+
+function renderExtraParamRows(params, t) {
+    const container = el('extraParamRows');
+    container.replaceChildren();
+    const entries = Object.entries(params);
+    if (entries.length === 0) {
+        const empty = document.createElement('div');
+        empty.className = 'empty-list';
+        empty.textContent = t.optExtraParamEmpty;
+        container.appendChild(empty);
+        return;
+    }
+    entries.forEach(([key, value]) => {
+        const row = document.createElement('div');
+        row.className = 'chip-row';
+        const main = document.createElement('div');
+        main.className = 'chip-main';
+        const name = document.createElement('span');
+        name.className = 'host';
+        name.textContent = key;
+        name.title = key;
+        const shown = document.createElement('span');
+        shown.className = 'chip-meta';
+        const literal = document.createElement('bdi');
+        literal.textContent = JSON.stringify(value);
+        shown.appendChild(literal);
+        main.appendChild(name);
+        main.appendChild(shown);
+        const removeBtn = document.createElement('button');
+        removeBtn.type = 'button';
+        removeBtn.className = 'icon-btn';
+        removeBtn.title = t.optRemove;
+        removeBtn.setAttribute('aria-label', t.optRemove);
+        removeBtn.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+        removeBtn.addEventListener('click', () => {
+            delete providerSettings['openai-compatible'].extraParams[key];
+            setExtraParamsError('');
+            renderExtraParams();
+            scheduleSave();
+        });
+        row.appendChild(main);
+        row.appendChild(removeBtn);
+        container.appendChild(row);
+    });
+}
+
+function renderExtraParams() {
+    const group = el('extraParamsGroup');
+    if (!group) return;
+    const t = currentT();
+    const params = providerSettings['openai-compatible'].extraParams;
+    const raw = extraParamsMode === 'raw';
+    el('extraParamsMode').value = extraParamsMode;
+    el('extraParamRows').hidden = raw;
+    el('extraParamAddRow').hidden = raw;
+    el('extraParamRawRow').hidden = !raw;
+    renderExtraParamRows(params, t);
+    const textarea = el('extraParamRaw');
+    if (document.activeElement !== textarea) textarea.value = JSON.stringify(params, null, 2);
+    renderExtraParamsError();
+}
+
+function addExtraParam() {
+    const keyInput = el('extraParamKey');
+    const valueInput = el('extraParamValue');
+    const key = String(keyInput.value || '').trim();
+    if (!key) {
+        keyInput.focus();
+        return;
+    }
+    const candidate = {};
+    Object.defineProperty(candidate, key, { value: parseExtraParamValue(valueInput.value), enumerable: true, writable: true, configurable: true });
+    if (!acceptsExtraParams(candidate)) {
+        setExtraParamsError('reserved');
+        return;
+    }
+    const settings = providerSettings['openai-compatible'];
+    settings.extraParams = Object.assign({}, settings.extraParams, candidate);
+    keyInput.value = '';
+    valueInput.value = '';
+    setExtraParamsError('');
+    renderExtraParams();
+    scheduleSave();
+    keyInput.focus();
+}
+
+function readExtraParamsRaw() {
+    let parsed;
+    try {
+        parsed = JSON.parse(el('extraParamRaw').value);
+    } catch (e) {
+        setExtraParamsError('invalid', e && e.message ? e.message : '');
+        return;
+    }
+    if (!isPlainObject(parsed)) {
+        setExtraParamsError('invalid', '');
+        return;
+    }
+    if (!acceptsExtraParams(parsed)) {
+        setExtraParamsError('reserved');
+        return;
+    }
+    providerSettings['openai-compatible'].extraParams = parsed;
+    setExtraParamsError('');
+    renderExtraParamRows(parsed, currentT());
+    scheduleSave();
 }
 
 function updateProviderUI(provider) {
@@ -152,13 +369,19 @@ function updateProviderUI(provider) {
     el('aiModel').value = settings.model;
     el('aiModel').placeholder = MODEL_PLACEHOLDERS[provider] || '';
     const endpointGroup = el('endpointGroup');
+    const extraParamsGroup = el('extraParamsGroup');
     if (provider === 'openai-compatible') {
         el('endpointUrl').value = settings.endpoint || '';
         endpointGroup.style.display = '';
+        extraParamsGroup.hidden = false;
     } else {
         endpointGroup.style.display = 'none';
+        extraParamsGroup.hidden = true;
     }
     updateProviderRowDescs(provider);
+    renderReasoningControl();
+    setExtraParamsError('');
+    renderExtraParams();
 }
 
 function languageNativeName(code) {
@@ -313,6 +536,11 @@ async function saveNow() {
         compatibleApiKey: providerSettings['openai-compatible'].apiKey,
         compatibleModel: providerSettings['openai-compatible'].model.trim(),
         compatibleEndpoint: compatibleEndpointRaw,
+        geminiReasoning: providerSettings.gemini.reasoning,
+        openaiReasoning: providerSettings.openai.reasoning,
+        anthropicReasoning: providerSettings.anthropic.reasoning,
+        compatibleReasoning: providerSettings['openai-compatible'].reasoning,
+        compatibleExtraParams: providerSettings['openai-compatible'].extraParams,
         delayBetweenRequests: readNumberField('delayBetweenRequests') * 1000,
         maxToken: readNumberField('maxToken'),
         concurrencyLimit: readNumberField('concurrencyLimit'),
@@ -737,10 +965,10 @@ const resetHandlers = {
         el('toggleBlueBackground').checked = false;
     },
     provider: () => {
-        providerSettings.gemini = { apiKey: '', model: DEFAULTS.geminiModel };
-        providerSettings.openai = { apiKey: '', model: DEFAULTS.openaiModel };
-        providerSettings.anthropic = { apiKey: '', model: DEFAULTS.anthropicModel };
-        providerSettings['openai-compatible'] = { apiKey: '', model: DEFAULTS.compatibleModel, endpoint: '' };
+        providerSettings.gemini = { apiKey: '', model: DEFAULTS.geminiModel, reasoning: DEFAULTS.geminiReasoning };
+        providerSettings.openai = { apiKey: '', model: DEFAULTS.openaiModel, reasoning: DEFAULTS.openaiReasoning };
+        providerSettings.anthropic = { apiKey: '', model: DEFAULTS.anthropicModel, reasoning: DEFAULTS.anthropicReasoning };
+        providerSettings['openai-compatible'] = { apiKey: '', model: DEFAULTS.compatibleModel, reasoning: DEFAULTS.compatibleReasoning, endpoint: '', extraParams: {} };
         currentProvider = DEFAULTS.apiProvider;
         el('apiProvider').value = currentProvider;
         updateProviderUI(currentProvider);
@@ -775,7 +1003,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             'geminiApiKey', 'geminiModel',
             'openaiApiKey', 'openaiModel',
             'anthropicApiKey', 'anthropicModel',
-            'compatibleApiKey', 'compatibleModel', 'compatibleEndpoint',
+            'compatibleApiKey', 'compatibleModel', 'compatibleEndpoint', 'compatibleExtraParams',
+            'geminiReasoning', 'openaiReasoning', 'anthropicReasoning', 'compatibleReasoning',
             'delayBetweenRequests', 'maxToken', 'concurrencyLimit',
             'maxRetries', 'timeout',
             'toggleBlueBackground', 'realTimeTranslation', 'showProgressPopup', 'excludeList', 'alwaysTranslateList', 'hidePromptAllSites', 'showContextMenu', 'autoRetranslateDomain', 'autoTranslateNewContent', 'streamingTranslation',
@@ -795,6 +1024,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         providerSettings['openai-compatible'].apiKey = items.compatibleApiKey || '';
         providerSettings['openai-compatible'].model = items.compatibleModel || DEFAULTS.compatibleModel;
         providerSettings['openai-compatible'].endpoint = items.compatibleEndpoint || '';
+        providerSettings['openai-compatible'].extraParams = isPlainObject(items.compatibleExtraParams) ? items.compatibleExtraParams : {};
+        providerSettings.gemini.reasoning = resolveReasoningLevel(items.geminiReasoning,
+            providerSettings.gemini.model === DEFAULTS.geminiModel, DEFAULTS.geminiReasoning);
+        providerSettings.openai.reasoning = resolveReasoningLevel(items.openaiReasoning,
+            providerSettings.openai.model === DEFAULTS.openaiModel, DEFAULTS.openaiReasoning);
+        providerSettings.anthropic.reasoning = resolveReasoningLevel(items.anthropicReasoning,
+            providerSettings.anthropic.model === DEFAULTS.anthropicModel, DEFAULTS.anthropicReasoning);
+        providerSettings['openai-compatible'].reasoning = resolveReasoningLevel(items.compatibleReasoning,
+            providerSettings['openai-compatible'].model === DEFAULTS.compatibleModel, DEFAULTS.compatibleReasoning);
 
         currentProvider = normalizeProvider(items.apiProvider || DEFAULTS.apiProvider);
         if (items.apiProvider && items.apiProvider !== currentProvider) {
@@ -856,6 +1094,37 @@ document.addEventListener('DOMContentLoaded', async () => {
     ['apiKey', 'aiModel', 'endpointUrl', 'customInstruction', 'glossaryText'].forEach(id => {
         el(id).addEventListener('input', scheduleSave);
     });
+
+    el('aiModel').addEventListener('input', () => {
+        updateProviderRowDescs(currentProvider);
+        renderReasoningControl();
+    });
+
+    el('reasoningLevel').addEventListener('change', () => {
+        const settings = providerSettings[currentProvider];
+        if (settings) settings.reasoning = el('reasoningLevel').value;
+        renderReasoningControl();
+        scheduleSave();
+    });
+
+    el('extraParamsMode').addEventListener('change', () => {
+        extraParamsMode = el('extraParamsMode').value === 'raw' ? 'raw' : 'list';
+        el('extraParamRaw').blur();
+        setExtraParamsError('');
+        renderExtraParams();
+    });
+
+    el('extraParamAddBtn').addEventListener('click', addExtraParam);
+    ['extraParamKey', 'extraParamValue'].forEach(id => {
+        el(id).addEventListener('keydown', event => {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                addExtraParam();
+            }
+        });
+    });
+
+    el('extraParamRaw').addEventListener('input', readExtraParamsRaw);
 
     el('translationStyle').addEventListener('change', scheduleSave);
 

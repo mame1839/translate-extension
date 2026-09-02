@@ -49,8 +49,8 @@ Google Gemini・OpenAI・Anthropic などの AI API を使ってウェブペー�
 
 | プロバイダー | デフォルトモデル |
 |---|---|
-| Google Gemini | `gemini-3.1-flash-lite` |
-| OpenAI | `gpt-5.4-nano-2026-03-17` |
+| Google Gemini | `gemini-3.5-flash-lite` |
+| OpenAI | `gpt-5.6-luna` |
 | Anthropic | `claude-haiku-4-5-20251001` |
 | OpenAI 互換 | 任意のモデル |
 
@@ -62,6 +62,7 @@ Google Gemini・OpenAI・Anthropic などの AI API を使ってウェブペー�
 
 | 項目 | デフォルト | 説明 |
 |---|---|---|
+| 推論 | モデルの既定 | 回答の前にモデルが考える量 |
 | 最大出力トークン | 65536 | API の最大出力トークン数 |
 | リクエスト間隔 | 10 秒 | リクエスト間のディレイ |
 | 並列数上限 | 10 | 同時リクエスト数 |
@@ -117,8 +118,8 @@ Click **Add to Chrome** on the [Chrome Web Store page](https://chromewebstore.go
 
 | Provider | Default Model |
 |---|---|
-| Google Gemini | `gemini-3.1-flash-lite` |
-| OpenAI | `gpt-5.4-nano-2026-03-17` |
+| Google Gemini | `gemini-3.5-flash-lite` |
+| OpenAI | `gpt-5.6-luna` |
 | Anthropic | `claude-haiku-4-5-20251001` |
 | OpenAI Compatible | Any model |
 
@@ -130,6 +131,7 @@ English / Japanese / Chinese (Simplified & Traditional) / Korean / Spanish / Fre
 
 | Setting | Default | Description |
 |---|---|---|
+| Reasoning | Model default | How much the model thinks before answering |
 | Max output tokens | 65536 | Maximum tokens per API response |
 | Delay between requests | 10 s | Pause between batch requests |
 | Concurrency limit | 10 | Maximum simultaneous requests |
@@ -185,8 +187,8 @@ Copyright (C) 2026 mame1839
 
 | 提供商 | 默认模型 |
 |---|---|
-| Google Gemini | `gemini-3.1-flash-lite` |
-| OpenAI | `gpt-5.4-nano-2026-03-17` |
+| Google Gemini | `gemini-3.5-flash-lite` |
+| OpenAI | `gpt-5.6-luna` |
 | Anthropic | `claude-haiku-4-5-20251001` |
 | OpenAI 兼容 | 任意模型 |
 
@@ -198,6 +200,7 @@ Copyright (C) 2026 mame1839
 
 | 设置 | 默认值 | 说明 |
 |---|---|---|
+| 推理 | 模型默认 | 模型回答前的思考程度 |
 | 最大输出 Token | 65536 | API 每次响应的最大 Token 数 |
 | 请求间隔 | 10 秒 | 批次请求之间的延迟 |
 | 并发上限 | 10 | 最大同时请求数 |
@@ -253,8 +256,8 @@ Google Gemini, OpenAI, Anthropic 또는 OpenAI 호환 엔드포인트 등의 AI 
 
 | 공급자 | 기본 모델 |
 |---|---|
-| Google Gemini | `gemini-3.1-flash-lite` |
-| OpenAI | `gpt-5.4-nano-2026-03-17` |
+| Google Gemini | `gemini-3.5-flash-lite` |
+| OpenAI | `gpt-5.6-luna` |
 | Anthropic | `claude-haiku-4-5-20251001` |
 | OpenAI 호환 | 임의 모델 |
 
@@ -266,6 +269,7 @@ Google Gemini, OpenAI, Anthropic 또는 OpenAI 호환 엔드포인트 등의 AI 
 
 | 설정 | 기본값 | 설명 |
 |---|---|---|
+| 추론 | 모델 기본값 | 답하기 전에 모델이 생각하는 정도 |
 | 최대 출력 토큰 | 65536 | API 응답당 최대 토큰 수 |
 | 요청 간격 | 10 초 | 배치 요청 간 대기 시간 |
 | 동시 요청 상한 | 10 | 최대 동시 요청 수 |
@@ -321,8 +325,8 @@ Copyright (C) 2026 mame1839
 
 | Провайдер | Модель по умолчанию |
 |---|---|
-| Google Gemini | `gemini-3.1-flash-lite` |
-| OpenAI | `gpt-5.4-nano-2026-03-17` |
+| Google Gemini | `gemini-3.5-flash-lite` |
+| OpenAI | `gpt-5.6-luna` |
 | Anthropic | `claude-haiku-4-5-20251001` |
 | Совместимый с OpenAI | Любая модель |
 
@@ -334,6 +338,7 @@ Copyright (C) 2026 mame1839
 
 | Настройка | По умолчанию | Описание |
 |---|---|---|
+| Рассуждение | По умолчанию для модели | Сколько модель думает перед ответом |
 | Макс. токенов на выходе | 65536 | Максимальное количество токенов в ответе API |
 | Задержка между запросами | 10 с | Пауза между пакетными запросами |
 | Лимит параллельных запросов | 10 | Максимальное число одновременных запросов |
