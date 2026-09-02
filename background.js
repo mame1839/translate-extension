@@ -57,7 +57,8 @@ const errorMessages = {
     serverError: 'Server is currently unavailable. Please try again later.',
     emptyResponse: 'Empty response received from AI.',
     contentRefused: 'The AI refused to translate this content.',
-    reasoningNotSupported: 'The model rejected the reasoning setting. Please check the extension settings.'
+    reasoningNotSupported: 'The model rejected the reasoning setting. Please check the extension settings.',
+    reasoningTimeout: 'Reasoning ran past the request timeout. Lower the reasoning level or raise the timeout in the extension settings.'
 };
 
 const FATAL_TRANSLATION_ERRORS = [
@@ -625,7 +626,14 @@ function sleep(ms, signal) {
     });
 }
 
-async function fetchJsonWithTimeout(resource, options = {}, timeout) {
+function createTimeoutError(reasoningLevel, timeoutSeconds) {
+    if (reasoningLevel && reasoningLevel !== 'off') {
+        return createTranslationError('reasoningTimeout', ` (${reasoningLevel}, ${timeoutSeconds} s)`);
+    }
+    return createTranslationError('requestTimeout');
+}
+
+async function fetchJsonWithTimeout(resource, options = {}, timeout, reasoningLevel = '') {
     const controller = new AbortController();
     const timeoutId = timeout > 0 ? setTimeout(() => controller.abort(), timeout * 1000) : null;
     const externalSignal = options.signal;
@@ -645,7 +653,7 @@ async function fetchJsonWithTimeout(resource, options = {}, timeout) {
             if (externalSignal?.aborted && !controller.signal.aborted) {
                 throw createAbortError();
             }
-            throw createTranslationError('requestTimeout');
+            throw createTimeoutError(reasoningLevel, timeout);
         }
         throw createTranslationError('fetchError', `: ${error.message}`);
     } finally {
@@ -860,6 +868,7 @@ async function performTranslation(apiCall, retryLimit, signal) {
                 errorMessages.insufficientQuota,
                 errorMessages.contentRefused,
                 errorMessages.reasoningNotSupported,
+                errorMessages.reasoningTimeout,
                 errorMessages.translationCancelled
             ];
             const msg = error?.message || '';
@@ -1375,7 +1384,7 @@ function consumeSSELine(line, readChunk, acc, streamContext) {
 }
 
 async function streamModelResponse(streamRequest) {
-    const { url, headers, body, timeout, signal, onHttpError, readChunk, finalizeStream, streamContext, provider } = streamRequest;
+    const { url, headers, body, timeout, reasoningLevel, signal, onHttpError, readChunk, finalizeStream, streamContext, provider } = streamRequest;
     const timeoutController = new AbortController();
     const timeoutId = timeout > 0 ? setTimeout(() => timeoutController.abort(), timeout * 1000) : null;
     const combinedSignal = combineSignals(signal, timeoutController.signal);
@@ -1386,7 +1395,7 @@ async function streamModelResponse(streamRequest) {
     } catch (error) {
         if (timeoutId) clearTimeout(timeoutId);
         if (error.name === 'AbortError') {
-            if (timedOut()) throw createTranslationError('requestTimeout');
+            if (timedOut()) throw createTimeoutError(reasoningLevel, timeout);
             throw createAbortError();
         }
         throw createTranslationError('fetchError', `: ${error.message}`);
@@ -1421,7 +1430,7 @@ async function streamModelResponse(streamRequest) {
         return acc.fullText;
     } catch (error) {
         if (error?.name === 'AbortError') {
-            if (timedOut()) throw createTranslationError('requestTimeout');
+            if (timedOut()) throw createTimeoutError(reasoningLevel, timeout);
             throw createAbortError();
         }
         throw error;
@@ -1570,7 +1579,8 @@ function buildGeminiRequest(settings, prompt, maxOutputTokens, options) {
         url: `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(actualModel)}:${method}`,
         headers: { 'Content-Type': 'application/json', 'x-goog-api-key': settings.geminiApiKey },
         body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig }),
-        reasoningSent: !!reasoning
+        reasoningSent: !!reasoning,
+        reasoningLevel: reasoning ? level : ''
     };
 }
 
@@ -1595,7 +1605,8 @@ function buildOpenAIRequest(settings, prompt, maxOutputTokens, options) {
         url: 'https://api.openai.com/v1/chat/completions',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${settings.openaiApiKey}` },
         body: JSON.stringify(body),
-        reasoningSent: !!reasoning
+        reasoningSent: !!reasoning,
+        reasoningLevel: reasoning ? level : ''
     };
 }
 
@@ -1620,13 +1631,15 @@ function buildCompatibleRequest(settings, prompt, maxOutputTokens, options) {
         throw createTranslationError('invalidRequest', ` (${error.message})`);
     }
     const reasoningOverridden = extras !== undefined && Object.prototype.hasOwnProperty.call(extras, 'reasoning_effort');
+    const reasoningSent = !!reasoning && !reasoningOverridden;
     const headers = { 'Content-Type': 'application/json' };
     if (settings.compatibleApiKey) headers['Authorization'] = `Bearer ${settings.compatibleApiKey}`;
     return {
         url: settings.compatibleEndpoint.trim(),
         headers,
         body: JSON.stringify(body),
-        reasoningSent: !!reasoning && !reasoningOverridden
+        reasoningSent,
+        reasoningLevel: reasoningSent ? level : ''
     };
 }
 
@@ -1653,7 +1666,8 @@ function buildAnthropicRequest(settings, prompt, maxOutputTokens, options) {
             'anthropic-dangerous-direct-browser-access': 'true'
         },
         body: JSON.stringify(body),
-        reasoningSent: !!reasoning
+        reasoningSent: !!reasoning,
+        reasoningLevel: reasoning ? level : ''
     };
 }
 
@@ -1663,7 +1677,7 @@ function postProviderRequest(request, signal, timeout) {
         headers: request.headers,
         body: request.body,
         signal
-    }, timeout);
+    }, timeout, request.reasoningLevel);
 }
 
 async function translateWithGemini(text, retryLimit, signal, targetLanguage = 'English', targetLanguageCode, streamContext = null) {
@@ -1680,6 +1694,7 @@ async function translateWithGemini(text, retryLimit, signal, targetLanguage = 'E
             headers: request.headers,
             body: request.body,
             timeout: actualTimeout,
+            reasoningLevel: request.reasoningLevel,
             signal,
             onHttpError,
             readChunk: readGeminiStreamChunk,
@@ -1725,6 +1740,7 @@ async function translateWithOpenAI(text, retryLimit, signal, targetLanguage = 'E
             headers: request.headers,
             body: request.body,
             timeout: actualTimeout,
+            reasoningLevel: request.reasoningLevel,
             signal,
             onHttpError,
             readChunk: readOpenAIStreamChunk,
@@ -1761,6 +1777,7 @@ async function translateWithOpenAICompatible(text, retryLimit, signal, targetLan
             headers: request.headers,
             body: request.body,
             timeout: actualTimeout,
+            reasoningLevel: request.reasoningLevel,
             signal,
             onHttpError,
             readChunk: readCompatibleStreamChunk,
@@ -1796,6 +1813,7 @@ async function translateWithAnthropic(text, retryLimit, signal, targetLanguage =
             headers: request.headers,
             body: request.body,
             timeout: actualTimeout,
+            reasoningLevel: request.reasoningLevel,
             signal,
             onHttpError,
             readChunk: readAnthropicStreamChunk,
