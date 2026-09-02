@@ -197,6 +197,28 @@
               <select id="reasoningLevel"></select>
             </div>
           </div>
+          <div class="row stack" id="extraParamsGroup" hidden>
+            <div class="row-main">
+              <label class="row-label" for="extraParamsMode" data-i18n="extraParamsLabel">Extra parameters</label>
+              <div class="row-desc" data-i18n="optExtraParamsDesc"></div>
+            </div>
+            <div class="row-control">
+              <select id="extraParamsMode">
+                <option value="list" data-i18n="optExtraParamModeList">List</option>
+                <option value="raw" data-i18n="optExtraParamModeRaw">JSON</option>
+              </select>
+            </div>
+            <div class="row-control chip-list" id="extraParamRows"></div>
+            <div class="row-control add-row" id="extraParamAddRow">
+              <input type="text" id="extraParamKey" class="ltr-input" data-i18n-placeholder="optExtraParamKeyPlaceholder" autocomplete="off" spellcheck="false">
+              <input type="text" id="extraParamValue" class="ltr-input" data-i18n-placeholder="optExtraParamValuePlaceholder" autocomplete="off" spellcheck="false">
+              <button class="btn-tonal" type="button" id="extraParamAddBtn" data-i18n="optAdd">Add</button>
+            </div>
+            <div class="row-control field-wide" id="extraParamRawRow" hidden>
+              <textarea id="extraParamRaw" class="ltr-input" rows="6" spellcheck="false"></textarea>
+            </div>
+            <div class="row-desc warn-text" id="extraParamError" hidden></div>
+          </div>
         </div>
       </section>
 
