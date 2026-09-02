@@ -1444,6 +1444,11 @@ function finalizeAnthropicStream(acc) {
     if (!acc.fullText) throw createTranslationError('emptyResponse');
 }
 
+function readAnthropicTextContent(content) {
+    if (!Array.isArray(content)) return '';
+    return content.map(part => part?.type === 'text' ? (part.text || '') : '').join('');
+}
+
 function geminiAllowsCustomTemperature(model) {
     const versionMatch = /^gemini-(\d+)/i.exec(model || '');
     return !!versionMatch && parseInt(versionMatch[1], 10) < 3;
@@ -1675,7 +1680,7 @@ async function translateWithAnthropic(text, retryLimit, signal, targetLanguage =
         if (!response.ok) handleAnthropicHttpError(response, data);
         recordApiUsage('anthropic', readUsageTokens(data));
         if (data?.stop_reason === 'max_tokens') throw createTranslationError('maxTokensError');
-        const responseText = data?.content?.[0]?.text || '';
+        const responseText = readAnthropicTextContent(data?.content);
         if (!responseText) throw createTranslationError('emptyResponse');
         return parseTranslationResponse(responseText);
     }, retryLimit, signal);
@@ -2096,10 +2101,7 @@ async function selectionRequestAnthropic(prompt, retryLimit, signal) {
         }, actualTimeout);
         if (!response.ok) handleAnthropicHttpError(response, data);
         recordApiUsage('anthropic', readUsageTokens(data));
-        const responseText = Array.isArray(data?.content)
-            ? data.content.map(part => part?.type === 'text' ? (part.text || '') : '').join('')
-            : '';
-        return finishSelectionText(responseText, data?.stop_reason === 'max_tokens');
+        return finishSelectionText(readAnthropicTextContent(data?.content), data?.stop_reason === 'max_tokens');
     }, retryLimit, signal);
 }
 
