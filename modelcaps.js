@@ -183,8 +183,8 @@ function buildReasoningFields(caps, level, maxTokens) {
             return { thinking: { type: 'adaptive', display: 'omitted' }, output_config: { effort: level } };
         case 'enabledBudget': {
             if (level === 'off') return { thinking: { type: 'disabled' } };
-            const ceiling = Number.isFinite(maxTokens) ? maxTokens - 1 : Infinity;
-            const budget = Math.min(caps.budgets[level], ceiling);
+            const room = Number.isFinite(maxTokens) ? Math.floor(maxTokens / 2) : Infinity;
+            const budget = Math.min(caps.budgets[level], room);
             if (budget < 1024) return null;
             return { thinking: { type: 'enabled', budget_tokens: budget } };
         }
