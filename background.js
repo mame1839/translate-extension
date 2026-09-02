@@ -1584,13 +1584,20 @@ function buildCompatibleRequest(settings, prompt, maxOutputTokens, options) {
     body.max_tokens = maxOutputTokens;
     if (reasoning) Object.assign(body, reasoning);
     if (options.stream) body.stream = true;
+    const extras = settings.compatibleExtraParams;
+    try {
+        applyExtraParams(body, extras);
+    } catch (error) {
+        throw createTranslationError('invalidRequest', ` (${error.message})`);
+    }
+    const reasoningOverridden = extras !== undefined && Object.prototype.hasOwnProperty.call(extras, 'reasoning_effort');
     const headers = { 'Content-Type': 'application/json' };
     if (settings.compatibleApiKey) headers['Authorization'] = `Bearer ${settings.compatibleApiKey}`;
     return {
         url: settings.compatibleEndpoint.trim(),
         headers,
         body: JSON.stringify(body),
-        reasoningSent: !!reasoning
+        reasoningSent: !!reasoning && !reasoningOverridden
     };
 }
 
@@ -1711,7 +1718,7 @@ async function translateWithOpenAI(text, retryLimit, signal, targetLanguage = 'E
 
 async function translateWithOpenAICompatible(text, retryLimit, signal, targetLanguage = 'English', targetLanguageCode, streamContext = null) {
     const settings = await new Promise(resolve =>
-        chrome.storage.local.get(['compatibleApiKey', 'compatibleModel', 'compatibleEndpoint', 'compatibleReasoning', 'maxToken', 'timeout'], resolve));
+        chrome.storage.local.get(['compatibleApiKey', 'compatibleModel', 'compatibleEndpoint', 'compatibleReasoning', 'compatibleExtraParams', 'maxToken', 'timeout'], resolve));
     if (!settings.compatibleEndpoint) throw createTranslationError('endpointNotSet');
     if (!(settings.compatibleModel || '').trim()) throw createTranslationError('modelNotSet');
     const actualTimeout = settings.timeout || DEFAULTS.timeout;
@@ -2123,7 +2130,7 @@ async function selectionRequestOpenAI(prompt, retryLimit, signal) {
 
 async function selectionRequestCompatible(prompt, retryLimit, signal) {
     const settings = await new Promise(resolve =>
-        chrome.storage.local.get(['compatibleApiKey', 'compatibleModel', 'compatibleEndpoint', 'compatibleReasoning', 'maxToken', 'timeout'], resolve));
+        chrome.storage.local.get(['compatibleApiKey', 'compatibleModel', 'compatibleEndpoint', 'compatibleReasoning', 'compatibleExtraParams', 'maxToken', 'timeout'], resolve));
     if (!settings.compatibleEndpoint) throw new Error(errorMessages.endpointNotSet);
     if (!(settings.compatibleModel || '').trim()) throw new Error(errorMessages.modelNotSet);
     const actualTimeout = settings.timeout || DEFAULTS.timeout;

@@ -12,6 +12,8 @@ const OPENAI_O_SERIES_PATTERN = /^o[134](-|$)/;
 
 const ANTHROPIC_MODEL_ID_PATTERN = /^claude-([a-z]+)-(\d+)(?:-(\d{1,2}))?(?:-\d{8})?$/;
 
+const EXTRA_PARAM_RESERVED_KEYS = Object.freeze(['model', 'messages', 'stream', '__proto__']);
+
 function createModelCaps(fields) {
     return {
         recognized: fields.recognized === true,
@@ -150,6 +152,19 @@ function resolveModelCapabilities(provider, modelId) {
 function resolveReasoningLevel(stored, modelIsDefault, defaultLevel) {
     if (typeof stored === 'string') return stored;
     return modelIsDefault && typeof defaultLevel === 'string' ? defaultLevel : '';
+}
+
+function applyExtraParams(target, extras) {
+    if (extras === undefined) return target;
+    if (typeof extras !== 'object' || extras === null || Array.isArray(extras)) {
+        throw new Error('extra parameters must be a JSON object');
+    }
+    for (const key of Object.keys(extras)) {
+        if (EXTRA_PARAM_RESERVED_KEYS.includes(key)) throw new Error(`extra parameter "${key}" is reserved`);
+        if (extras[key] === null) delete target[key];
+        else target[key] = extras[key];
+    }
+    return target;
 }
 
 function buildReasoningFields(caps, level, maxTokens) {
