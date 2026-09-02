@@ -475,6 +475,7 @@
     let cacheRestoreMap = null;
     let cacheRestoreActive = false;
     let cacheReadError = '';
+    const POPUP_STATE_MEMO_MS = 1500;
     let cacheCoverageMemo = null;
     let popupRemainingMemo = { ts: 0, value: false };
     const sessionTranslationMemo = new Map();
@@ -583,7 +584,6 @@
                     const isAlwaysTranslate = !isExcluded && siteListMatchesUrl(items.alwaysTranslateList, currentUrl);
                     if (!isReactSpa && !isExcluded) {
                         const restored = await tryRestoreFromCache(chosenLang);
-                        measureCacheCoverage();
                         const optedIntoAutoTranslation = (restored || cacheRestoreActive) && (items.realTimeTranslation === true
                             || isAlwaysTranslate
                             || (items.autoRetranslateDomain !== false && await new Promise(resolve => querySessionDomainKnown(resolve))));
@@ -1039,22 +1039,50 @@
         return applied;
     }
 
-    function measureCacheCoverage() {
-        if (cacheCoverageMemo) return;
+    function getTranslationUnitTextLength(block) {
+        const tu = buildTU(block);
+        if (!tu || !tu.hasTranslatableText) return 0;
+        let text = '';
+        for (const run of tu.textRuns) {
+            for (const node of run.nodes) text += node.textContent || '';
+        }
+        return text.trim().replace(/\s+/g, ' ').length;
+    }
+
+    function measureCacheCoverageScan() {
+        const map = (cacheRestoreMap && cacheRestoreMap.size > 0) ? cacheRestoreMap : null;
         let matched = 0, total = 0;
+        for (const block of collectCacheableBlocks()) {
+            if (!block.isConnected) continue;
+            const status = block.dataset?.translationStatus;
+            if (status === 'translated' || status === 'processing') continue;
+            const unitLength = getTranslationUnitTextLength(block);
+            if (unitLength === 0) continue;
+            total += unitLength;
+            if (!map) continue;
+            const text = getBlockOriginalText(block);
+            if (!text) continue;
+            if (map.has(compositeBlockKey(computeBlockTextKey(text), block.tagName))) matched += unitLength;
+        }
+        return { matched, total };
+    }
+
+    function measureCacheCoverage() {
+        const now = Date.now();
+        if (cacheCoverageMemo && cacheCoverageMemo.map === cacheRestoreMap && now - cacheCoverageMemo.ts < POPUP_STATE_MEMO_MS) {
+            return cacheCoverageMemo;
+        }
+        let matched = 0, total = 0;
+        let scanError = '';
         try {
-            for (const block of collectCacheableBlocks()) {
-                if (!block.isConnected) continue;
-                const text = getBlockOriginalText(block);
-                if (!text) continue;
-                total += text.length;
-                if (cacheRestoreMap) {
-                    const key = compositeBlockKey(computeBlockTextKey(text), block.tagName);
-                    if (cacheRestoreMap.has(key)) matched += text.length;
-                }
-            }
-        } catch (e) { }
-        cacheCoverageMemo = { matched, total, error: cacheReadError || '' };
+            ({ matched, total } = withScanCache(measureCacheCoverageScan));
+        } catch (e) {
+            matched = 0;
+            total = 0;
+            scanError = 'coverageScanFailed: ' + ((e && e.message) || String(e));
+        }
+        cacheCoverageMemo = { ts: now, map: cacheRestoreMap, matched, total, error: cacheReadError || scanError };
+        return cacheCoverageMemo;
     }
 
     function getStoredTargetLanguage() {
@@ -4315,7 +4343,7 @@
     function computeHasRemainingForPopup() {
         if (isTranslating || isApplyingUpdates) return false;
         const now = Date.now();
-        if (now - popupRemainingMemo.ts < 1500) return popupRemainingMemo.value;
+        if (now - popupRemainingMemo.ts < POPUP_STATE_MEMO_MS) return popupRemainingMemo.value;
         let remaining = false;
         try { remaining = hasTranslatableUnitsInDocument(); } catch (e) { remaining = false; }
         popupRemainingMemo = { ts: now, value: remaining };
@@ -4342,6 +4370,7 @@
         if (isTranslating || isApplyingUpdates || translatingSubframes.size > 0) translationStatus = 'translating';
         else if (translationHasError) translationStatus = 'error';
         else if (showingTranslation > 0 || revertedBlocks > 0) translationStatus = 'translated';
+        const coverage = translationStatus === 'idle' ? measureCacheCoverage() : null;
         return {
             translationStatus,
             showingOriginal: showingTranslation === 0 && revertedBlocks > 0,
@@ -4353,9 +4382,9 @@
                 translatedFragments: translatedUnitsCount,
                 totalFragments: expectedTotalUnits
             },
-            restorableChars: (cacheCoverageMemo && cacheCoverageMemo.matched) || 0,
-            totalChars: (cacheCoverageMemo && cacheCoverageMemo.total) || 0,
-            cacheReadError: (cacheCoverageMemo && cacheCoverageMemo.error) || '',
+            restorableChars: coverage ? coverage.matched : 0,
+            totalChars: coverage ? coverage.total : 0,
+            cacheReadError: coverage ? coverage.error : '',
             hasUntranslatedText: translationStatus === 'translated' ? computeHasRemainingForPopup() : false
         };
     }
