@@ -30,6 +30,10 @@ try {
 } catch (e) { }
 
 try {
+    importScripts('modelcaps.js');
+} catch (e) { }
+
+try {
     chrome.alarms.create('translator-keepalive', { periodInMinutes: 0.5 });
     chrome.alarms.onAlarm.addListener(() => { });
 } catch (e) { }
