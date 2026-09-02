@@ -63,7 +63,7 @@ Google Gemini・OpenAI・Anthropic などの AI API を使ってウェブペー�
 | 項目 | デフォルト | 説明 |
 |---|---|---|
 | 推論 | モデルの既定 | 回答の前にモデルが考える量 |
-| 最大出力トークン | 65536 | API の最大出力トークン数 |
+| 最大出力トークン | 自動 | 空欄ならモデルの上限まで出力します |
 | リクエスト間隔 | 10 秒 | リクエスト間のディレイ |
 | 並列数上限 | 10 | 同時リクエスト数 |
 | タイムアウト | 180 秒 | API タイムアウト |
@@ -132,7 +132,7 @@ English / Japanese / Chinese (Simplified & Traditional) / Korean / Spanish / Fre
 | Setting | Default | Description |
 |---|---|---|
 | Reasoning | Model default | How much the model thinks before answering |
-| Max output tokens | 65536 | Maximum tokens per API response |
+| Max output tokens | Auto | Leave empty to output up to the model's limit |
 | Delay between requests | 10 s | Pause between batch requests |
 | Concurrency limit | 10 | Maximum simultaneous requests |
 | API timeout | 180 s | Request timeout |
@@ -201,7 +201,7 @@ Copyright (C) 2026 mame1839
 | 设置 | 默认值 | 说明 |
 |---|---|---|
 | 推理 | 模型默认 | 模型回答前的思考程度 |
-| 最大输出 Token | 65536 | API 每次响应的最大 Token 数 |
+| 最大输出 Token | 自动 | 留空则输出至模型的上限 |
 | 请求间隔 | 10 秒 | 批次请求之间的延迟 |
 | 并发上限 | 10 | 最大同时请求数 |
 | 超时时间 | 180 秒 | API 请求超时时间 |
@@ -270,7 +270,7 @@ Google Gemini, OpenAI, Anthropic 또는 OpenAI 호환 엔드포인트 등의 AI 
 | 설정 | 기본값 | 설명 |
 |---|---|---|
 | 추론 | 모델 기본값 | 답하기 전에 모델이 생각하는 정도 |
-| 최대 출력 토큰 | 65536 | API 응답당 최대 토큰 수 |
+| 최대 출력 토큰 | 자동 | 비워 두면 모델의 한도까지 출력합니다 |
 | 요청 간격 | 10 초 | 배치 요청 간 대기 시간 |
 | 동시 요청 상한 | 10 | 최대 동시 요청 수 |
 | 타임아웃 | 180 초 | API 요청 타임아웃 |
@@ -339,7 +339,7 @@ Copyright (C) 2026 mame1839
 | Настройка | По умолчанию | Описание |
 |---|---|---|
 | Рассуждение | По умолчанию для модели | Сколько модель думает перед ответом |
-| Макс. токенов на выходе | 65536 | Максимальное количество токенов в ответе API |
+| Макс. токенов на выходе | Авто | Оставьте пустым, чтобы вывод доходил до лимита модели |
 | Задержка между запросами | 10 с | Пауза между пакетными запросами |
 | Лимит параллельных запросов | 10 | Максимальное число одновременных запросов |
 | Тайм-аут API | 180 с | Время ожидания ответа API |
