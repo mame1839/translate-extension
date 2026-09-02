@@ -2426,6 +2426,7 @@
         emptyResponse: 'errBadResponse',
         invalidRequest: 'errInvalidRequest',
         contentRefused: 'errContentRefused',
+        reasoningNotSupported: 'errReasoningNotSupported',
         unknownError: 'errUnknown',
         extensionReloaded: 'errExtensionReloaded'
     };
@@ -2438,6 +2439,7 @@
         insufficientQuota: 'settings',
         modelNotFound: 'settings',
         invalidRequest: 'settings',
+        reasoningNotSupported: 'settings',
         maxTokensError: 'settings',
         blockTooLong: 'settings',
         nothingTranslated: 'retry',
