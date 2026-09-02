@@ -187,6 +187,16 @@
               <input type="text" id="aiModel" class="ltr-input" autocomplete="off" spellcheck="false">
             </div>
           </div>
+          <div class="row" id="reasoningGroup">
+            <div class="row-main">
+              <label class="row-label" for="reasoningLevel" data-i18n="reasoningLabel">Reasoning</label>
+              <div class="row-desc" id="reasoningDesc"></div>
+              <div class="row-desc warn-text" id="reasoningStale" hidden></div>
+            </div>
+            <div class="row-control">
+              <select id="reasoningLevel"></select>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -520,6 +530,7 @@
 
   <script src="translations.js"></script>
   <script src="sitematch.js"></script>
+  <script src="modelcaps.js"></script>
   <script src="options.js"></script>
 </body>
 

@@ -1,9 +1,13 @@
 const DEFAULTS = Object.freeze({
     apiProvider: 'gemini',
-    geminiModel: 'gemini-3.1-flash-lite',
-    openaiModel: 'gpt-5.4-nano-2026-03-17',
+    geminiModel: 'gemini-3.5-flash-lite',
+    openaiModel: 'gpt-5.6-luna',
     anthropicModel: 'claude-haiku-4-5-20251001',
     compatibleModel: '',
+    geminiReasoning: '',
+    openaiReasoning: 'off',
+    anthropicReasoning: '',
+    compatibleReasoning: '',
     batchSize: 500,
     maxBatchLength: 65535,
     delayBetweenRequests: 10000,
@@ -20,7 +24,15 @@ const MODEL_PLACEHOLDERS = {
     'openai-compatible': DEFAULTS.compatibleModel
 };
 
-const ANTHROPIC_MAX_OUTPUT_TOKENS = 64000;
+const REASONING_LEVEL_LABEL_KEYS = {
+    off: 'reasoningOff',
+    minimal: 'reasoningMinimal',
+    low: 'reasoningLow',
+    medium: 'reasoningMedium',
+    high: 'reasoningHigh',
+    xhigh: 'reasoningXhigh',
+    max: 'reasoningMax'
+};
 
 const PROVIDER_ROW_DESCS = {
     apiKeyDesc: { base: 'optApiKeyDesc', 'openai-compatible': 'optCompatibleApiKeyDesc' },
@@ -29,10 +41,10 @@ const PROVIDER_ROW_DESCS = {
 };
 
 const providerSettings = {
-    gemini: { apiKey: '', model: DEFAULTS.geminiModel },
-    openai: { apiKey: '', model: DEFAULTS.openaiModel },
-    anthropic: { apiKey: '', model: DEFAULTS.anthropicModel },
-    'openai-compatible': { apiKey: '', model: DEFAULTS.compatibleModel, endpoint: '' }
+    gemini: { apiKey: '', model: DEFAULTS.geminiModel, reasoning: DEFAULTS.geminiReasoning },
+    openai: { apiKey: '', model: DEFAULTS.openaiModel, reasoning: DEFAULTS.openaiReasoning },
+    anthropic: { apiKey: '', model: DEFAULTS.anthropicModel, reasoning: DEFAULTS.anthropicReasoning },
+    'openai-compatible': { apiKey: '', model: DEFAULTS.compatibleModel, reasoning: DEFAULTS.compatibleReasoning, endpoint: '' }
 };
 
 const RTL_LANGS = new Set(['ar', 'ur', 'he', 'fa']);
@@ -104,6 +116,7 @@ function applyI18n(t) {
         if (t[key] !== undefined) node.placeholder = t[key];
     });
     updateProviderRowDescs(currentProvider);
+    renderReasoningControl();
     renderSiteLists();
     renderUsageStats();
     renderCacheStats();
@@ -132,18 +145,69 @@ function normalizeProvider(provider) {
     return Object.prototype.hasOwnProperty.call(providerSettings, provider) ? provider : DEFAULTS.apiProvider;
 }
 
+function modelIdFor(provider) {
+    return el('aiModel').value.trim() || MODEL_PLACEHOLDERS[provider] || '';
+}
+
+function modelCapsFor(provider) {
+    return resolveModelCapabilities(provider, modelIdFor(provider));
+}
+
 function updateProviderRowDescs(provider) {
     const t = currentT();
     const lang = getUiLang();
+    const outputLimit = modelCapsFor(provider).maxOutputTokens ?? ANTHROPIC_MAX_OUTPUT_TOKENS;
     Object.keys(PROVIDER_ROW_DESCS).forEach(id => {
         const variants = PROVIDER_ROW_DESCS[id];
         const key = variants[provider] || variants.base;
         const node = el(id);
         node.dataset.i18n = key;
         if (t[key] !== undefined) {
-            node.textContent = t[key].replace('{limit}', formatNumber(ANTHROPIC_MAX_OUTPUT_TOKENS, lang));
+            node.textContent = t[key].replace('{limit}', formatNumber(outputLimit, lang));
         }
     });
+}
+
+function reasoningLevelLabel(t, level) {
+    const key = REASONING_LEVEL_LABEL_KEYS[level];
+    return key && t[key] !== undefined ? t[key] : level;
+}
+
+function renderReasoningControl() {
+    const select = el('reasoningLevel');
+    const desc = el('reasoningDesc');
+    const stale = el('reasoningStale');
+    if (!select || !desc || !stale) return;
+    const t = currentT();
+    const caps = modelCapsFor(currentProvider);
+    const settings = providerSettings[currentProvider] || providerSettings.gemini;
+    const stored = typeof settings.reasoning === 'string' ? settings.reasoning : '';
+    const storedSupported = caps.levels.includes(stored);
+    select.replaceChildren();
+    const defaultOption = document.createElement('option');
+    defaultOption.value = '';
+    defaultOption.textContent = REASONING_LEVEL_LABEL_KEYS[caps.defaultLevel]
+        ? t.reasoningDefaultIs.replace('{level}', reasoningLevelLabel(t, caps.defaultLevel))
+        : t.reasoningDefault;
+    select.appendChild(defaultOption);
+    caps.levels.forEach(level => {
+        const option = document.createElement('option');
+        option.value = level;
+        option.textContent = reasoningLevelLabel(t, level);
+        select.appendChild(option);
+    });
+    select.disabled = caps.levels.length === 0;
+    select.value = storedSupported ? stored : '';
+    if (caps.levels.length === 0) {
+        desc.textContent = t.optReasoningNotSent;
+    } else {
+        desc.textContent = currentProvider === 'openai-compatible' ? t.optReasoningCompatibleDesc : t.optReasoningDesc;
+    }
+    const showStale = caps.levels.length > 0 && stored !== '' && !storedSupported;
+    stale.hidden = !showStale;
+    stale.textContent = showStale
+        ? t.optReasoningStale.replace('{level}', reasoningLevelLabel(t, stored)).replace('{model}', modelIdFor(currentProvider))
+        : '';
 }
 
 function updateProviderUI(provider) {
@@ -159,6 +223,7 @@ function updateProviderUI(provider) {
         endpointGroup.style.display = 'none';
     }
     updateProviderRowDescs(provider);
+    renderReasoningControl();
 }
 
 function languageNativeName(code) {
@@ -313,6 +378,10 @@ async function saveNow() {
         compatibleApiKey: providerSettings['openai-compatible'].apiKey,
         compatibleModel: providerSettings['openai-compatible'].model.trim(),
         compatibleEndpoint: compatibleEndpointRaw,
+        geminiReasoning: providerSettings.gemini.reasoning,
+        openaiReasoning: providerSettings.openai.reasoning,
+        anthropicReasoning: providerSettings.anthropic.reasoning,
+        compatibleReasoning: providerSettings['openai-compatible'].reasoning,
         delayBetweenRequests: readNumberField('delayBetweenRequests') * 1000,
         maxToken: readNumberField('maxToken'),
         concurrencyLimit: readNumberField('concurrencyLimit'),
@@ -737,10 +806,10 @@ const resetHandlers = {
         el('toggleBlueBackground').checked = false;
     },
     provider: () => {
-        providerSettings.gemini = { apiKey: '', model: DEFAULTS.geminiModel };
-        providerSettings.openai = { apiKey: '', model: DEFAULTS.openaiModel };
-        providerSettings.anthropic = { apiKey: '', model: DEFAULTS.anthropicModel };
-        providerSettings['openai-compatible'] = { apiKey: '', model: DEFAULTS.compatibleModel, endpoint: '' };
+        providerSettings.gemini = { apiKey: '', model: DEFAULTS.geminiModel, reasoning: DEFAULTS.geminiReasoning };
+        providerSettings.openai = { apiKey: '', model: DEFAULTS.openaiModel, reasoning: DEFAULTS.openaiReasoning };
+        providerSettings.anthropic = { apiKey: '', model: DEFAULTS.anthropicModel, reasoning: DEFAULTS.anthropicReasoning };
+        providerSettings['openai-compatible'] = { apiKey: '', model: DEFAULTS.compatibleModel, reasoning: DEFAULTS.compatibleReasoning, endpoint: '' };
         currentProvider = DEFAULTS.apiProvider;
         el('apiProvider').value = currentProvider;
         updateProviderUI(currentProvider);
@@ -776,6 +845,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             'openaiApiKey', 'openaiModel',
             'anthropicApiKey', 'anthropicModel',
             'compatibleApiKey', 'compatibleModel', 'compatibleEndpoint',
+            'geminiReasoning', 'openaiReasoning', 'anthropicReasoning', 'compatibleReasoning',
             'delayBetweenRequests', 'maxToken', 'concurrencyLimit',
             'maxRetries', 'timeout',
             'toggleBlueBackground', 'realTimeTranslation', 'showProgressPopup', 'excludeList', 'alwaysTranslateList', 'hidePromptAllSites', 'showContextMenu', 'autoRetranslateDomain', 'autoTranslateNewContent', 'streamingTranslation',
@@ -795,6 +865,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         providerSettings['openai-compatible'].apiKey = items.compatibleApiKey || '';
         providerSettings['openai-compatible'].model = items.compatibleModel || DEFAULTS.compatibleModel;
         providerSettings['openai-compatible'].endpoint = items.compatibleEndpoint || '';
+        providerSettings.gemini.reasoning = resolveReasoningLevel(items.geminiReasoning,
+            providerSettings.gemini.model === DEFAULTS.geminiModel, DEFAULTS.geminiReasoning);
+        providerSettings.openai.reasoning = resolveReasoningLevel(items.openaiReasoning,
+            providerSettings.openai.model === DEFAULTS.openaiModel, DEFAULTS.openaiReasoning);
+        providerSettings.anthropic.reasoning = resolveReasoningLevel(items.anthropicReasoning,
+            providerSettings.anthropic.model === DEFAULTS.anthropicModel, DEFAULTS.anthropicReasoning);
+        providerSettings['openai-compatible'].reasoning = resolveReasoningLevel(items.compatibleReasoning,
+            providerSettings['openai-compatible'].model === DEFAULTS.compatibleModel, DEFAULTS.compatibleReasoning);
 
         currentProvider = normalizeProvider(items.apiProvider || DEFAULTS.apiProvider);
         if (items.apiProvider && items.apiProvider !== currentProvider) {
@@ -855,6 +933,18 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     ['apiKey', 'aiModel', 'endpointUrl', 'customInstruction', 'glossaryText'].forEach(id => {
         el(id).addEventListener('input', scheduleSave);
+    });
+
+    el('aiModel').addEventListener('input', () => {
+        updateProviderRowDescs(currentProvider);
+        renderReasoningControl();
+    });
+
+    el('reasoningLevel').addEventListener('change', () => {
+        const settings = providerSettings[currentProvider];
+        if (settings) settings.reasoning = el('reasoningLevel').value;
+        renderReasoningControl();
+        scheduleSave();
     });
 
     el('translationStyle').addEventListener('change', scheduleSave);
