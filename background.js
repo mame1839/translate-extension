@@ -96,12 +96,12 @@ function resolveTranslationErrorCode(error, message) {
 
 const DEFAULTS = Object.freeze({
     apiProvider: 'gemini',
-    geminiModel: 'gemini-3.1-flash-lite',
-    openaiModel: 'gpt-5.4-nano-2026-03-17',
+    geminiModel: 'gemini-3.5-flash-lite',
+    openaiModel: 'gpt-5.6-luna',
     anthropicModel: 'claude-haiku-4-5-20251001',
     compatibleModel: '',
     geminiReasoning: '',
-    openaiReasoning: '',
+    openaiReasoning: 'off',
     anthropicReasoning: '',
     compatibleReasoning: '',
     batchSize: 500,
