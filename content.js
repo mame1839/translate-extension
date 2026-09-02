@@ -3007,13 +3007,18 @@
         });
     }
 
+    function unitAwaitingTranslation(id) {
+        const block = translationUnits.get(id)?.block;
+        return !!block && block.isConnected && block.dataset?.translationStatus !== 'translated';
+    }
+
     async function resendOnce(unitIds, runGeneration) {
-        const ids = Array.from(unitIds).slice(0, AUTO_RESEND_MAX_UNITS);
+        const ids = Array.from(unitIds).filter(unitAwaitingTranslation).slice(0, AUTO_RESEND_MAX_UNITS);
         for (const id of ids) {
             if (translationCancelled || fatalErrorCancelPending) break;
             if (runGeneration !== translationRunGeneration) break;
+            if (!unitAwaitingTranslation(id)) continue;
             const tu = translationUnits.get(id);
-            if (!tu || !tu.block || !tu.block.isConnected) continue;
             try {
                 const translations = await processBatch([{ id: tu.id, template: tu.template }], runGeneration);
                 if (translationCancelled || runGeneration !== translationRunGeneration) break;

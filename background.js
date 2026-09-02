@@ -1386,9 +1386,15 @@ function consumeSSELine(line, readChunk, acc, streamContext) {
 async function streamModelResponse(streamRequest) {
     const { url, headers, body, timeout, reasoningLevel, signal, onHttpError, readChunk, finalizeStream, streamContext, provider } = streamRequest;
     const timeoutController = new AbortController();
-    const timeoutId = timeout > 0 ? setTimeout(() => timeoutController.abort(), timeout * 1000) : null;
+    let timeoutId = null;
+    const armIdleTimeout = () => {
+        if (timeoutId) clearTimeout(timeoutId);
+        timeoutId = timeout > 0 ? setTimeout(() => timeoutController.abort(), timeout * 1000) : null;
+    };
+    armIdleTimeout();
     const combinedSignal = combineSignals(signal, timeoutController.signal);
     const timedOut = () => timeoutController.signal.aborted && !signal?.aborted;
+    const acc = { fullText: '', finishReason: '', sentKeys: new Set(), usage: createUsageTokens() };
     let response;
     try {
         response = await fetch(url, { method: 'POST', headers, body, signal: combinedSignal });
@@ -1407,7 +1413,6 @@ async function streamModelResponse(streamRequest) {
             onHttpError(response, data);
         }
         if (!response.body) throw createTranslationError('emptyResponse');
-        const acc = { fullText: '', finishReason: '', sentKeys: new Set(), usage: createUsageTokens() };
         const reader = response.body.getReader();
         const decoder = new TextDecoder('utf-8');
         let pending = '';
@@ -1415,6 +1420,7 @@ async function streamModelResponse(streamRequest) {
             while (true) {
                 const { done, value } = await reader.read();
                 if (done) break;
+                armIdleTimeout();
                 pending += decoder.decode(value, { stream: true });
                 const lines = pending.split('\n');
                 pending = lines.pop() || '';
@@ -1430,7 +1436,7 @@ async function streamModelResponse(streamRequest) {
         return acc.fullText;
     } catch (error) {
         if (error?.name === 'AbortError') {
-            if (timedOut()) throw createTimeoutError(reasoningLevel, timeout);
+            if (timedOut()) throw createTimeoutError(acc.fullText ? '' : reasoningLevel, timeout);
             throw createAbortError();
         }
         throw error;
