@@ -107,11 +107,14 @@ const DEFAULTS = Object.freeze({
     batchSize: 500,
     maxBatchLength: 65535,
     delayBetweenRequests: 10000,
-    maxToken: 65536,
+    maxToken: null,
     concurrencyLimit: 10,
     maxRetries: 3,
     timeout: 180
 });
+
+const LEGACY_DEFAULT_MAX_TOKEN = 65536;
+const MAX_TOKEN_AUTO_SINCE = '7.1.0';
 
 const LANGUAGE_LIST = [
     { code: 'en', name: 'English' },       { code: 'zh', name: 'Chinese (Simplified)' },
@@ -193,6 +196,24 @@ try {
     });
 } catch (e) { }
 
+function versionIsBefore(version, reference) {
+    const parse = text => String(text || '').split('.').map(part => parseInt(part, 10) || 0);
+    const left = parse(version);
+    const right = parse(reference);
+    for (let i = 0; i < Math.max(left.length, right.length); i++) {
+        const a = left[i] || 0;
+        const b = right[i] || 0;
+        if (a !== b) return a < b;
+    }
+    return false;
+}
+
+function storedMaxTokenIsLegacyDefault(details, items) {
+    return details.reason === 'update'
+        && items.maxToken === LEGACY_DEFAULT_MAX_TOKEN
+        && versionIsBefore(details.previousVersion, MAX_TOKEN_AUTO_SINCE);
+}
+
 function handleExtensionInstalled(details) {
     if (details.reason === 'install') {
         chrome.runtime.openOptionsPage();
@@ -211,7 +232,7 @@ function handleExtensionInstalled(details) {
             if (items.batchSize === undefined) toSet.batchSize = DEFAULTS.batchSize;
             if (items.maxBatchLength === undefined) toSet.maxBatchLength = DEFAULTS.maxBatchLength;
             if (items.delayBetweenRequests === undefined) toSet.delayBetweenRequests = DEFAULTS.delayBetweenRequests;
-            if (items.maxToken === undefined) toSet.maxToken = DEFAULTS.maxToken;
+            if (storedMaxTokenIsLegacyDefault(details, items)) toSet.maxToken = DEFAULTS.maxToken;
             if (items.concurrencyLimit === undefined) toSet.concurrencyLimit = DEFAULTS.concurrencyLimit;
             if (items.maxRetries === undefined) toSet.maxRetries = DEFAULTS.maxRetries;
             if (items.timeout === undefined) toSet.timeout = DEFAULTS.timeout;
@@ -1529,12 +1550,18 @@ function extractGeminiRetryDelayMs(data) {
     return null;
 }
 
+function explicitOutputTokens(maxOutputTokens) {
+    return Number.isFinite(maxOutputTokens) && maxOutputTokens > 0 ? maxOutputTokens : null;
+}
+
 function buildGeminiRequest(settings, prompt, maxOutputTokens, options) {
     const actualModel = (settings.geminiModel || '').trim() || DEFAULTS.geminiModel;
     const caps = resolveModelCapabilities('gemini', actualModel);
     const level = resolveReasoningLevel(settings.geminiReasoning, actualModel === DEFAULTS.geminiModel, DEFAULTS.geminiReasoning);
-    const reasoning = buildReasoningFields(caps, level, maxOutputTokens);
-    const generationConfig = { maxOutputTokens };
+    const outputLimit = explicitOutputTokens(maxOutputTokens);
+    const reasoning = buildReasoningFields(caps, level, outputLimit);
+    const generationConfig = {};
+    if (outputLimit !== null) generationConfig.maxOutputTokens = outputLimit;
     if (options.json) generationConfig.responseMimeType = 'application/json';
     if (geminiAllowsCustomTemperature(actualModel)) generationConfig.temperature = 0.2;
     if (reasoning) Object.assign(generationConfig, reasoning);
@@ -1551,12 +1578,13 @@ function buildOpenAIRequest(settings, prompt, maxOutputTokens, options) {
     const actualModel = (settings.openaiModel || '').trim() || DEFAULTS.openaiModel;
     const caps = resolveModelCapabilities('openai', actualModel);
     const level = resolveReasoningLevel(settings.openaiReasoning, actualModel === DEFAULTS.openaiModel, DEFAULTS.openaiReasoning);
-    const reasoning = buildReasoningFields(caps, level, maxOutputTokens);
+    const outputLimit = explicitOutputTokens(maxOutputTokens);
+    const reasoning = buildReasoningFields(caps, level, outputLimit);
     const body = {
         model: actualModel,
-        messages: [{ role: 'user', content: prompt }],
-        max_completion_tokens: maxOutputTokens
+        messages: [{ role: 'user', content: prompt }]
     };
+    if (outputLimit !== null) body.max_completion_tokens = outputLimit;
     if (options.json) body.response_format = { type: 'json_object' };
     if (reasoning) Object.assign(body, reasoning);
     if (options.stream) {
@@ -1575,13 +1603,14 @@ function buildCompatibleRequest(settings, prompt, maxOutputTokens, options) {
     const actualModel = (settings.compatibleModel || '').trim();
     const caps = resolveModelCapabilities('openai-compatible', actualModel);
     const level = resolveReasoningLevel(settings.compatibleReasoning, actualModel === DEFAULTS.compatibleModel, DEFAULTS.compatibleReasoning);
-    const reasoning = buildReasoningFields(caps, level, maxOutputTokens);
+    const outputLimit = explicitOutputTokens(maxOutputTokens);
+    const reasoning = buildReasoningFields(caps, level, outputLimit);
     const body = {
         model: actualModel,
         messages: [{ role: 'user', content: prompt }]
     };
     if (!reasoning) body.temperature = 0.2;
-    body.max_tokens = maxOutputTokens;
+    if (outputLimit !== null) body.max_tokens = outputLimit;
     if (reasoning) Object.assign(body, reasoning);
     if (options.stream) body.stream = true;
     const extras = settings.compatibleExtraParams;
@@ -1605,7 +1634,8 @@ function buildAnthropicRequest(settings, prompt, maxOutputTokens, options) {
     const actualModel = (settings.anthropicModel || '').trim() || DEFAULTS.anthropicModel;
     const caps = resolveModelCapabilities('anthropic', actualModel);
     const level = resolveReasoningLevel(settings.anthropicReasoning, actualModel === DEFAULTS.anthropicModel, DEFAULTS.anthropicReasoning);
-    const maxTokens = Math.min(maxOutputTokens, caps.maxOutputTokens ?? ANTHROPIC_MAX_OUTPUT_TOKENS);
+    const modelLimit = caps.maxOutputTokens ?? ANTHROPIC_MAX_OUTPUT_TOKENS;
+    const maxTokens = Math.min(explicitOutputTokens(maxOutputTokens) ?? modelLimit, modelLimit);
     const reasoning = buildReasoningFields(caps, level, maxTokens);
     const body = {
         model: actualModel,
@@ -2078,7 +2108,7 @@ ${sourceText}`;
 }
 
 function selectionOutputTokenLimit(maxToken) {
-    return Math.min(maxToken || DEFAULTS.maxToken, SELECTION_MAX_OUTPUT_TOKENS);
+    return Math.min(explicitOutputTokens(maxToken) ?? SELECTION_MAX_OUTPUT_TOKENS, SELECTION_MAX_OUTPUT_TOKENS);
 }
 
 function finishSelectionText(responseText, truncated) {

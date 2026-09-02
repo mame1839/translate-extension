@@ -11,7 +11,7 @@ const DEFAULTS = Object.freeze({
     batchSize: 500,
     maxBatchLength: 65535,
     delayBetweenRequests: 10000,
-    maxToken: 65536,
+    maxToken: null,
     concurrencyLimit: 10,
     maxRetries: 3,
     timeout: 180
@@ -411,7 +411,7 @@ function readNumberField(id) {
 }
 
 function normalizeNumberField(id) {
-    el(id).value = readNumberField(id);
+    el(id).value = readNumberField(id) ?? '';
 }
 
 function normalizeSiteList(value) {
@@ -988,7 +988,7 @@ const resetHandlers = {
         el('glossaryText').value = '';
     },
     advanced: () => {
-        el('maxToken').value = DEFAULTS.maxToken;
+        el('maxToken').value = '';
         el('delayBetweenRequests').value = Math.round(DEFAULTS.delayBetweenRequests / 1000);
         el('concurrencyLimit').value = DEFAULTS.concurrencyLimit;
         el('maxRetries').value = DEFAULTS.maxRetries;
@@ -1042,7 +1042,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         updateProviderUI(currentProvider);
 
         el('delayBetweenRequests').value = Math.round((items.delayBetweenRequests ?? DEFAULTS.delayBetweenRequests) / 1000);
-        el('maxToken').value = items.maxToken ?? DEFAULTS.maxToken;
+        el('maxToken').value = items.maxToken ?? '';
         el('concurrencyLimit').value = items.concurrencyLimit ?? DEFAULTS.concurrencyLimit;
         el('maxRetries').value = items.maxRetries ?? DEFAULTS.maxRetries;
         el('timeout').value = items.timeout ?? DEFAULTS.timeout;

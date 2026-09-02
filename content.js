@@ -98,7 +98,6 @@
         batchSize: 500,
         maxBatchLength: 65535,
         delayBetweenRequests: 10000,
-        maxToken: 65536,
         concurrencyLimit: 10,
         maxRetries: 3,
         timeout: 180
@@ -2035,7 +2034,7 @@
                 return;
             }
 
-            const maxBatchLength = Math.min(Math.floor((config.maxToken || DEFAULTS.maxToken) * 3), DEFAULTS.maxBatchLength);
+            const maxBatchLength = Number.isFinite(config.maxToken) ? Math.min(Math.floor(config.maxToken * 3), DEFAULTS.maxBatchLength) : DEFAULTS.maxBatchLength;
             const tus = [];
             const oversizedTus = [];
             for (const tu of allTus) {
@@ -4727,7 +4726,7 @@
         useSessionMemoForLanguage(lang);
         try { applyStrings(lang); } catch (e) { }
         highlightTranslated = config.toggleBlueBackground === true;
-        const maxBatchLength = Math.min(Math.floor((config.maxToken || DEFAULTS.maxToken) * 3), DEFAULTS.maxBatchLength);
+        const maxBatchLength = Number.isFinite(config.maxToken) ? Math.min(Math.floor(config.maxToken * 3), DEFAULTS.maxBatchLength) : DEFAULTS.maxBatchLength;
 
         const tus = [];
         const byId = new Map();
