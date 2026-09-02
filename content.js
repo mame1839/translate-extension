@@ -28,7 +28,8 @@
         blocksTooLong: '{count} blocks are longer than the output token limit and were left untranslated. Raise the max output tokens in settings.',
         cacheSaveFailed: 'Could not save the translation for this page. It will be translated again next time.',
         cacheStorageFull: 'Storage is full. The translation for this page was not saved.',
-        waitingForModel: 'Waiting for the model · {elapsed} elapsed'
+        waitingForModel: 'Waiting for the model · {elapsed} elapsed',
+        blocksTimedOut: '{count} sections stopped because reasoning ran past the timeout. Lower Reasoning or raise the timeout in settings, then try again.'
     };
 
     const RTL_LANGS = new Set(['ar', 'ur', 'he', 'fa']);
@@ -71,7 +72,8 @@
             cacheStorageFull: t.cacheStorageFull,
             someBlocksFailed: t.someBlocksFailed,
             retryFailedButton: t.retryFailedButton,
-            waitingForModel: t.waitingForModel
+            waitingForModel: t.waitingForModel,
+            blocksTimedOut: t.blocksTimedOut
         };
     }
 
@@ -2141,6 +2143,7 @@
                             for (const item of batch) resendUnitIds.add(item.id);
                             return;
                         }
+                        if (isReasoningTimeoutError(error)) markBatchUnitsTimedOut(batch);
                         failures.push(error);
                         if (error?.translationFatal === true && !fatalErrorCancelPending && !translationCancelled) {
                             fatalErrorCancelPending = true;
@@ -2183,10 +2186,13 @@
                 handleCancellation(lang);
             } else if (failures.length > 0) {
                 const fatalError = failures.find(f => f?.translationFatal === true);
-                if (!fatalError && translatedUnitsCount > 0) {
-                    finishTranslationWithFailures(failures[0]);
-                } else {
+                const blockingFailure = failures.find(f => !isReasoningTimeoutError(f));
+                if (fatalError || translatedUnitsCount === 0) {
                     handleTranslationError(fatalError || failures[0], lang);
+                } else if (blockingFailure) {
+                    finishTranslationWithFailures(blockingFailure);
+                } else {
+                    finishTranslation();
                 }
             } else if (cancelledBatchCount > 0) {
                 handleCancellation(lang);
@@ -2369,6 +2375,10 @@
         return TEMPORARY_BATCH_ERROR_CODES.has(translationErrorCodeOf(error));
     }
 
+    function isReasoningTimeoutError(error) {
+        return translationErrorCodeOf(error) === 'reasoningTimeout';
+    }
+
     function forEachMarkedElement(selector, visit) {
         const queue = [];
         if (document.body) queue.push(document.body);
@@ -2392,12 +2402,20 @@
         });
     }
 
-    function countVisibleFailedBlocks() {
-        let count = 0;
+    function countFailedBlocksByReason() {
+        const counts = { timedOut: 0, other: 0 };
         forEachMarkedElement('[data-translation-status="failed"]', el => {
-            if (el.dataset?.translationFailReason !== 'oversized') count++;
+            const reason = el.dataset?.translationFailReason;
+            if (reason === 'oversized') return;
+            if (reason === 'timeout') counts.timedOut++;
+            else counts.other++;
         });
-        return count;
+        return counts;
+    }
+
+    function countVisibleFailedBlocks() {
+        const counts = countFailedBlocksByReason();
+        return counts.timedOut + counts.other;
     }
 
     function resetPageTranslationState() {
@@ -2931,6 +2949,19 @@
             try {
                 block.dataset.translationStatus = 'failed';
                 block.dataset.translationFailReason = 'missing';
+            } catch (e) { }
+        }
+    }
+
+    function markBatchUnitsTimedOut(batch) {
+        if (!Array.isArray(batch)) return;
+        for (const item of batch) {
+            const block = translationUnits.get(item.id)?.block;
+            if (!block || !block.isConnected) continue;
+            if (block.dataset?.translationStatus === 'translated') continue;
+            try {
+                block.dataset.translationStatus = 'failed';
+                block.dataset.translationFailReason = 'timeout';
             } catch (e) { }
         }
     }
@@ -4072,9 +4103,12 @@
                 const skipped = oversizedSkippedLabel();
                 if (skipped) headText.appendChild(createUiElement('div', 'sub', skipped));
             }
-            const failedCount = countVisibleFailedBlocks();
-            if (failedCount > 0 && st.someBlocksFailed) {
-                headText.appendChild(createUiElement('div', 'sub', st.someBlocksFailed.replace('{count}', failedCount)));
+            const failed = countFailedBlocksByReason();
+            if (failed.other > 0 && st.someBlocksFailed) {
+                headText.appendChild(createUiElement('div', 'sub', st.someBlocksFailed.replace('{count}', failed.other)));
+            }
+            if (failed.timedOut > 0 && st.blocksTimedOut) {
+                headText.appendChild(createUiElement('div', 'sub', st.blocksTimedOut.replace('{count}', failed.timedOut)));
             }
         }
         head.appendChild(headText);

@@ -248,6 +248,7 @@ const TRANSLATIONS = {
         popupTranslateRemaining: 'Translate the rest',
         popupRestorableHint: '{percent}% can be restored ({matched}/{total} characters)',
         someBlocksFailed: '{count} sections could not be translated.',
+        blocksTimedOut: '{count} sections stopped because reasoning ran past the timeout. Lower Reasoning or raise the timeout in settings, then try again.',
         retryFailedButton: 'Retry failed only',
     },
     zh: {
@@ -475,6 +476,7 @@ const TRANSLATIONS = {
         popupTranslateRemaining: '翻译其余部分',
         popupRestorableHint: '可恢复 {percent}%（{matched}/{total} 个字符）',
         someBlocksFailed: '有 {count} 个部分未能翻译。',
+        blocksTimedOut: '有 {count} 个部分因推理超过超时时间而停止。请在设置中降低推理级别或延长超时时间后重试。',
         retryFailedButton: '仅重试失败部分',
     },
     'zh-Hant': {
@@ -702,6 +704,7 @@ const TRANSLATIONS = {
         popupTranslateRemaining: '翻譯其餘部分',
         popupRestorableHint: '可還原 {percent}%（{matched}/{total} 個字元）',
         someBlocksFailed: '有 {count} 個部分未能翻譯。',
+        blocksTimedOut: '有 {count} 個部分因推理超過逾時時間而停止。請在設定中降低推理等級或延長逾時時間後重試。',
         retryFailedButton: '僅重試失敗部分',
     },
     hi: {
@@ -929,6 +932,7 @@ const TRANSLATIONS = {
         popupTranslateRemaining: 'बाकी का अनुवाद करें',
         popupRestorableHint: '{percent}% बहाल किया जा सकता है ({matched}/{total} वर्ण)',
         someBlocksFailed: '{count} भाग अनुवादित नहीं हो सके।',
+        blocksTimedOut: '{count} भाग रुक गए क्योंकि तर्क में समय-सीमा से अधिक समय लगा। सेटिंग में तर्क घटाएँ या समय-सीमा बढ़ाएँ, फिर दोबारा कोशिश करें।',
         retryFailedButton: 'विफल हिस्सों का ही पुनः प्रयास करें',
     },
     es: {
@@ -1156,6 +1160,7 @@ const TRANSLATIONS = {
         popupTranslateRemaining: 'Traducir el resto',
         popupRestorableHint: 'Se puede restaurar el {percent}% ({matched}/{total} caracteres)',
         someBlocksFailed: '{count} secciones no se pudieron traducir.',
+        blocksTimedOut: '{count} secciones se detuvieron porque el razonamiento superó el tiempo de espera. Baja el razonamiento o sube el tiempo de espera en los ajustes y vuelve a intentarlo.',
         retryFailedButton: 'Reintentar solo lo fallido',
     },
     fr: {
@@ -1383,6 +1388,7 @@ const TRANSLATIONS = {
         popupTranslateRemaining: 'Traduire le reste',
         popupRestorableHint: '{percent}% peuvent être restaurés ({matched}/{total} caractères)',
         someBlocksFailed: '{count} sections n’ont pas pu être traduites.',
+        blocksTimedOut: '{count} sections se sont arrêtées car le raisonnement a dépassé le délai. Baissez le raisonnement ou allongez le délai dans les paramètres, puis réessayez.',
         retryFailedButton: 'Réessayer uniquement les échecs',
     },
     ar: {
@@ -1610,6 +1616,7 @@ const TRANSLATIONS = {
         popupTranslateRemaining: 'ترجمة الباقي',
         popupRestorableHint: 'يمكن استعادة {percent}% ({matched}/{total} حرف)',
         someBlocksFailed: 'تعذّرت ترجمة {count} أجزاء.',
+        blocksTimedOut: 'توقّف {count} قسمًا لأن الاستدلال تجاوز المهلة. خفّض الاستدلال أو زد المهلة في الإعدادات ثم أعد المحاولة.',
         retryFailedButton: 'إعادة محاولة الأجزاء الفاشلة فقط',
     },
     bn: {
@@ -1837,6 +1844,7 @@ const TRANSLATIONS = {
         popupTranslateRemaining: 'বাকিটা অনুবাদ করুন',
         popupRestorableHint: '{percent}% ফিরিয়ে আনা যাবে ({matched}/{total} অক্ষর)',
         someBlocksFailed: '{count}টি অংশ অনুবাদ করা যায়নি।',
+        blocksTimedOut: '{count}টি অংশ থেমে গেছে, কারণ যুক্তিতে সময়সীমার চেয়ে বেশি সময় লেগেছে। সেটিংসে যুক্তি কমান বা সময়সীমা বাড়ান, তারপর আবার চেষ্টা করুন।',
         retryFailedButton: 'শুধু ব্যর্থ অংশ আবার চেষ্টা করুন',
     },
     ru: {
@@ -2064,6 +2072,7 @@ const TRANSLATIONS = {
         popupTranslateRemaining: 'Перевести остальное',
         popupRestorableHint: 'Можно восстановить {percent}% ({matched}/{total} символов)',
         someBlocksFailed: '{count} разделов не удалось перевести.',
+        blocksTimedOut: '{count} фрагментов остановились, потому что рассуждение заняло больше времени, чем таймаут. Уменьшите рассуждение или увеличьте таймаут в настройках и повторите попытку.',
         retryFailedButton: 'Повторить только неудавшиеся',
     },
     pt: {
@@ -2291,6 +2300,7 @@ const TRANSLATIONS = {
         popupTranslateRemaining: 'Traduzir o resto',
         popupRestorableHint: '{percent}% podem ser restaurados ({matched}/{total} caracteres)',
         someBlocksFailed: '{count} seções não puderam ser traduzidas.',
+        blocksTimedOut: '{count} trechos pararam porque o raciocínio ultrapassou o tempo limite. Reduza o raciocínio ou aumente o tempo limite nas configurações e tente novamente.',
         retryFailedButton: 'Tentar novamente apenas as falhas',
     },
     ur: {
@@ -2518,6 +2528,7 @@ const TRANSLATIONS = {
         popupTranslateRemaining: 'باقی کا ترجمہ کریں',
         popupRestorableHint: '{percent}% بحال کیے جا سکتے ہیں ({matched}/{total} حروف)',
         someBlocksFailed: '{count} حصوں کا ترجمہ نہیں ہو سکا۔',
+        blocksTimedOut: '{count} حصے رک گئے کیونکہ استدلال میں مقررہ مدت سے زیادہ وقت لگا۔ ترتیبات میں استدلال کم کریں یا مدت بڑھائیں، پھر دوبارہ کوشش کریں۔',
         retryFailedButton: 'صرف ناکام حصوں کو دوبارہ آزمائیں',
     },
     id: {
@@ -2745,6 +2756,7 @@ const TRANSLATIONS = {
         popupTranslateRemaining: 'Terjemahkan sisanya',
         popupRestorableHint: '{percent}% dapat dipulihkan ({matched}/{total} karakter)',
         someBlocksFailed: '{count} bagian tidak dapat diterjemahkan.',
+        blocksTimedOut: '{count} bagian berhenti karena penalaran melebihi batas waktu. Turunkan penalaran atau naikkan batas waktu di pengaturan, lalu coba lagi.',
         retryFailedButton: 'Coba lagi yang gagal saja',
     },
     de: {
@@ -2972,6 +2984,7 @@ const TRANSLATIONS = {
         popupTranslateRemaining: 'Rest übersetzen',
         popupRestorableHint: '{percent}% können wiederhergestellt werden ({matched}/{total} Zeichen)',
         someBlocksFailed: '{count} Abschnitte konnten nicht übersetzt werden.',
+        blocksTimedOut: '{count} Abschnitte wurden abgebrochen, weil der Denkaufwand das Zeitlimit überschritten hat. Verringern Sie den Denkaufwand oder erhöhen Sie das Zeitlimit in den Einstellungen und versuchen Sie es erneut.',
         retryFailedButton: 'Nur Fehlgeschlagene erneut versuchen',
     },
     ja: {
@@ -3199,6 +3212,7 @@ const TRANSLATIONS = {
         popupTranslateRemaining: '残りを翻訳',
         popupRestorableHint: '{percent}% を復元できます（{matched}/{total} 文字）',
         someBlocksFailed: '{count} 箇所は翻訳できませんでした',
+        blocksTimedOut: '{count} 件は推論に時間がかかり、タイムアウト設定を超えたため止まりました。設定画面で推論を下げるか、タイムアウトを延ばして再試行してください。',
         retryFailedButton: '失敗だけ訳し直す',
     },
     sw: {
@@ -3426,6 +3440,7 @@ const TRANSLATIONS = {
         popupTranslateRemaining: 'Tafsiri iliyobaki',
         popupRestorableHint: 'Asilimia {percent}% zinaweza kurejeshwa (herufi {matched}/{total})',
         someBlocksFailed: 'Sehemu {count} hazikuweza kutafsiriwa.',
+        blocksTimedOut: 'Sehemu {count} zimesimama kwa sababu kufikiri kulizidi muda wa kusubiri. Punguza kufikiri au ongeza muda wa kusubiri katika mipangilio, kisha ujaribu tena.',
         retryFailedButton: 'Jaribu tena zilizoshindwa pekee',
     },
     mr: {
@@ -3653,6 +3668,7 @@ const TRANSLATIONS = {
         popupTranslateRemaining: 'उर्वरित भाषांतर करा',
         popupRestorableHint: '{percent}% पुनर्संचयित करता येईल ({matched}/{total} वर्ण)',
         someBlocksFailed: '{count} भाग भाषांतरित होऊ शकले नाहीत.',
+        blocksTimedOut: '{count} भाग थांबले, कारण तर्काला वेळमर्यादेपेक्षा जास्त वेळ लागला. सेटिंग्जमध्ये तर्क कमी करा किंवा वेळमर्यादा वाढवा, नंतर पुन्हा प्रयत्न करा.',
         retryFailedButton: 'फक्त अयशस्वी झालेल्यांचा पुन्हा प्रयत्न करा',
     },
     te: {
@@ -3880,6 +3896,7 @@ const TRANSLATIONS = {
         popupTranslateRemaining: 'మిగిలినది అనువదించు',
         popupRestorableHint: '{percent}% పునరుద్ధరించవచ్చు ({matched}/{total} అక్షరాలు)',
         someBlocksFailed: '{count} భాగాలు అనువదించబడలేదు.',
+        blocksTimedOut: 'తర్కానికి సమయ పరిమితి కంటే ఎక్కువ సమయం పట్టడంతో {count} భాగాలు ఆగిపోయాయి. సెట్టింగ్‌లలో తర్కాన్ని తగ్గించండి లేదా సమయ పరిమితిని పెంచి మళ్లీ ప్రయత్నించండి.',
         retryFailedButton: 'విఫలమైనవి మాత్రమే మళ్లీ ప్రయత్నించండి',
     },
     tr: {
@@ -4107,6 +4124,7 @@ const TRANSLATIONS = {
         popupTranslateRemaining: 'Kalanı çevir',
         popupRestorableHint: '%{percent} geri yüklenebilir ({matched}/{total} karakter)',
         someBlocksFailed: '{count} bölüm çevrilemedi.',
+        blocksTimedOut: '{count} bölüm, akıl yürütme zaman aşımını aştığı için durdu. Ayarlarda akıl yürütmeyi düşürün veya zaman aşımını artırın, sonra yeniden deneyin.',
         retryFailedButton: 'Yalnızca başarısızları yeniden dene',
     },
     ta: {
@@ -4334,6 +4352,7 @@ const TRANSLATIONS = {
         popupTranslateRemaining: 'மீதியை மொழிபெயர்',
         popupRestorableHint: '{percent}% மீட்டமைக்க முடியும் ({matched}/{total} எழுத்துகள்)',
         someBlocksFailed: '{count} பகுதிகள் மொழிபெயர்க்கப்படவில்லை.',
+        blocksTimedOut: 'பகுத்தறிவு காலக்கெடுவை மீறியதால் {count} பகுதிகள் நின்றன. அமைப்புகளில் பகுத்தறிவைக் குறைக்கவும் அல்லது காலக்கெடுவை அதிகரித்து மீண்டும் முயலவும்.',
         retryFailedButton: 'தோல்வியடைந்தவை மட்டும் மீண்டும் முயற்சி',
     },
     vi: {
@@ -4561,6 +4580,7 @@ const TRANSLATIONS = {
         popupTranslateRemaining: 'Dịch phần còn lại',
         popupRestorableHint: 'Có thể khôi phục {percent}% ({matched}/{total} ký tự)',
         someBlocksFailed: '{count} phần không thể dịch được.',
+        blocksTimedOut: '{count} phần đã dừng vì suy luận vượt quá thời gian chờ. Hãy giảm suy luận hoặc tăng thời gian chờ trong phần cài đặt rồi thử lại.',
         retryFailedButton: 'Chỉ thử lại phần lỗi',
     },
     ko: {
@@ -4788,6 +4808,7 @@ const TRANSLATIONS = {
         popupTranslateRemaining: '나머지 번역',
         popupRestorableHint: '{percent}%를 복원할 수 있습니다 ({matched}/{total}자)',
         someBlocksFailed: '{count}개 부분을 번역하지 못했습니다.',
+        blocksTimedOut: '추론이 시간 제한을 넘겨 {count}개 부분이 멈췄습니다. 설정에서 추론을 낮추거나 시간 제한을 늘린 뒤 다시 시도하세요.',
         retryFailedButton: '실패한 항목만 다시 시도',
     },
 };

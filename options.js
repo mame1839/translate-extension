@@ -14,7 +14,7 @@ const DEFAULTS = Object.freeze({
     maxToken: null,
     concurrencyLimit: 10,
     maxRetries: 3,
-    timeout: 180
+    timeout: 300
 });
 
 const MODEL_PLACEHOLDERS = {

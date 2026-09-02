@@ -66,7 +66,7 @@ Google Gemini・OpenAI・Anthropic などの AI API を使ってウェブペー�
 | 最大出力トークン | 自動 | 空欄ならモデルの上限まで出力します |
 | リクエスト間隔 | 10 秒 | リクエスト間のディレイ |
 | 並列数上限 | 10 | 同時リクエスト数 |
-| タイムアウト | 180 秒 | API タイムアウト |
+| タイムアウト | 300 秒 | API タイムアウト |
 | リトライ回数 | 3 | エラー時の最大再試行回数 |
 
 ### ライセンス
@@ -135,7 +135,7 @@ English / Japanese / Chinese (Simplified & Traditional) / Korean / Spanish / Fre
 | Max output tokens | Auto | Leave empty to output up to the model's limit |
 | Delay between requests | 10 s | Pause between batch requests |
 | Concurrency limit | 10 | Maximum simultaneous requests |
-| API timeout | 180 s | Request timeout |
+| API timeout | 300 s | Request timeout |
 | Max retries | 3 | Retry attempts on error |
 
 ### License
@@ -204,7 +204,7 @@ Copyright (C) 2026 mame1839
 | 最大输出 Token | 自动 | 留空则输出至模型的上限 |
 | 请求间隔 | 10 秒 | 批次请求之间的延迟 |
 | 并发上限 | 10 | 最大同时请求数 |
-| 超时时间 | 180 秒 | API 请求超时时间 |
+| 超时时间 | 300 秒 | API 请求超时时间 |
 | 最大重试次数 | 3 | 出错时的最大重试次数 |
 
 ### 许可证
@@ -273,7 +273,7 @@ Google Gemini, OpenAI, Anthropic 또는 OpenAI 호환 엔드포인트 등의 AI 
 | 최대 출력 토큰 | 자동 | 비워 두면 모델의 한도까지 출력합니다 |
 | 요청 간격 | 10 초 | 배치 요청 간 대기 시간 |
 | 동시 요청 상한 | 10 | 최대 동시 요청 수 |
-| 타임아웃 | 180 초 | API 요청 타임아웃 |
+| 타임아웃 | 300 초 | API 요청 타임아웃 |
 | 최대 재시도 횟수 | 3 | 오류 시 최대 재시도 횟수 |
 
 ### 라이선스
@@ -342,7 +342,7 @@ Copyright (C) 2026 mame1839
 | Макс. токенов на выходе | Авто | Оставьте пустым, чтобы вывод доходил до лимита модели |
 | Задержка между запросами | 10 с | Пауза между пакетными запросами |
 | Лимит параллельных запросов | 10 | Максимальное число одновременных запросов |
-| Тайм-аут API | 180 с | Время ожидания ответа API |
+| Тайм-аут API | 300 с | Время ожидания ответа API |
 | Макс. повторных попыток | 3 | Число повторных попыток при ошибке |
 
 ### Лицензия
