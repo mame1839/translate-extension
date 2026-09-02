@@ -51,7 +51,8 @@ const errorMessages = {
     modelNotFound: 'Specified model not found. Please select a different model in the options page.',
     invalidRequest: 'Invalid request. Please check the extension settings.',
     serverError: 'Server is currently unavailable. Please try again later.',
-    emptyResponse: 'Empty response received from AI.'
+    emptyResponse: 'Empty response received from AI.',
+    contentRefused: 'The AI refused to translate this content.'
 };
 
 const FATAL_TRANSLATION_ERRORS = [
@@ -829,6 +830,7 @@ async function performTranslation(apiCall, retryLimit, signal) {
                 errorMessages.invalidRequest,
                 errorMessages.maxTokensError,
                 errorMessages.insufficientQuota,
+                errorMessages.contentRefused,
                 errorMessages.translationCancelled
             ];
             const msg = error?.message || '';
@@ -1168,6 +1170,10 @@ function parseRetryAfterHeaderMs(response) {
 function handleOpenAIHttpError(response, data) {
     const message = data?.error?.message || `HTTP Error ${response.status}`;
     switch (response.status) {
+        case 400: {
+            const detail = [message, data?.error?.code, data?.error?.param].filter(Boolean).join(' | ');
+            throw createTranslationError('invalidRequest', `\n${detail}`);
+        }
         case 401:
             throw createTranslationError('invalidApiKey');
         case 403:
@@ -1234,10 +1240,13 @@ function handleAnthropicHttpError(response, data) {
     const message = data?.error?.message || `HTTP Error ${response.status}`;
     switch (response.status) {
         case 400:
+        case 413:
             throw createTranslationError('invalidRequest', `\n${message}`);
         case 401:
         case 403:
             throw createTranslationError('invalidApiKey');
+        case 402:
+            throw createTranslationError('insufficientQuota', `\n${message}`);
         case 404:
             throw createTranslationError('modelNotFound');
         case 429: {
@@ -1386,17 +1395,21 @@ async function streamModelResponse(streamRequest) {
     }
 }
 
+function readGeminiTextParts(parts) {
+    if (!Array.isArray(parts)) return '';
+    let text = '';
+    for (const part of parts) {
+        if (part?.thought === true) continue;
+        if (part?.text) text += part.text;
+    }
+    return text;
+}
+
 function readGeminiStreamChunk(chunk, acc) {
     const candidate = chunk?.candidates?.[0];
     if (!candidate) return '';
     if (candidate.finishReason) acc.finishReason = candidate.finishReason;
-    const parts = candidate.content?.parts;
-    if (!Array.isArray(parts)) return '';
-    let delta = '';
-    for (const part of parts) {
-        if (part?.text) delta += part.text;
-    }
-    return delta;
+    return readGeminiTextParts(candidate.content?.parts);
 }
 
 function finalizeGeminiStream(acc) {
@@ -1432,6 +1445,7 @@ function readAnthropicStreamChunk(chunk, acc) {
     }
     if (chunk?.type === 'message_delta' && chunk.delta?.stop_reason) {
         acc.finishReason = chunk.delta.stop_reason;
+        acc.stopDetails = chunk.delta.stop_details;
     }
     if (chunk?.type === 'content_block_delta' && chunk.delta?.type === 'text_delta') {
         return chunk.delta.text || '';
@@ -1439,8 +1453,19 @@ function readAnthropicStreamChunk(chunk, acc) {
     return '';
 }
 
+function throwIfAnthropicRefused(stopReason, stopDetails) {
+    if (stopReason !== 'refusal') return;
+    const reason = stopDetails?.explanation || stopDetails?.category;
+    throw createTranslationError('contentRefused', typeof reason === 'string' && reason ? `\n${reason}` : '');
+}
+
+function anthropicOutputTruncated(stopReason) {
+    return stopReason === 'max_tokens' || stopReason === 'model_context_window_exceeded';
+}
+
 function finalizeAnthropicStream(acc) {
-    if (acc.finishReason === 'max_tokens') throw createTranslationError('maxTokensError');
+    throwIfAnthropicRefused(acc.finishReason, acc.stopDetails);
+    if (anthropicOutputTruncated(acc.finishReason)) throw createTranslationError('maxTokensError');
     if (!acc.fullText) throw createTranslationError('emptyResponse');
 }
 
@@ -1521,10 +1546,7 @@ async function translateWithGemini(text, retryLimit, signal, targetLanguage = 'E
         if (candidate.finishReason === 'SAFETY' || candidate.finishReason === 'BLOCKLIST' || candidate.finishReason === 'PROHIBITED_CONTENT') {
             throw createTranslationError('invalidRequest', ` (content blocked: ${candidate.finishReason})`);
         }
-        const parts = candidate.content?.parts;
-        const responseText = Array.isArray(parts)
-            ? parts.map(p => p?.text || '').join('')
-            : '';
+        const responseText = readGeminiTextParts(candidate.content?.parts);
         if (candidate.finishReason === 'MAX_TOKENS') {
             if (!responseText) throw createTranslationError('maxTokensError');
             return parseTranslationResponse(responseText);
@@ -1679,7 +1701,8 @@ async function translateWithAnthropic(text, retryLimit, signal, targetLanguage =
         }, actualTimeout);
         if (!response.ok) handleAnthropicHttpError(response, data);
         recordApiUsage('anthropic', readUsageTokens(data));
-        if (data?.stop_reason === 'max_tokens') throw createTranslationError('maxTokensError');
+        throwIfAnthropicRefused(data?.stop_reason, data?.stop_details);
+        if (anthropicOutputTruncated(data?.stop_reason)) throw createTranslationError('maxTokensError');
         const responseText = readAnthropicTextContent(data?.content);
         if (!responseText) throw createTranslationError('emptyResponse');
         return parseTranslationResponse(responseText);
@@ -2016,9 +2039,7 @@ async function selectionRequestGemini(prompt, retryLimit, signal) {
         if (candidate.finishReason === 'SAFETY' || candidate.finishReason === 'BLOCKLIST' || candidate.finishReason === 'PROHIBITED_CONTENT') {
             throw new Error(`${errorMessages.invalidRequest} (content blocked: ${candidate.finishReason})`);
         }
-        const parts = candidate.content?.parts;
-        const responseText = Array.isArray(parts) ? parts.map(p => p?.text || '').join('') : '';
-        return finishSelectionText(responseText, candidate.finishReason === 'MAX_TOKENS');
+        return finishSelectionText(readGeminiTextParts(candidate.content?.parts), candidate.finishReason === 'MAX_TOKENS');
     }, retryLimit, signal);
 }
 
@@ -2101,7 +2122,8 @@ async function selectionRequestAnthropic(prompt, retryLimit, signal) {
         }, actualTimeout);
         if (!response.ok) handleAnthropicHttpError(response, data);
         recordApiUsage('anthropic', readUsageTokens(data));
-        return finishSelectionText(readAnthropicTextContent(data?.content), data?.stop_reason === 'max_tokens');
+        throwIfAnthropicRefused(data?.stop_reason, data?.stop_details);
+        return finishSelectionText(readAnthropicTextContent(data?.content), anthropicOutputTruncated(data?.stop_reason));
     }, retryLimit, signal);
 }
 

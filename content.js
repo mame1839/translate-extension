@@ -2425,6 +2425,7 @@
         jsonExtractFailed: 'errBadResponse',
         emptyResponse: 'errBadResponse',
         invalidRequest: 'errInvalidRequest',
+        contentRefused: 'errContentRefused',
         unknownError: 'errUnknown',
         extensionReloaded: 'errExtensionReloaded'
     };
@@ -2447,6 +2448,7 @@
         emptyResponse: 'retry',
         jsonParseFailed: 'retry',
         jsonExtractFailed: 'retry',
+        contentRefused: 'close',
         unknownError: 'close',
         extensionReloaded: 'close'
     };
