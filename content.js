@@ -27,7 +27,8 @@
         newContentTitle: 'New content on this page is not translated',
         blocksTooLong: '{count} blocks are longer than the output token limit and were left untranslated. Raise the max output tokens in settings.',
         cacheSaveFailed: 'Could not save the translation for this page. It will be translated again next time.',
-        cacheStorageFull: 'Storage is full. The translation for this page was not saved.'
+        cacheStorageFull: 'Storage is full. The translation for this page was not saved.',
+        waitingForModel: 'Waiting for the model · {elapsed} elapsed'
     };
 
     const RTL_LANGS = new Set(['ar', 'ur', 'he', 'fa']);
@@ -69,7 +70,8 @@
             cacheSaveFailed: t.cacheSaveFailed,
             cacheStorageFull: t.cacheStorageFull,
             someBlocksFailed: t.someBlocksFailed,
-            retryFailedButton: t.retryFailedButton
+            retryFailedButton: t.retryFailedButton,
+            waitingForModel: t.waitingForModel
         };
     }
 
@@ -438,6 +440,8 @@
     const TEMPORARY_BATCH_ERROR_CODES = new Set(['serverError', 'requestTimeout', 'jsonParseFailed', 'jsonExtractFailed', 'emptyResponse']);
     let totalBatches = 0;
     let batchesProcessed = 0;
+    let modelWaitStartedAt = 0;
+    let modelResponded = false;
 
     let translationUnits = new Map();
     let activeObservers = [];
@@ -2006,6 +2010,8 @@
         translatedUnitsCount = 0;
         totalBatches = 0;
         batchesProcessed = 0;
+        modelWaitStartedAt = 0;
+        modelResponded = false;
         expectedTotalUnits = 0;
         oversizedSkippedCount = 0;
         translationProgress = 0;
@@ -2089,6 +2095,7 @@
                 processBatch(batch, runGeneration)
                     .then(translations => {
                         if (runGeneration !== translationRunGeneration || translationCancelled) return;
+                        modelResponded = true;
                         batchesProcessed++;
                         markMissingBatchUnitsFailed(batch, translations);
                         for (const id of unitsNotReturned(batch, translations)) resendUnitIds.add(id);
@@ -2266,6 +2273,7 @@
             translations.push({ id: tuId, translatedTemplate: update.translatedTemplate });
         }
         if (translations.length === 0) return;
+        modelResponded = true;
         markStreamingActive();
         domUpdateQueue.push({ generation: registryEntry.generation, translations });
         applyQueuedUpdates();
@@ -2427,6 +2435,7 @@
         invalidRequest: 'errInvalidRequest',
         contentRefused: 'errContentRefused',
         reasoningNotSupported: 'errReasoningNotSupported',
+        reasoningTimeout: 'errReasoningTimeout',
         unknownError: 'errUnknown',
         extensionReloaded: 'errExtensionReloaded'
     };
@@ -2440,6 +2449,7 @@
         modelNotFound: 'settings',
         invalidRequest: 'settings',
         reasoningNotSupported: 'settings',
+        reasoningTimeout: 'settings',
         maxTokensError: 'settings',
         blockTooLong: 'settings',
         nothingTranslated: 'retry',
@@ -2954,6 +2964,7 @@
         const keyToTuId = new Map();
         batch.forEach((item, index) => keyToTuId.set(`TU_${index}`, item.id));
         streamingBatchRegistry.set(batchId, { keyToTuId, generation: runGeneration });
+        if (!modelWaitStartedAt) modelWaitStartedAt = Date.now();
         return new Promise((resolve, reject) => {
             sendRuntimeMessage({ action: "translateBatch", batch, batchId }, (response, failure) => {
                 streamingBatchRegistry.delete(batchId);
@@ -4208,6 +4219,16 @@
         renderMiniProgress(translationProgress);
     }
 
+    function isWaitingForModel() {
+        return isTranslating && !translationCancelled && !translationHasError
+            && modelWaitStartedAt > 0 && !modelResponded && typeof st.waitingForModel === 'string';
+    }
+
+    function formatElapsed(ms) {
+        const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+        return Math.floor(totalSeconds / 60) + ':' + String(totalSeconds % 60).padStart(2, '0');
+    }
+
     function updateProgress(forcePercent = null) {
         if (typeof forcePercent === 'number') {
             translationProgress = Math.max(0, Math.min(100, forcePercent));
@@ -4230,11 +4251,13 @@
                 progressBar.setAttribute('aria-valuenow', translationProgress.toFixed(0));
             }
             if (statsElem) {
-                statsElem.textContent = st.progressTemplate
-                    .replace('{currentBatch}', batchesProcessed)
-                    .replace('{totalBatch}', totalBatches)
-                    .replace('{translatedUnits}', translatedUnitsCount)
-                    .replace('{totalUnits}', expectedTotalUnits);
+                statsElem.textContent = isWaitingForModel()
+                    ? st.waitingForModel.replace('{elapsed}', formatElapsed(Date.now() - modelWaitStartedAt))
+                    : st.progressTemplate
+                        .replace('{currentBatch}', batchesProcessed)
+                        .replace('{totalBatch}', totalBatches)
+                        .replace('{translatedUnits}', translatedUnitsCount)
+                        .replace('{totalUnits}', expectedTotalUnits);
             }
         }
         renderMiniProgress(translationProgress);
