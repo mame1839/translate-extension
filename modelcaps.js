@@ -167,20 +167,26 @@ function applyExtraParams(target, extras) {
     return target;
 }
 
-function buildReasoningFields(caps, level, maxTokens) {
+function geminiThinkingConfig(thinkingConfig, streamThoughtSummaries) {
+    if (streamThoughtSummaries) thinkingConfig.includeThoughts = true;
+    return { thinkingConfig };
+}
+
+function buildReasoningFields(caps, level, maxTokens, streaming) {
     if (!caps || typeof level !== 'string' || !level) return null;
     if (!caps.levels.includes(level)) return null;
+    const streamThoughtSummaries = streaming === true && level !== 'off';
     switch (caps.mechanism) {
         case 'thinkingLevel':
-            return { thinkingConfig: { thinkingLevel: level } };
+            return geminiThinkingConfig({ thinkingLevel: level }, streamThoughtSummaries);
         case 'thinkingBudget':
-            return { thinkingConfig: { thinkingBudget: caps.budgets[level] } };
+            return geminiThinkingConfig({ thinkingBudget: caps.budgets[level] }, streamThoughtSummaries);
         case 'reasoningEffort':
         case 'passthrough':
             return { reasoning_effort: level === 'off' ? 'none' : level };
         case 'adaptiveEffort':
             if (level === 'off') return { thinking: { type: 'disabled' } };
-            return { thinking: { type: 'adaptive', display: 'omitted' }, output_config: { effort: level } };
+            return { thinking: { type: 'adaptive', display: streamThoughtSummaries ? 'summarized' : 'omitted' }, output_config: { effort: level } };
         case 'enabledBudget': {
             if (level === 'off') return { thinking: { type: 'disabled' } };
             const room = Number.isFinite(maxTokens) ? Math.floor(maxTokens / 2) : Infinity;

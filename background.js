@@ -1582,7 +1582,7 @@ function buildGeminiRequest(settings, prompt, maxOutputTokens, options) {
     const caps = resolveModelCapabilities('gemini', actualModel);
     const level = resolveReasoningLevel(settings.geminiReasoning, actualModel === DEFAULTS.geminiModel, DEFAULTS.geminiReasoning);
     const outputLimit = explicitOutputTokens(maxOutputTokens);
-    const reasoning = buildReasoningFields(caps, level, outputLimit);
+    const reasoning = buildReasoningFields(caps, level, outputLimit, options.stream);
     const generationConfig = {};
     if (outputLimit !== null) generationConfig.maxOutputTokens = outputLimit;
     if (options.json) generationConfig.responseMimeType = 'application/json';
@@ -1603,7 +1603,7 @@ function buildOpenAIRequest(settings, prompt, maxOutputTokens, options) {
     const caps = resolveModelCapabilities('openai', actualModel);
     const level = resolveReasoningLevel(settings.openaiReasoning, actualModel === DEFAULTS.openaiModel, DEFAULTS.openaiReasoning);
     const outputLimit = explicitOutputTokens(maxOutputTokens);
-    const reasoning = buildReasoningFields(caps, level, outputLimit);
+    const reasoning = buildReasoningFields(caps, level, outputLimit, options.stream);
     const body = {
         model: actualModel,
         messages: [{ role: 'user', content: prompt }]
@@ -1629,7 +1629,7 @@ function buildCompatibleRequest(settings, prompt, maxOutputTokens, options) {
     const caps = resolveModelCapabilities('openai-compatible', actualModel);
     const level = resolveReasoningLevel(settings.compatibleReasoning, actualModel === DEFAULTS.compatibleModel, DEFAULTS.compatibleReasoning);
     const outputLimit = explicitOutputTokens(maxOutputTokens);
-    const reasoning = buildReasoningFields(caps, level, outputLimit);
+    const reasoning = buildReasoningFields(caps, level, outputLimit, options.stream);
     const body = {
         model: actualModel,
         messages: [{ role: 'user', content: prompt }]
@@ -1663,7 +1663,7 @@ function buildAnthropicRequest(settings, prompt, maxOutputTokens, options) {
     const level = resolveReasoningLevel(settings.anthropicReasoning, actualModel === DEFAULTS.anthropicModel, DEFAULTS.anthropicReasoning);
     const modelLimit = caps.maxOutputTokens ?? ANTHROPIC_MAX_OUTPUT_TOKENS;
     const maxTokens = Math.min(explicitOutputTokens(maxOutputTokens) ?? modelLimit, modelLimit);
-    const reasoning = buildReasoningFields(caps, level, maxTokens);
+    const reasoning = buildReasoningFields(caps, level, maxTokens, options.stream);
     const body = {
         model: actualModel,
         max_tokens: maxTokens,
