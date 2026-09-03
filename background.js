@@ -1150,8 +1150,8 @@ Any other characters (including HTML entities like \`&amp;\`, \`&lt;\`, \`&quot;
 5. **Anchor content integrity (CRITICAL)** — The content inside \`<aN>...</aN>\` must remain a standalone meaningful referent. Do NOT place only grammatical particles, conjunctions, or auxiliary words inside an anchor; those go outside.
 6. **Empty content** — Inside \`<tN>\`, if the wrapped content naturally disappears in ${targetLanguage} (e.g., articles), output \`<tN></tN>\`. Do NOT empty \`<aN>\` unless the source anchor was truly empty.
 7. **Preserve nesting** — \`<t0>outer <a1>inner</a1> outer</t0>\` must remain nested with both tags intact.
-8. **Do not translate** — Brand/product names, proper nouns, code identifiers, URLs, emails, file paths, numbers, currency symbols, and HTML entities. Leave them exactly as written.
-9. **Technical terms** — Translate only if a well-established ${targetLanguage} term exists; otherwise keep the original or use an established loanword form.
+8. **Translate nouns by default** — Personal names, place names, organization names, titles of works, and ordinary nouns are rendered the way ${targetLanguage} normally renders them: translated, or transliterated into the target script when that is the conventional form (Japanese katakana, Cyrillic or Chinese transcription, and so on). Do not leave a noun in the source language merely because it is a proper noun.
+9. **Keep as written only in these cases** — (a) content that must not be translated: code identifiers, URLs, email addresses, file paths, numbers, currency symbols, HTML entities, and brand or product names used as such (for example "iPhone", "GitHub"); (b) terms whose translation would change the meaning or break a reference the reader has to match, such as an on-screen UI label, a command name, or a cited title in its official form; (c) names and abbreviations that readers of ${targetLanguage} conventionally see in the source language (for example "API", "NASA"). For a technical term, use the established ${targetLanguage} term when one exists, and otherwise the established loanword form written in the target language's own script.
 10. **Do NOT add, summarize, explain, or annotate** — Output translation only.
 
 ## Output Format (STRICT — must be machine-parseable)
@@ -2132,7 +2132,8 @@ function createSelectionPrompt(sourceText, targetLanguage) {
 Rules:
 - Output the translation only. No preface, explanation, notes, quotation marks, or markdown fences.
 - Keep the original line breaks, paragraph splits, and list markers.
-- Leave proper nouns, brand and product names, code identifiers, URLs, email addresses, file paths, and numbers as they are.
+- Translate nouns, including personal, place, and organization names, the way ${targetLanguage} normally renders them, transliterating into the target script when that is the conventional form.
+- Leave as written only what must not change: code identifiers, URLs, email addresses, file paths, numbers, brand and product names, terms whose translation would change their meaning, and names conventionally written in the source language.
 - If the text is already written in ${targetLanguage}, repeat it unchanged.
 
 Text:
