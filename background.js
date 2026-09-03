@@ -30,6 +30,10 @@ try {
 } catch (e) { }
 
 try {
+    importScripts('modelcaps.js');
+} catch (e) { }
+
+try {
     chrome.alarms.create('translator-keepalive', { periodInMinutes: 0.5 });
     chrome.alarms.onAlarm.addListener(() => { });
 } catch (e) { }
@@ -51,7 +55,10 @@ const errorMessages = {
     modelNotFound: 'Specified model not found. Please select a different model in the options page.',
     invalidRequest: 'Invalid request. Please check the extension settings.',
     serverError: 'Server is currently unavailable. Please try again later.',
-    emptyResponse: 'Empty response received from AI.'
+    emptyResponse: 'Empty response received from AI.',
+    contentRefused: 'The AI refused to translate this content.',
+    reasoningNotSupported: 'The model rejected the reasoning setting. Please check the extension settings.',
+    reasoningTimeout: 'Reasoning ran past the request timeout. Lower the reasoning level or raise the timeout in the extension settings.'
 };
 
 const FATAL_TRANSLATION_ERRORS = [
@@ -90,20 +97,27 @@ function resolveTranslationErrorCode(error, message) {
 
 const DEFAULTS = Object.freeze({
     apiProvider: 'gemini',
-    geminiModel: 'gemini-3.1-flash-lite',
-    openaiModel: 'gpt-5.4-nano-2026-03-17',
+    geminiModel: 'gemini-3.5-flash-lite',
+    openaiModel: 'gpt-5.6-luna',
     anthropicModel: 'claude-haiku-4-5-20251001',
     compatibleModel: '',
+    geminiReasoning: '',
+    openaiReasoning: 'off',
+    anthropicReasoning: '',
+    compatibleReasoning: '',
     batchSize: 500,
     maxBatchLength: 65535,
     delayBetweenRequests: 10000,
-    maxToken: 65536,
+    maxToken: null,
     concurrencyLimit: 10,
     maxRetries: 3,
-    timeout: 180
+    timeout: 300
 });
 
-const ANTHROPIC_MAX_OUTPUT_TOKENS = 64000;
+const LEGACY_DEFAULT_MAX_TOKEN = 65536;
+const MAX_TOKEN_AUTO_SINCE = '7.1.0';
+const LEGACY_DEFAULT_TIMEOUT = 180;
+const TIMEOUT_RAISED_SINCE = '7.1.0';
 
 const LANGUAGE_LIST = [
     { code: 'en', name: 'English' },       { code: 'zh', name: 'Chinese (Simplified)' },
@@ -185,6 +199,30 @@ try {
     });
 } catch (e) { }
 
+function versionIsBefore(version, reference) {
+    const parse = text => String(text || '').split('.').map(part => parseInt(part, 10) || 0);
+    const left = parse(version);
+    const right = parse(reference);
+    for (let i = 0; i < Math.max(left.length, right.length); i++) {
+        const a = left[i] || 0;
+        const b = right[i] || 0;
+        if (a !== b) return a < b;
+    }
+    return false;
+}
+
+function storedMaxTokenIsLegacyDefault(details, items) {
+    return details.reason === 'update'
+        && items.maxToken === LEGACY_DEFAULT_MAX_TOKEN
+        && versionIsBefore(details.previousVersion, MAX_TOKEN_AUTO_SINCE);
+}
+
+function storedTimeoutIsLegacyDefault(details, items) {
+    return details.reason === 'update'
+        && items.timeout === LEGACY_DEFAULT_TIMEOUT
+        && versionIsBefore(details.previousVersion, TIMEOUT_RAISED_SINCE);
+}
+
 function handleExtensionInstalled(details) {
     if (details.reason === 'install') {
         chrome.runtime.openOptionsPage();
@@ -203,10 +241,10 @@ function handleExtensionInstalled(details) {
             if (items.batchSize === undefined) toSet.batchSize = DEFAULTS.batchSize;
             if (items.maxBatchLength === undefined) toSet.maxBatchLength = DEFAULTS.maxBatchLength;
             if (items.delayBetweenRequests === undefined) toSet.delayBetweenRequests = DEFAULTS.delayBetweenRequests;
-            if (items.maxToken === undefined) toSet.maxToken = DEFAULTS.maxToken;
+            if (storedMaxTokenIsLegacyDefault(details, items)) toSet.maxToken = DEFAULTS.maxToken;
             if (items.concurrencyLimit === undefined) toSet.concurrencyLimit = DEFAULTS.concurrencyLimit;
             if (items.maxRetries === undefined) toSet.maxRetries = DEFAULTS.maxRetries;
-            if (items.timeout === undefined) toSet.timeout = DEFAULTS.timeout;
+            if (items.timeout === undefined || storedTimeoutIsLegacyDefault(details, items)) toSet.timeout = DEFAULTS.timeout;
             if (items.showContextMenu === undefined) toSet.showContextMenu = true;
             if (items.autoRetranslateDomain === undefined) toSet.autoRetranslateDomain = true;
             if (Object.keys(toSet).length > 0) chrome.storage.local.set(toSet);
@@ -596,7 +634,14 @@ function sleep(ms, signal) {
     });
 }
 
-async function fetchJsonWithTimeout(resource, options = {}, timeout) {
+function createTimeoutError(reasoningLevel, timeoutSeconds) {
+    if (reasoningLevel && reasoningLevel !== 'off') {
+        return createTranslationError('reasoningTimeout', ` (${reasoningLevel}, ${timeoutSeconds} s)`);
+    }
+    return createTranslationError('requestTimeout');
+}
+
+async function fetchJsonWithTimeout(resource, options = {}, timeout, reasoningLevel = '') {
     const controller = new AbortController();
     const timeoutId = timeout > 0 ? setTimeout(() => controller.abort(), timeout * 1000) : null;
     const externalSignal = options.signal;
@@ -616,7 +661,7 @@ async function fetchJsonWithTimeout(resource, options = {}, timeout) {
             if (externalSignal?.aborted && !controller.signal.aborted) {
                 throw createAbortError();
             }
-            throw createTranslationError('requestTimeout');
+            throw createTimeoutError(reasoningLevel, timeout);
         }
         throw createTranslationError('fetchError', `: ${error.message}`);
     } finally {
@@ -829,6 +874,9 @@ async function performTranslation(apiCall, retryLimit, signal) {
                 errorMessages.invalidRequest,
                 errorMessages.maxTokensError,
                 errorMessages.insufficientQuota,
+                errorMessages.contentRefused,
+                errorMessages.reasoningNotSupported,
+                errorMessages.reasoningTimeout,
                 errorMessages.translationCancelled
             ];
             const msg = error?.message || '';
@@ -1102,8 +1150,8 @@ Any other characters (including HTML entities like \`&amp;\`, \`&lt;\`, \`&quot;
 5. **Anchor content integrity (CRITICAL)** — The content inside \`<aN>...</aN>\` must remain a standalone meaningful referent. Do NOT place only grammatical particles, conjunctions, or auxiliary words inside an anchor; those go outside.
 6. **Empty content** — Inside \`<tN>\`, if the wrapped content naturally disappears in ${targetLanguage} (e.g., articles), output \`<tN></tN>\`. Do NOT empty \`<aN>\` unless the source anchor was truly empty.
 7. **Preserve nesting** — \`<t0>outer <a1>inner</a1> outer</t0>\` must remain nested with both tags intact.
-8. **Do not translate** — Brand/product names, proper nouns, code identifiers, URLs, emails, file paths, numbers, currency symbols, and HTML entities. Leave them exactly as written.
-9. **Technical terms** — Translate only if a well-established ${targetLanguage} term exists; otherwise keep the original or use an established loanword form.
+8. **Translate nouns by default** — Personal names, place names, organization names, titles of works, and ordinary nouns are rendered the way ${targetLanguage} normally renders them: translated, or transliterated into the target script when that is the conventional form (Japanese katakana, Cyrillic or Chinese transcription, and so on). Do not leave a noun in the source language merely because it is a proper noun.
+9. **Keep as written only in these cases** — (a) content that must not be translated: code identifiers, URLs, email addresses, file paths, numbers, currency symbols, HTML entities, and brand or product names used as such (for example "iPhone", "GitHub"); (b) terms whose translation would change the meaning or break a reference the reader has to match, such as an on-screen UI label, a command name, or a cited title in its official form; (c) names and abbreviations that readers of ${targetLanguage} conventionally see in the source language (for example "API", "NASA"). For a technical term, use the established ${targetLanguage} term when one exists, and otherwise the established loanword form written in the target language's own script.
 10. **Do NOT add, summarize, explain, or annotate** — Output translation only.
 
 ## Output Format (STRICT — must be machine-parseable)
@@ -1165,9 +1213,18 @@ function parseRetryAfterHeaderMs(response) {
     return Number.isFinite(asInt) ? asInt * 1000 : null;
 }
 
-function handleOpenAIHttpError(response, data) {
+function createInvalidRequestError(message, reasoningSent) {
+    const rejectsReasoning = reasoningSent === true && /thinking|effort|reasoning|output_config/i.test(message);
+    return createTranslationError(rejectsReasoning ? 'reasoningNotSupported' : 'invalidRequest', `\n${message}`);
+}
+
+function handleOpenAIHttpError(response, data, reasoningSent) {
     const message = data?.error?.message || `HTTP Error ${response.status}`;
     switch (response.status) {
+        case 400: {
+            const detail = [message, data?.error?.code, data?.error?.param].filter(Boolean).join(' | ');
+            throw createInvalidRequestError(detail, reasoningSent);
+        }
         case 401:
             throw createTranslationError('invalidApiKey');
         case 403:
@@ -1196,13 +1253,13 @@ function handleOpenAIHttpError(response, data) {
     }
 }
 
-function handleGeminiHttpError(response, data) {
+function handleGeminiHttpError(response, data, reasoningSent) {
     const message = data?.error?.message || `HTTP Error ${response.status}`;
     const status = data?.error?.status || '';
     switch (response.status) {
         case 400:
             if (message.includes("API key not valid")) throw createTranslationError('invalidApiKey');
-            throw createTranslationError('invalidRequest', `\n${message}`);
+            throw createInvalidRequestError(message, reasoningSent);
         case 401:
         case 403:
             throw createTranslationError('invalidApiKey');
@@ -1230,14 +1287,18 @@ function handleGeminiHttpError(response, data) {
     }
 }
 
-function handleAnthropicHttpError(response, data) {
+function handleAnthropicHttpError(response, data, reasoningSent) {
     const message = data?.error?.message || `HTTP Error ${response.status}`;
     switch (response.status) {
         case 400:
+            throw createInvalidRequestError(message, reasoningSent);
+        case 413:
             throw createTranslationError('invalidRequest', `\n${message}`);
         case 401:
         case 403:
             throw createTranslationError('invalidApiKey');
+        case 402:
+            throw createTranslationError('insufficientQuota', `\n${message}`);
         case 404:
             throw createTranslationError('modelNotFound');
         case 429: {
@@ -1331,18 +1392,24 @@ function consumeSSELine(line, readChunk, acc, streamContext) {
 }
 
 async function streamModelResponse(streamRequest) {
-    const { url, headers, body, timeout, signal, onHttpError, readChunk, finalizeStream, streamContext, provider } = streamRequest;
+    const { url, headers, body, timeout, reasoningLevel, signal, onHttpError, readChunk, finalizeStream, streamContext, provider } = streamRequest;
     const timeoutController = new AbortController();
-    const timeoutId = timeout > 0 ? setTimeout(() => timeoutController.abort(), timeout * 1000) : null;
+    let timeoutId = null;
+    const armIdleTimeout = () => {
+        if (timeoutId) clearTimeout(timeoutId);
+        timeoutId = timeout > 0 ? setTimeout(() => timeoutController.abort(), timeout * 1000) : null;
+    };
+    armIdleTimeout();
     const combinedSignal = combineSignals(signal, timeoutController.signal);
     const timedOut = () => timeoutController.signal.aborted && !signal?.aborted;
+    const acc = { fullText: '', finishReason: '', sentKeys: new Set(), usage: createUsageTokens() };
     let response;
     try {
         response = await fetch(url, { method: 'POST', headers, body, signal: combinedSignal });
     } catch (error) {
         if (timeoutId) clearTimeout(timeoutId);
         if (error.name === 'AbortError') {
-            if (timedOut()) throw createTranslationError('requestTimeout');
+            if (timedOut()) throw createTimeoutError(reasoningLevel, timeout);
             throw createAbortError();
         }
         throw createTranslationError('fetchError', `: ${error.message}`);
@@ -1354,7 +1421,6 @@ async function streamModelResponse(streamRequest) {
             onHttpError(response, data);
         }
         if (!response.body) throw createTranslationError('emptyResponse');
-        const acc = { fullText: '', finishReason: '', sentKeys: new Set(), usage: createUsageTokens() };
         const reader = response.body.getReader();
         const decoder = new TextDecoder('utf-8');
         let pending = '';
@@ -1362,6 +1428,7 @@ async function streamModelResponse(streamRequest) {
             while (true) {
                 const { done, value } = await reader.read();
                 if (done) break;
+                armIdleTimeout();
                 pending += decoder.decode(value, { stream: true });
                 const lines = pending.split('\n');
                 pending = lines.pop() || '';
@@ -1377,7 +1444,7 @@ async function streamModelResponse(streamRequest) {
         return acc.fullText;
     } catch (error) {
         if (error?.name === 'AbortError') {
-            if (timedOut()) throw createTranslationError('requestTimeout');
+            if (timedOut()) throw createTimeoutError(acc.fullText ? '' : reasoningLevel, timeout);
             throw createAbortError();
         }
         throw error;
@@ -1386,17 +1453,21 @@ async function streamModelResponse(streamRequest) {
     }
 }
 
+function readGeminiTextParts(parts) {
+    if (!Array.isArray(parts)) return '';
+    let text = '';
+    for (const part of parts) {
+        if (part?.thought === true) continue;
+        if (part?.text) text += part.text;
+    }
+    return text;
+}
+
 function readGeminiStreamChunk(chunk, acc) {
     const candidate = chunk?.candidates?.[0];
     if (!candidate) return '';
     if (candidate.finishReason) acc.finishReason = candidate.finishReason;
-    const parts = candidate.content?.parts;
-    if (!Array.isArray(parts)) return '';
-    let delta = '';
-    for (const part of parts) {
-        if (part?.text) delta += part.text;
-    }
-    return delta;
+    return readGeminiTextParts(candidate.content?.parts);
 }
 
 function finalizeGeminiStream(acc) {
@@ -1421,6 +1492,29 @@ function finalizeOpenAIStream(acc) {
     if (!acc.fullText) throw createTranslationError('emptyResponse');
 }
 
+const THINK_OPEN_TAG = '<think>';
+const THINK_CLOSE_TAG = '</think>';
+
+function stripLeadingThinkBlock(text) {
+    const start = text.length - text.trimStart().length;
+    const head = text.slice(start, start + THINK_OPEN_TAG.length);
+    if (head.length < THINK_OPEN_TAG.length) return THINK_OPEN_TAG.startsWith(head) ? '' : text;
+    if (head !== THINK_OPEN_TAG) return text;
+    const close = text.indexOf(THINK_CLOSE_TAG, start + THINK_OPEN_TAG.length);
+    if (close < 0) return '';
+    return text.slice(close + THINK_CLOSE_TAG.length).trimStart();
+}
+
+function readCompatibleStreamChunk(chunk, acc) {
+    const delta = readOpenAIStreamChunk(chunk, acc);
+    if (!delta) return '';
+    acc.rawText = (acc.rawText || '') + delta;
+    const visible = stripLeadingThinkBlock(acc.rawText);
+    const alreadyEmitted = acc.visibleLength || 0;
+    acc.visibleLength = visible.length;
+    return visible.slice(alreadyEmitted);
+}
+
 function readAnthropicStreamChunk(chunk, acc) {
     if (chunk?.type === 'error') {
         const streamErrorType = chunk.error?.type || '';
@@ -1432,6 +1526,7 @@ function readAnthropicStreamChunk(chunk, acc) {
     }
     if (chunk?.type === 'message_delta' && chunk.delta?.stop_reason) {
         acc.finishReason = chunk.delta.stop_reason;
+        acc.stopDetails = chunk.delta.stop_details;
     }
     if (chunk?.type === 'content_block_delta' && chunk.delta?.type === 'text_delta') {
         return chunk.delta.text || '';
@@ -1439,9 +1534,25 @@ function readAnthropicStreamChunk(chunk, acc) {
     return '';
 }
 
+function throwIfAnthropicRefused(stopReason, stopDetails) {
+    if (stopReason !== 'refusal') return;
+    const reason = stopDetails?.explanation || stopDetails?.category;
+    throw createTranslationError('contentRefused', typeof reason === 'string' && reason ? `\n${reason}` : '');
+}
+
+function anthropicOutputTruncated(stopReason) {
+    return stopReason === 'max_tokens' || stopReason === 'model_context_window_exceeded';
+}
+
 function finalizeAnthropicStream(acc) {
-    if (acc.finishReason === 'max_tokens') throw createTranslationError('maxTokensError');
+    throwIfAnthropicRefused(acc.finishReason, acc.stopDetails);
+    if (anthropicOutputTruncated(acc.finishReason)) throw createTranslationError('maxTokensError');
     if (!acc.fullText) throw createTranslationError('emptyResponse');
+}
+
+function readAnthropicTextContent(content) {
+    if (!Array.isArray(content)) return '';
+    return content.map(part => part?.type === 'text' ? (part.text || '') : '').join('');
 }
 
 function geminiAllowsCustomTemperature(model) {
@@ -1462,35 +1573,144 @@ function extractGeminiRetryDelayMs(data) {
     return null;
 }
 
-async function translateWithGemini(text, retryLimit, signal, targetLanguage = 'English', targetLanguageCode, streamContext = null) {
-    const { geminiApiKey: apiKey, geminiModel: model, maxToken, timeout } = await new Promise(resolve =>
-        chrome.storage.local.get(['geminiApiKey', 'geminiModel', 'maxToken', 'timeout'], resolve));
-    if (!apiKey) throw createTranslationError('apiKeyNotSet');
-    const actualModel = (model || '').trim() || DEFAULTS.geminiModel;
-    const actualMaxToken = maxToken || DEFAULTS.maxToken;
-    const actualTimeout = timeout || DEFAULTS.timeout;
-    const prompt = createTranslationPrompt(text, targetLanguage, targetLanguageCode, await getPromptCustomSections());
-    const generationConfig = {
-        maxOutputTokens: actualMaxToken,
-        responseMimeType: "application/json"
-    };
+function explicitOutputTokens(maxOutputTokens) {
+    return Number.isFinite(maxOutputTokens) && maxOutputTokens > 0 ? maxOutputTokens : null;
+}
+
+function buildGeminiRequest(settings, prompt, maxOutputTokens, options) {
+    const actualModel = (settings.geminiModel || '').trim() || DEFAULTS.geminiModel;
+    const caps = resolveModelCapabilities('gemini', actualModel);
+    const level = resolveReasoningLevel(settings.geminiReasoning, actualModel === DEFAULTS.geminiModel, DEFAULTS.geminiReasoning);
+    const outputLimit = explicitOutputTokens(maxOutputTokens);
+    const reasoning = buildReasoningFields(caps, level, outputLimit, options.stream);
+    const generationConfig = {};
+    if (outputLimit !== null) generationConfig.maxOutputTokens = outputLimit;
+    if (options.json) generationConfig.responseMimeType = 'application/json';
     if (geminiAllowsCustomTemperature(actualModel)) generationConfig.temperature = 0.2;
-    const requestBody = {
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig
+    if (reasoning) Object.assign(generationConfig, reasoning);
+    const method = options.stream ? 'streamGenerateContent?alt=sse' : 'generateContent';
+    return {
+        url: `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(actualModel)}:${method}`,
+        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': settings.geminiApiKey },
+        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig }),
+        reasoningSent: !!reasoning,
+        reasoningLevel: reasoning ? level : ''
     };
-    const headers = {
-        'Content-Type': 'application/json',
-        'x-goog-api-key': apiKey
+}
+
+function buildOpenAIRequest(settings, prompt, maxOutputTokens, options) {
+    const actualModel = (settings.openaiModel || '').trim() || DEFAULTS.openaiModel;
+    const caps = resolveModelCapabilities('openai', actualModel);
+    const level = resolveReasoningLevel(settings.openaiReasoning, actualModel === DEFAULTS.openaiModel, DEFAULTS.openaiReasoning);
+    const outputLimit = explicitOutputTokens(maxOutputTokens);
+    const reasoning = buildReasoningFields(caps, level, outputLimit, options.stream);
+    const body = {
+        model: actualModel,
+        messages: [{ role: 'user', content: prompt }]
     };
+    if (outputLimit !== null) body.max_completion_tokens = outputLimit;
+    if (options.json) body.response_format = { type: 'json_object' };
+    if (reasoning) Object.assign(body, reasoning);
+    if (options.stream) {
+        body.stream = true;
+        body.stream_options = { include_usage: true };
+    }
+    return {
+        url: 'https://api.openai.com/v1/chat/completions',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${settings.openaiApiKey}` },
+        body: JSON.stringify(body),
+        reasoningSent: !!reasoning,
+        reasoningLevel: reasoning ? level : ''
+    };
+}
+
+function buildCompatibleRequest(settings, prompt, maxOutputTokens, options) {
+    const actualModel = (settings.compatibleModel || '').trim();
+    const caps = resolveModelCapabilities('openai-compatible', actualModel);
+    const level = resolveReasoningLevel(settings.compatibleReasoning, actualModel === DEFAULTS.compatibleModel, DEFAULTS.compatibleReasoning);
+    const outputLimit = explicitOutputTokens(maxOutputTokens);
+    const reasoning = buildReasoningFields(caps, level, outputLimit, options.stream);
+    const body = {
+        model: actualModel,
+        messages: [{ role: 'user', content: prompt }]
+    };
+    if (!reasoning) body.temperature = 0.2;
+    if (outputLimit !== null) body.max_tokens = outputLimit;
+    if (reasoning) Object.assign(body, reasoning);
+    if (options.stream) body.stream = true;
+    const extras = settings.compatibleExtraParams;
+    try {
+        applyExtraParams(body, extras);
+    } catch (error) {
+        throw createTranslationError('invalidRequest', ` (${error.message})`);
+    }
+    const reasoningOverridden = extras !== undefined && Object.prototype.hasOwnProperty.call(extras, 'reasoning_effort');
+    const reasoningSent = !!reasoning && !reasoningOverridden;
+    const headers = { 'Content-Type': 'application/json' };
+    if (settings.compatibleApiKey) headers['Authorization'] = `Bearer ${settings.compatibleApiKey}`;
+    return {
+        url: settings.compatibleEndpoint.trim(),
+        headers,
+        body: JSON.stringify(body),
+        reasoningSent,
+        reasoningLevel: reasoningSent ? level : ''
+    };
+}
+
+function buildAnthropicRequest(settings, prompt, maxOutputTokens, options) {
+    const actualModel = (settings.anthropicModel || '').trim() || DEFAULTS.anthropicModel;
+    const caps = resolveModelCapabilities('anthropic', actualModel);
+    const level = resolveReasoningLevel(settings.anthropicReasoning, actualModel === DEFAULTS.anthropicModel, DEFAULTS.anthropicReasoning);
+    const modelLimit = caps.maxOutputTokens ?? ANTHROPIC_MAX_OUTPUT_TOKENS;
+    const maxTokens = Math.min(explicitOutputTokens(maxOutputTokens) ?? modelLimit, modelLimit);
+    const reasoning = buildReasoningFields(caps, level, maxTokens, options.stream);
+    const body = {
+        model: actualModel,
+        max_tokens: maxTokens,
+        messages: [{ role: 'user', content: prompt }]
+    };
+    if (reasoning) Object.assign(body, reasoning);
+    if (options.stream) body.stream = true;
+    return {
+        url: 'https://api.anthropic.com/v1/messages',
+        headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': settings.anthropicApiKey,
+            'anthropic-version': '2023-06-01',
+            'anthropic-dangerous-direct-browser-access': 'true'
+        },
+        body: JSON.stringify(body),
+        reasoningSent: !!reasoning,
+        reasoningLevel: reasoning ? level : ''
+    };
+}
+
+function postProviderRequest(request, signal, timeout) {
+    return fetchJsonWithTimeout(request.url, {
+        method: 'POST',
+        headers: request.headers,
+        body: request.body,
+        signal
+    }, timeout, request.reasoningLevel);
+}
+
+async function translateWithGemini(text, retryLimit, signal, targetLanguage = 'English', targetLanguageCode, streamContext = null) {
+    const settings = await new Promise(resolve =>
+        chrome.storage.local.get(['geminiApiKey', 'geminiModel', 'geminiReasoning', 'maxToken', 'timeout'], resolve));
+    if (!settings.geminiApiKey) throw createTranslationError('apiKeyNotSet');
+    const actualTimeout = settings.timeout || DEFAULTS.timeout;
+    const prompt = createTranslationPrompt(text, targetLanguage, targetLanguageCode, await getPromptCustomSections());
+    const request = buildGeminiRequest(settings, prompt, settings.maxToken || DEFAULTS.maxToken, { json: true, stream: !!streamContext });
+    const onHttpError = (response, data) => handleGeminiHttpError(response, data, request.reasoningSent);
     if (streamContext) {
         return performTranslation(async () => parseTranslationResponse(await streamModelResponse({
-            url: `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(actualModel)}:streamGenerateContent?alt=sse`,
-            headers,
-            body: JSON.stringify(requestBody),
+            url: request.url,
+            headers: request.headers,
+            body: request.body,
             timeout: actualTimeout,
+            reasoningLevel: request.reasoningLevel,
             signal,
-            onHttpError: handleGeminiHttpError,
+            onHttpError,
             readChunk: readGeminiStreamChunk,
             finalizeStream: finalizeGeminiStream,
             streamContext,
@@ -1498,14 +1718,8 @@ async function translateWithGemini(text, retryLimit, signal, targetLanguage = 'E
         })), retryLimit, signal);
     }
     return performTranslation(async () => {
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(actualModel)}:generateContent`;
-        const { response, data } = await fetchJsonWithTimeout(url, {
-            method: 'POST',
-            headers,
-            body: JSON.stringify(requestBody),
-            signal
-        }, actualTimeout);
-        if (!response.ok) handleGeminiHttpError(response, data);
+        const { response, data } = await postProviderRequest(request, signal, actualTimeout);
+        if (!response.ok) onHttpError(response, data);
         recordApiUsage('gemini', readUsageTokens(data));
         if (!data || !Array.isArray(data.candidates) || data.candidates.length === 0) {
             const blockReason = data?.promptFeedback?.blockReason;
@@ -1516,10 +1730,7 @@ async function translateWithGemini(text, retryLimit, signal, targetLanguage = 'E
         if (candidate.finishReason === 'SAFETY' || candidate.finishReason === 'BLOCKLIST' || candidate.finishReason === 'PROHIBITED_CONTENT') {
             throw createTranslationError('invalidRequest', ` (content blocked: ${candidate.finishReason})`);
         }
-        const parts = candidate.content?.parts;
-        const responseText = Array.isArray(parts)
-            ? parts.map(p => p?.text || '').join('')
-            : '';
+        const responseText = readGeminiTextParts(candidate.content?.parts);
         if (candidate.finishReason === 'MAX_TOKENS') {
             if (!responseText) throw createTranslationError('maxTokensError');
             return parseTranslationResponse(responseText);
@@ -1530,33 +1741,22 @@ async function translateWithGemini(text, retryLimit, signal, targetLanguage = 'E
 }
 
 async function translateWithOpenAI(text, retryLimit, signal, targetLanguage = 'English', targetLanguageCode, streamContext = null) {
-    const { openaiApiKey: apiKey, openaiModel: model, maxToken, timeout } = await new Promise(resolve =>
-        chrome.storage.local.get(['openaiApiKey', 'openaiModel', 'maxToken', 'timeout'], resolve));
-    if (!apiKey) throw createTranslationError('apiKeyNotSet');
-    const actualModel = (model || '').trim() || DEFAULTS.openaiModel;
-    const actualMaxToken = maxToken || DEFAULTS.maxToken;
-    const actualTimeout = timeout || DEFAULTS.timeout;
+    const settings = await new Promise(resolve =>
+        chrome.storage.local.get(['openaiApiKey', 'openaiModel', 'openaiReasoning', 'maxToken', 'timeout'], resolve));
+    if (!settings.openaiApiKey) throw createTranslationError('apiKeyNotSet');
+    const actualTimeout = settings.timeout || DEFAULTS.timeout;
     const prompt = createTranslationPrompt(text, targetLanguage, targetLanguageCode, await getPromptCustomSections());
-    const requestBody = {
-        model: actualModel,
-        messages: [{ role: 'user', content: prompt }],
-        max_completion_tokens: actualMaxToken,
-        response_format: { type: 'json_object' }
-    };
-    const headers = {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
-    };
+    const request = buildOpenAIRequest(settings, prompt, settings.maxToken || DEFAULTS.maxToken, { json: true, stream: !!streamContext });
+    const onHttpError = (response, data) => handleOpenAIHttpError(response, data, request.reasoningSent);
     if (streamContext) {
-        requestBody.stream = true;
-        requestBody.stream_options = { include_usage: true };
         return performTranslation(async () => parseTranslationResponse(await streamModelResponse({
-            url: 'https://api.openai.com/v1/chat/completions',
-            headers,
-            body: JSON.stringify(requestBody),
+            url: request.url,
+            headers: request.headers,
+            body: request.body,
             timeout: actualTimeout,
+            reasoningLevel: request.reasoningLevel,
             signal,
-            onHttpError: handleOpenAIHttpError,
+            onHttpError,
             readChunk: readOpenAIStreamChunk,
             finalizeStream: finalizeOpenAIStream,
             streamContext,
@@ -1564,13 +1764,8 @@ async function translateWithOpenAI(text, retryLimit, signal, targetLanguage = 'E
         })), retryLimit, signal);
     }
     return performTranslation(async () => {
-        const { response, data } = await fetchJsonWithTimeout('https://api.openai.com/v1/chat/completions', {
-            method: 'POST',
-            headers,
-            body: JSON.stringify(requestBody),
-            signal
-        }, actualTimeout);
-        if (!response.ok) handleOpenAIHttpError(response, data);
+        const { response, data } = await postProviderRequest(request, signal, actualTimeout);
+        if (!response.ok) onHttpError(response, data);
         recordApiUsage('openai', readUsageTokens(data));
         const choice = data?.choices?.[0];
         if (!choice) throw createTranslationError('unknownError', ' (no choices)');
@@ -1582,83 +1777,59 @@ async function translateWithOpenAI(text, retryLimit, signal, targetLanguage = 'E
 }
 
 async function translateWithOpenAICompatible(text, retryLimit, signal, targetLanguage = 'English', targetLanguageCode, streamContext = null) {
-    const { compatibleApiKey: apiKey, compatibleModel: model, compatibleEndpoint: endpoint, maxToken, timeout } = await new Promise(resolve =>
-        chrome.storage.local.get(['compatibleApiKey', 'compatibleModel', 'compatibleEndpoint', 'maxToken', 'timeout'], resolve));
-    if (!endpoint) throw createTranslationError('endpointNotSet');
-    const actualModel = (model || '').trim();
-    if (!actualModel) throw createTranslationError('modelNotSet');
-    const actualMaxToken = maxToken || DEFAULTS.maxToken;
-    const actualTimeout = timeout || DEFAULTS.timeout;
+    const settings = await new Promise(resolve =>
+        chrome.storage.local.get(['compatibleApiKey', 'compatibleModel', 'compatibleEndpoint', 'compatibleReasoning', 'compatibleExtraParams', 'maxToken', 'timeout'], resolve));
+    if (!settings.compatibleEndpoint) throw createTranslationError('endpointNotSet');
+    if (!(settings.compatibleModel || '').trim()) throw createTranslationError('modelNotSet');
+    const actualTimeout = settings.timeout || DEFAULTS.timeout;
     const prompt = createTranslationPrompt(text, targetLanguage, targetLanguageCode, await getPromptCustomSections());
-    const requestBody = {
-        model: actualModel,
-        messages: [{ role: 'user', content: prompt }],
-        temperature: 0.2,
-        max_tokens: actualMaxToken
-    };
-    const headers = { 'Content-Type': 'application/json' };
-    if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`;
+    const request = buildCompatibleRequest(settings, prompt, settings.maxToken || DEFAULTS.maxToken, { stream: !!streamContext });
+    const onHttpError = (response, data) => handleOpenAIHttpError(response, data, request.reasoningSent);
     if (streamContext) {
-        requestBody.stream = true;
         return performTranslation(async () => parseTranslationResponse(await streamModelResponse({
-            url: endpoint.trim(),
-            headers,
-            body: JSON.stringify(requestBody),
+            url: request.url,
+            headers: request.headers,
+            body: request.body,
             timeout: actualTimeout,
+            reasoningLevel: request.reasoningLevel,
             signal,
-            onHttpError: handleOpenAIHttpError,
-            readChunk: readOpenAIStreamChunk,
+            onHttpError,
+            readChunk: readCompatibleStreamChunk,
             finalizeStream: finalizeOpenAIStream,
             streamContext,
             provider: 'openai-compatible'
         })), retryLimit, signal);
     }
     return performTranslation(async () => {
-        const { response, data } = await fetchJsonWithTimeout(endpoint.trim(), {
-            method: 'POST',
-            headers,
-            body: JSON.stringify(requestBody),
-            signal
-        }, actualTimeout);
-        if (!response.ok) handleOpenAIHttpError(response, data);
+        const { response, data } = await postProviderRequest(request, signal, actualTimeout);
+        if (!response.ok) onHttpError(response, data);
         recordApiUsage('openai-compatible', readUsageTokens(data));
         const choice = data?.choices?.[0];
         if (!choice) throw createTranslationError('unknownError', ' (no choices)');
         if (choice.finish_reason === 'length') throw createTranslationError('maxTokensError');
-        const responseText = choice.message?.content || '';
+        const responseText = stripLeadingThinkBlock(choice.message?.content || '');
         if (!responseText) throw createTranslationError('emptyResponse');
         return parseTranslationResponse(responseText);
     }, retryLimit, signal);
 }
 
 async function translateWithAnthropic(text, retryLimit, signal, targetLanguage = 'English', targetLanguageCode, streamContext = null) {
-    const { anthropicApiKey: apiKey, anthropicModel: model, maxToken, timeout } = await new Promise(resolve =>
-        chrome.storage.local.get(['anthropicApiKey', 'anthropicModel', 'maxToken', 'timeout'], resolve));
-    if (!apiKey) throw createTranslationError('apiKeyNotSet');
-    const actualModel = (model || '').trim() || DEFAULTS.anthropicModel;
-    const actualMaxToken = Math.min(maxToken || DEFAULTS.maxToken, ANTHROPIC_MAX_OUTPUT_TOKENS);
-    const actualTimeout = timeout || DEFAULTS.timeout;
+    const settings = await new Promise(resolve =>
+        chrome.storage.local.get(['anthropicApiKey', 'anthropicModel', 'anthropicReasoning', 'maxToken', 'timeout'], resolve));
+    if (!settings.anthropicApiKey) throw createTranslationError('apiKeyNotSet');
+    const actualTimeout = settings.timeout || DEFAULTS.timeout;
     const prompt = createTranslationPrompt(text, targetLanguage, targetLanguageCode, await getPromptCustomSections());
-    const requestBody = {
-        model: actualModel,
-        max_tokens: actualMaxToken,
-        messages: [{ role: 'user', content: prompt }]
-    };
-    const headers = {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true'
-    };
+    const request = buildAnthropicRequest(settings, prompt, settings.maxToken || DEFAULTS.maxToken, { stream: !!streamContext });
+    const onHttpError = (response, data) => handleAnthropicHttpError(response, data, request.reasoningSent);
     if (streamContext) {
-        requestBody.stream = true;
         return performTranslation(async () => parseTranslationResponse(await streamModelResponse({
-            url: 'https://api.anthropic.com/v1/messages',
-            headers,
-            body: JSON.stringify(requestBody),
+            url: request.url,
+            headers: request.headers,
+            body: request.body,
             timeout: actualTimeout,
+            reasoningLevel: request.reasoningLevel,
             signal,
-            onHttpError: handleAnthropicHttpError,
+            onHttpError,
             readChunk: readAnthropicStreamChunk,
             finalizeStream: finalizeAnthropicStream,
             streamContext,
@@ -1666,16 +1837,12 @@ async function translateWithAnthropic(text, retryLimit, signal, targetLanguage =
         })), retryLimit, signal);
     }
     return performTranslation(async () => {
-        const { response, data } = await fetchJsonWithTimeout('https://api.anthropic.com/v1/messages', {
-            method: 'POST',
-            headers,
-            body: JSON.stringify(requestBody),
-            signal
-        }, actualTimeout);
-        if (!response.ok) handleAnthropicHttpError(response, data);
+        const { response, data } = await postProviderRequest(request, signal, actualTimeout);
+        if (!response.ok) onHttpError(response, data);
         recordApiUsage('anthropic', readUsageTokens(data));
-        if (data?.stop_reason === 'max_tokens') throw createTranslationError('maxTokensError');
-        const responseText = data?.content?.[0]?.text || '';
+        throwIfAnthropicRefused(data?.stop_reason, data?.stop_details);
+        if (anthropicOutputTruncated(data?.stop_reason)) throw createTranslationError('maxTokensError');
+        const responseText = readAnthropicTextContent(data?.content);
         if (!responseText) throw createTranslationError('emptyResponse');
         return parseTranslationResponse(responseText);
     }, retryLimit, signal);
@@ -1965,7 +2132,8 @@ function createSelectionPrompt(sourceText, targetLanguage) {
 Rules:
 - Output the translation only. No preface, explanation, notes, quotation marks, or markdown fences.
 - Keep the original line breaks, paragraph splits, and list markers.
-- Leave proper nouns, brand and product names, code identifiers, URLs, email addresses, file paths, and numbers as they are.
+- Translate nouns, including personal, place, and organization names, the way ${targetLanguage} normally renders them, transliterating into the target script when that is the conventional form.
+- Leave as written only what must not change: code identifiers, URLs, email addresses, file paths, numbers, brand and product names, terms whose translation would change their meaning, and names conventionally written in the source language.
 - If the text is already written in ${targetLanguage}, repeat it unchanged.
 
 Text:
@@ -1973,7 +2141,7 @@ ${sourceText}`;
 }
 
 function selectionOutputTokenLimit(maxToken) {
-    return Math.min(maxToken || DEFAULTS.maxToken, SELECTION_MAX_OUTPUT_TOKENS);
+    return Math.min(explicitOutputTokens(maxToken) ?? SELECTION_MAX_OUTPUT_TOKENS, SELECTION_MAX_OUTPUT_TOKENS);
 }
 
 function finishSelectionText(responseText, truncated) {
@@ -1985,22 +2153,14 @@ function finishSelectionText(responseText, truncated) {
 }
 
 async function selectionRequestGemini(prompt, retryLimit, signal) {
-    const { geminiApiKey: apiKey, geminiModel: model, maxToken, timeout } = await new Promise(resolve =>
-        chrome.storage.local.get(['geminiApiKey', 'geminiModel', 'maxToken', 'timeout'], resolve));
-    if (!apiKey) throw new Error(errorMessages.apiKeyNotSet);
-    const actualModel = (model || '').trim() || DEFAULTS.geminiModel;
-    const actualTimeout = timeout || DEFAULTS.timeout;
-    const generationConfig = { maxOutputTokens: selectionOutputTokenLimit(maxToken) };
-    if (geminiAllowsCustomTemperature(actualModel)) generationConfig.temperature = 0.2;
+    const settings = await new Promise(resolve =>
+        chrome.storage.local.get(['geminiApiKey', 'geminiModel', 'geminiReasoning', 'maxToken', 'timeout'], resolve));
+    if (!settings.geminiApiKey) throw new Error(errorMessages.apiKeyNotSet);
+    const actualTimeout = settings.timeout || DEFAULTS.timeout;
+    const request = buildGeminiRequest(settings, prompt, selectionOutputTokenLimit(settings.maxToken), { json: false, stream: false });
     return performTranslation(async () => {
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(actualModel)}:generateContent`;
-        const { response, data } = await fetchJsonWithTimeout(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
-            body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig }),
-            signal
-        }, actualTimeout);
-        if (!response.ok) handleGeminiHttpError(response, data);
+        const { response, data } = await postProviderRequest(request, signal, actualTimeout);
+        if (!response.ok) handleGeminiHttpError(response, data, request.reasoningSent);
         recordApiUsage('gemini', readUsageTokens(data));
         const candidate = data?.candidates?.[0];
         if (!candidate) {
@@ -2011,30 +2171,19 @@ async function selectionRequestGemini(prompt, retryLimit, signal) {
         if (candidate.finishReason === 'SAFETY' || candidate.finishReason === 'BLOCKLIST' || candidate.finishReason === 'PROHIBITED_CONTENT') {
             throw new Error(`${errorMessages.invalidRequest} (content blocked: ${candidate.finishReason})`);
         }
-        const parts = candidate.content?.parts;
-        const responseText = Array.isArray(parts) ? parts.map(p => p?.text || '').join('') : '';
-        return finishSelectionText(responseText, candidate.finishReason === 'MAX_TOKENS');
+        return finishSelectionText(readGeminiTextParts(candidate.content?.parts), candidate.finishReason === 'MAX_TOKENS');
     }, retryLimit, signal);
 }
 
 async function selectionRequestOpenAI(prompt, retryLimit, signal) {
-    const { openaiApiKey: apiKey, openaiModel: model, maxToken, timeout } = await new Promise(resolve =>
-        chrome.storage.local.get(['openaiApiKey', 'openaiModel', 'maxToken', 'timeout'], resolve));
-    if (!apiKey) throw new Error(errorMessages.apiKeyNotSet);
-    const actualModel = (model || '').trim() || DEFAULTS.openaiModel;
-    const actualTimeout = timeout || DEFAULTS.timeout;
+    const settings = await new Promise(resolve =>
+        chrome.storage.local.get(['openaiApiKey', 'openaiModel', 'openaiReasoning', 'maxToken', 'timeout'], resolve));
+    if (!settings.openaiApiKey) throw new Error(errorMessages.apiKeyNotSet);
+    const actualTimeout = settings.timeout || DEFAULTS.timeout;
+    const request = buildOpenAIRequest(settings, prompt, selectionOutputTokenLimit(settings.maxToken), { json: false, stream: false });
     return performTranslation(async () => {
-        const { response, data } = await fetchJsonWithTimeout('https://api.openai.com/v1/chat/completions', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-            body: JSON.stringify({
-                model: actualModel,
-                messages: [{ role: 'user', content: prompt }],
-                max_completion_tokens: selectionOutputTokenLimit(maxToken)
-            }),
-            signal
-        }, actualTimeout);
-        if (!response.ok) handleOpenAIHttpError(response, data);
+        const { response, data } = await postProviderRequest(request, signal, actualTimeout);
+        if (!response.ok) handleOpenAIHttpError(response, data, request.reasoningSent);
         recordApiUsage('openai', readUsageTokens(data));
         const choice = data?.choices?.[0];
         if (!choice) throw new Error(`${errorMessages.unknownError} (no choices)`);
@@ -2043,63 +2192,34 @@ async function selectionRequestOpenAI(prompt, retryLimit, signal) {
 }
 
 async function selectionRequestCompatible(prompt, retryLimit, signal) {
-    const { compatibleApiKey: apiKey, compatibleModel: model, compatibleEndpoint: endpoint, maxToken, timeout } = await new Promise(resolve =>
-        chrome.storage.local.get(['compatibleApiKey', 'compatibleModel', 'compatibleEndpoint', 'maxToken', 'timeout'], resolve));
-    if (!endpoint) throw new Error(errorMessages.endpointNotSet);
-    const actualModel = (model || '').trim();
-    if (!actualModel) throw new Error(errorMessages.modelNotSet);
-    const actualTimeout = timeout || DEFAULTS.timeout;
-    const requestBody = {
-        model: actualModel,
-        messages: [{ role: 'user', content: prompt }],
-        temperature: 0.2,
-        max_tokens: selectionOutputTokenLimit(maxToken)
-    };
-    const headers = { 'Content-Type': 'application/json' };
-    if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`;
+    const settings = await new Promise(resolve =>
+        chrome.storage.local.get(['compatibleApiKey', 'compatibleModel', 'compatibleEndpoint', 'compatibleReasoning', 'compatibleExtraParams', 'maxToken', 'timeout'], resolve));
+    if (!settings.compatibleEndpoint) throw new Error(errorMessages.endpointNotSet);
+    if (!(settings.compatibleModel || '').trim()) throw new Error(errorMessages.modelNotSet);
+    const actualTimeout = settings.timeout || DEFAULTS.timeout;
+    const request = buildCompatibleRequest(settings, prompt, selectionOutputTokenLimit(settings.maxToken), { stream: false });
     return performTranslation(async () => {
-        const { response, data } = await fetchJsonWithTimeout(endpoint.trim(), {
-            method: 'POST',
-            headers,
-            body: JSON.stringify(requestBody),
-            signal
-        }, actualTimeout);
-        if (!response.ok) handleOpenAIHttpError(response, data);
+        const { response, data } = await postProviderRequest(request, signal, actualTimeout);
+        if (!response.ok) handleOpenAIHttpError(response, data, request.reasoningSent);
         recordApiUsage('openai-compatible', readUsageTokens(data));
         const choice = data?.choices?.[0];
         if (!choice) throw new Error(`${errorMessages.unknownError} (no choices)`);
-        return finishSelectionText(choice.message?.content || '', choice.finish_reason === 'length');
+        return finishSelectionText(stripLeadingThinkBlock(choice.message?.content || ''), choice.finish_reason === 'length');
     }, retryLimit, signal);
 }
 
 async function selectionRequestAnthropic(prompt, retryLimit, signal) {
-    const { anthropicApiKey: apiKey, anthropicModel: model, maxToken, timeout } = await new Promise(resolve =>
-        chrome.storage.local.get(['anthropicApiKey', 'anthropicModel', 'maxToken', 'timeout'], resolve));
-    if (!apiKey) throw new Error(errorMessages.apiKeyNotSet);
-    const actualModel = (model || '').trim() || DEFAULTS.anthropicModel;
-    const actualTimeout = timeout || DEFAULTS.timeout;
+    const settings = await new Promise(resolve =>
+        chrome.storage.local.get(['anthropicApiKey', 'anthropicModel', 'anthropicReasoning', 'maxToken', 'timeout'], resolve));
+    if (!settings.anthropicApiKey) throw new Error(errorMessages.apiKeyNotSet);
+    const actualTimeout = settings.timeout || DEFAULTS.timeout;
+    const request = buildAnthropicRequest(settings, prompt, selectionOutputTokenLimit(settings.maxToken), { stream: false });
     return performTranslation(async () => {
-        const { response, data } = await fetchJsonWithTimeout('https://api.anthropic.com/v1/messages', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'x-api-key': apiKey,
-                'anthropic-version': '2023-06-01',
-                'anthropic-dangerous-direct-browser-access': 'true'
-            },
-            body: JSON.stringify({
-                model: actualModel,
-                max_tokens: Math.min(selectionOutputTokenLimit(maxToken), ANTHROPIC_MAX_OUTPUT_TOKENS),
-                messages: [{ role: 'user', content: prompt }]
-            }),
-            signal
-        }, actualTimeout);
-        if (!response.ok) handleAnthropicHttpError(response, data);
+        const { response, data } = await postProviderRequest(request, signal, actualTimeout);
+        if (!response.ok) handleAnthropicHttpError(response, data, request.reasoningSent);
         recordApiUsage('anthropic', readUsageTokens(data));
-        const responseText = Array.isArray(data?.content)
-            ? data.content.map(part => part?.type === 'text' ? (part.text || '') : '').join('')
-            : '';
-        return finishSelectionText(responseText, data?.stop_reason === 'max_tokens');
+        throwIfAnthropicRefused(data?.stop_reason, data?.stop_details);
+        return finishSelectionText(readAnthropicTextContent(data?.content), anthropicOutputTruncated(data?.stop_reason));
     }, retryLimit, signal);
 }
 

@@ -27,7 +27,9 @@
         newContentTitle: 'New content on this page is not translated',
         blocksTooLong: '{count} blocks are longer than the output token limit and were left untranslated. Raise the max output tokens in settings.',
         cacheSaveFailed: 'Could not save the translation for this page. It will be translated again next time.',
-        cacheStorageFull: 'Storage is full. The translation for this page was not saved.'
+        cacheStorageFull: 'Storage is full. The translation for this page was not saved.',
+        waitingForModel: 'Waiting for the model · {elapsed} elapsed',
+        blocksTimedOut: '{count} sections stopped because reasoning ran past the timeout. Lower Reasoning or raise the timeout in settings, then try again.'
     };
 
     const RTL_LANGS = new Set(['ar', 'ur', 'he', 'fa']);
@@ -69,7 +71,9 @@
             cacheSaveFailed: t.cacheSaveFailed,
             cacheStorageFull: t.cacheStorageFull,
             someBlocksFailed: t.someBlocksFailed,
-            retryFailedButton: t.retryFailedButton
+            retryFailedButton: t.retryFailedButton,
+            waitingForModel: t.waitingForModel,
+            blocksTimedOut: t.blocksTimedOut
         };
     }
 
@@ -98,7 +102,6 @@
         batchSize: 500,
         maxBatchLength: 65535,
         delayBetweenRequests: 10000,
-        maxToken: 65536,
         concurrencyLimit: 10,
         maxRetries: 3,
         timeout: 180
@@ -438,6 +441,8 @@
     const TEMPORARY_BATCH_ERROR_CODES = new Set(['serverError', 'requestTimeout', 'jsonParseFailed', 'jsonExtractFailed', 'emptyResponse']);
     let totalBatches = 0;
     let batchesProcessed = 0;
+    let modelWaitStartedAt = 0;
+    let modelResponded = false;
 
     let translationUnits = new Map();
     let activeObservers = [];
@@ -475,6 +480,7 @@
     let cacheRestoreMap = null;
     let cacheRestoreActive = false;
     let cacheReadError = '';
+    const POPUP_STATE_MEMO_MS = 1500;
     let cacheCoverageMemo = null;
     let popupRemainingMemo = { ts: 0, value: false };
     const sessionTranslationMemo = new Map();
@@ -583,7 +589,6 @@
                     const isAlwaysTranslate = !isExcluded && siteListMatchesUrl(items.alwaysTranslateList, currentUrl);
                     if (!isReactSpa && !isExcluded) {
                         const restored = await tryRestoreFromCache(chosenLang);
-                        measureCacheCoverage();
                         const optedIntoAutoTranslation = (restored || cacheRestoreActive) && (items.realTimeTranslation === true
                             || isAlwaysTranslate
                             || (items.autoRetranslateDomain !== false && await new Promise(resolve => querySessionDomainKnown(resolve))));
@@ -1039,22 +1044,50 @@
         return applied;
     }
 
-    function measureCacheCoverage() {
-        if (cacheCoverageMemo) return;
+    function getTranslationUnitTextLength(block) {
+        const tu = buildTU(block);
+        if (!tu || !tu.hasTranslatableText) return 0;
+        let text = '';
+        for (const run of tu.textRuns) {
+            for (const node of run.nodes) text += node.textContent || '';
+        }
+        return text.trim().replace(/\s+/g, ' ').length;
+    }
+
+    function measureCacheCoverageScan() {
+        const map = (cacheRestoreMap && cacheRestoreMap.size > 0) ? cacheRestoreMap : null;
         let matched = 0, total = 0;
+        for (const block of collectCacheableBlocks()) {
+            if (!block.isConnected) continue;
+            const status = block.dataset?.translationStatus;
+            if (status === 'translated' || status === 'processing') continue;
+            const unitLength = getTranslationUnitTextLength(block);
+            if (unitLength === 0) continue;
+            total += unitLength;
+            if (!map) continue;
+            const text = getBlockOriginalText(block);
+            if (!text) continue;
+            if (map.has(compositeBlockKey(computeBlockTextKey(text), block.tagName))) matched += unitLength;
+        }
+        return { matched, total };
+    }
+
+    function measureCacheCoverage() {
+        const now = Date.now();
+        if (cacheCoverageMemo && cacheCoverageMemo.map === cacheRestoreMap && now - cacheCoverageMemo.ts < POPUP_STATE_MEMO_MS) {
+            return cacheCoverageMemo;
+        }
+        let matched = 0, total = 0;
+        let scanError = '';
         try {
-            for (const block of collectCacheableBlocks()) {
-                if (!block.isConnected) continue;
-                const text = getBlockOriginalText(block);
-                if (!text) continue;
-                total += text.length;
-                if (cacheRestoreMap) {
-                    const key = compositeBlockKey(computeBlockTextKey(text), block.tagName);
-                    if (cacheRestoreMap.has(key)) matched += text.length;
-                }
-            }
-        } catch (e) { }
-        cacheCoverageMemo = { matched, total, error: cacheReadError || '' };
+            ({ matched, total } = withScanCache(measureCacheCoverageScan));
+        } catch (e) {
+            matched = 0;
+            total = 0;
+            scanError = 'coverageScanFailed: ' + ((e && e.message) || String(e));
+        }
+        cacheCoverageMemo = { ts: now, map: cacheRestoreMap, matched, total, error: cacheReadError || scanError };
+        return cacheCoverageMemo;
     }
 
     function getStoredTargetLanguage() {
@@ -2006,6 +2039,8 @@
         translatedUnitsCount = 0;
         totalBatches = 0;
         batchesProcessed = 0;
+        modelWaitStartedAt = 0;
+        modelResponded = false;
         expectedTotalUnits = 0;
         oversizedSkippedCount = 0;
         translationProgress = 0;
@@ -2035,7 +2070,7 @@
                 return;
             }
 
-            const maxBatchLength = Math.min(Math.floor((config.maxToken || DEFAULTS.maxToken) * 3), DEFAULTS.maxBatchLength);
+            const maxBatchLength = Number.isFinite(config.maxToken) ? Math.min(Math.floor(config.maxToken * 3), DEFAULTS.maxBatchLength) : DEFAULTS.maxBatchLength;
             const tus = [];
             const oversizedTus = [];
             for (const tu of allTus) {
@@ -2089,6 +2124,7 @@
                 processBatch(batch, runGeneration)
                     .then(translations => {
                         if (runGeneration !== translationRunGeneration || translationCancelled) return;
+                        modelResponded = true;
                         batchesProcessed++;
                         markMissingBatchUnitsFailed(batch, translations);
                         for (const id of unitsNotReturned(batch, translations)) resendUnitIds.add(id);
@@ -2107,6 +2143,7 @@
                             for (const item of batch) resendUnitIds.add(item.id);
                             return;
                         }
+                        if (isReasoningTimeoutError(error)) markBatchUnitsTimedOut(batch);
                         failures.push(error);
                         if (error?.translationFatal === true && !fatalErrorCancelPending && !translationCancelled) {
                             fatalErrorCancelPending = true;
@@ -2149,10 +2186,13 @@
                 handleCancellation(lang);
             } else if (failures.length > 0) {
                 const fatalError = failures.find(f => f?.translationFatal === true);
-                if (!fatalError && translatedUnitsCount > 0) {
-                    finishTranslationWithFailures(failures[0]);
-                } else {
+                const blockingFailure = failures.find(f => !isReasoningTimeoutError(f));
+                if (fatalError || translatedUnitsCount === 0) {
                     handleTranslationError(fatalError || failures[0], lang);
+                } else if (blockingFailure) {
+                    finishTranslationWithFailures(blockingFailure);
+                } else {
+                    finishTranslation();
                 }
             } else if (cancelledBatchCount > 0) {
                 handleCancellation(lang);
@@ -2266,6 +2306,7 @@
             translations.push({ id: tuId, translatedTemplate: update.translatedTemplate });
         }
         if (translations.length === 0) return;
+        modelResponded = true;
         markStreamingActive();
         domUpdateQueue.push({ generation: registryEntry.generation, translations });
         applyQueuedUpdates();
@@ -2334,6 +2375,10 @@
         return TEMPORARY_BATCH_ERROR_CODES.has(translationErrorCodeOf(error));
     }
 
+    function isReasoningTimeoutError(error) {
+        return translationErrorCodeOf(error) === 'reasoningTimeout';
+    }
+
     function forEachMarkedElement(selector, visit) {
         const queue = [];
         if (document.body) queue.push(document.body);
@@ -2357,12 +2402,20 @@
         });
     }
 
-    function countVisibleFailedBlocks() {
-        let count = 0;
+    function countFailedBlocksByReason() {
+        const counts = { timedOut: 0, other: 0 };
         forEachMarkedElement('[data-translation-status="failed"]', el => {
-            if (el.dataset?.translationFailReason !== 'oversized') count++;
+            const reason = el.dataset?.translationFailReason;
+            if (reason === 'oversized') return;
+            if (reason === 'timeout') counts.timedOut++;
+            else counts.other++;
         });
-        return count;
+        return counts;
+    }
+
+    function countVisibleFailedBlocks() {
+        const counts = countFailedBlocksByReason();
+        return counts.timedOut + counts.other;
     }
 
     function resetPageTranslationState() {
@@ -2425,6 +2478,9 @@
         jsonExtractFailed: 'errBadResponse',
         emptyResponse: 'errBadResponse',
         invalidRequest: 'errInvalidRequest',
+        contentRefused: 'errContentRefused',
+        reasoningNotSupported: 'errReasoningNotSupported',
+        reasoningTimeout: 'errReasoningTimeout',
         unknownError: 'errUnknown',
         extensionReloaded: 'errExtensionReloaded'
     };
@@ -2437,6 +2493,8 @@
         insufficientQuota: 'settings',
         modelNotFound: 'settings',
         invalidRequest: 'settings',
+        reasoningNotSupported: 'settings',
+        reasoningTimeout: 'settings',
         maxTokensError: 'settings',
         blockTooLong: 'settings',
         nothingTranslated: 'retry',
@@ -2447,6 +2505,7 @@
         emptyResponse: 'retry',
         jsonParseFailed: 'retry',
         jsonExtractFailed: 'retry',
+        contentRefused: 'close',
         unknownError: 'close',
         extensionReloaded: 'close'
     };
@@ -2894,6 +2953,19 @@
         }
     }
 
+    function markBatchUnitsTimedOut(batch) {
+        if (!Array.isArray(batch)) return;
+        for (const item of batch) {
+            const block = translationUnits.get(item.id)?.block;
+            if (!block || !block.isConnected) continue;
+            if (block.dataset?.translationStatus === 'translated') continue;
+            try {
+                block.dataset.translationStatus = 'failed';
+                block.dataset.translationFailReason = 'timeout';
+            } catch (e) { }
+        }
+    }
+
     function markOversizedUnitsSkipped(oversizedTus) {
         for (const tu of oversizedTus) {
             const block = tu?.block;
@@ -2950,6 +3022,7 @@
         const keyToTuId = new Map();
         batch.forEach((item, index) => keyToTuId.set(`TU_${index}`, item.id));
         streamingBatchRegistry.set(batchId, { keyToTuId, generation: runGeneration });
+        if (!modelWaitStartedAt) modelWaitStartedAt = Date.now();
         return new Promise((resolve, reject) => {
             sendRuntimeMessage({ action: "translateBatch", batch, batchId }, (response, failure) => {
                 streamingBatchRegistry.delete(batchId);
@@ -2965,13 +3038,18 @@
         });
     }
 
+    function unitAwaitingTranslation(id) {
+        const block = translationUnits.get(id)?.block;
+        return !!block && block.isConnected && block.dataset?.translationStatus !== 'translated';
+    }
+
     async function resendOnce(unitIds, runGeneration) {
-        const ids = Array.from(unitIds).slice(0, AUTO_RESEND_MAX_UNITS);
+        const ids = Array.from(unitIds).filter(unitAwaitingTranslation).slice(0, AUTO_RESEND_MAX_UNITS);
         for (const id of ids) {
             if (translationCancelled || fatalErrorCancelPending) break;
             if (runGeneration !== translationRunGeneration) break;
+            if (!unitAwaitingTranslation(id)) continue;
             const tu = translationUnits.get(id);
-            if (!tu || !tu.block || !tu.block.isConnected) continue;
             try {
                 const translations = await processBatch([{ id: tu.id, template: tu.template }], runGeneration);
                 if (translationCancelled || runGeneration !== translationRunGeneration) break;
@@ -4025,9 +4103,12 @@
                 const skipped = oversizedSkippedLabel();
                 if (skipped) headText.appendChild(createUiElement('div', 'sub', skipped));
             }
-            const failedCount = countVisibleFailedBlocks();
-            if (failedCount > 0 && st.someBlocksFailed) {
-                headText.appendChild(createUiElement('div', 'sub', st.someBlocksFailed.replace('{count}', failedCount)));
+            const failed = countFailedBlocksByReason();
+            if (failed.other > 0 && st.someBlocksFailed) {
+                headText.appendChild(createUiElement('div', 'sub', st.someBlocksFailed.replace('{count}', failed.other)));
+            }
+            if (failed.timedOut > 0 && st.blocksTimedOut) {
+                headText.appendChild(createUiElement('div', 'sub', st.blocksTimedOut.replace('{count}', failed.timedOut)));
             }
         }
         head.appendChild(headText);
@@ -4204,6 +4285,16 @@
         renderMiniProgress(translationProgress);
     }
 
+    function isWaitingForModel() {
+        return isTranslating && !translationCancelled && !translationHasError
+            && modelWaitStartedAt > 0 && !modelResponded && typeof st.waitingForModel === 'string';
+    }
+
+    function formatElapsed(ms) {
+        const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+        return Math.floor(totalSeconds / 60) + ':' + String(totalSeconds % 60).padStart(2, '0');
+    }
+
     function updateProgress(forcePercent = null) {
         if (typeof forcePercent === 'number') {
             translationProgress = Math.max(0, Math.min(100, forcePercent));
@@ -4226,11 +4317,13 @@
                 progressBar.setAttribute('aria-valuenow', translationProgress.toFixed(0));
             }
             if (statsElem) {
-                statsElem.textContent = st.progressTemplate
-                    .replace('{currentBatch}', batchesProcessed)
-                    .replace('{totalBatch}', totalBatches)
-                    .replace('{translatedUnits}', translatedUnitsCount)
-                    .replace('{totalUnits}', expectedTotalUnits);
+                statsElem.textContent = isWaitingForModel()
+                    ? st.waitingForModel.replace('{elapsed}', formatElapsed(Date.now() - modelWaitStartedAt))
+                    : st.progressTemplate
+                        .replace('{currentBatch}', batchesProcessed)
+                        .replace('{totalBatch}', totalBatches)
+                        .replace('{translatedUnits}', translatedUnitsCount)
+                        .replace('{totalUnits}', expectedTotalUnits);
             }
         }
         renderMiniProgress(translationProgress);
@@ -4311,7 +4404,7 @@
     function computeHasRemainingForPopup() {
         if (isTranslating || isApplyingUpdates) return false;
         const now = Date.now();
-        if (now - popupRemainingMemo.ts < 1500) return popupRemainingMemo.value;
+        if (now - popupRemainingMemo.ts < POPUP_STATE_MEMO_MS) return popupRemainingMemo.value;
         let remaining = false;
         try { remaining = hasTranslatableUnitsInDocument(); } catch (e) { remaining = false; }
         popupRemainingMemo = { ts: now, value: remaining };
@@ -4338,6 +4431,7 @@
         if (isTranslating || isApplyingUpdates || translatingSubframes.size > 0) translationStatus = 'translating';
         else if (translationHasError) translationStatus = 'error';
         else if (showingTranslation > 0 || revertedBlocks > 0) translationStatus = 'translated';
+        const coverage = translationStatus === 'idle' ? measureCacheCoverage() : null;
         return {
             translationStatus,
             showingOriginal: showingTranslation === 0 && revertedBlocks > 0,
@@ -4349,9 +4443,9 @@
                 translatedFragments: translatedUnitsCount,
                 totalFragments: expectedTotalUnits
             },
-            restorableChars: (cacheCoverageMemo && cacheCoverageMemo.matched) || 0,
-            totalChars: (cacheCoverageMemo && cacheCoverageMemo.total) || 0,
-            cacheReadError: (cacheCoverageMemo && cacheCoverageMemo.error) || '',
+            restorableChars: coverage ? coverage.matched : 0,
+            totalChars: coverage ? coverage.total : 0,
+            cacheReadError: coverage ? coverage.error : '',
             hasUntranslatedText: translationStatus === 'translated' ? computeHasRemainingForPopup() : false
         };
     }
@@ -4723,7 +4817,7 @@
         useSessionMemoForLanguage(lang);
         try { applyStrings(lang); } catch (e) { }
         highlightTranslated = config.toggleBlueBackground === true;
-        const maxBatchLength = Math.min(Math.floor((config.maxToken || DEFAULTS.maxToken) * 3), DEFAULTS.maxBatchLength);
+        const maxBatchLength = Number.isFinite(config.maxToken) ? Math.min(Math.floor(config.maxToken * 3), DEFAULTS.maxBatchLength) : DEFAULTS.maxBatchLength;
 
         const tus = [];
         const byId = new Map();

@@ -187,6 +187,38 @@
               <input type="text" id="aiModel" class="ltr-input" autocomplete="off" spellcheck="false">
             </div>
           </div>
+          <div class="row" id="reasoningGroup">
+            <div class="row-main">
+              <label class="row-label" for="reasoningLevel" data-i18n="reasoningLabel">Reasoning</label>
+              <div class="row-desc" id="reasoningDesc"></div>
+              <div class="row-desc warn-text" id="reasoningStale" hidden></div>
+            </div>
+            <div class="row-control">
+              <select id="reasoningLevel"></select>
+            </div>
+          </div>
+          <div class="row stack" id="extraParamsGroup" hidden>
+            <div class="row-main">
+              <label class="row-label" for="extraParamsMode" data-i18n="extraParamsLabel">Extra parameters</label>
+              <div class="row-desc" data-i18n="optExtraParamsDesc"></div>
+            </div>
+            <div class="row-control">
+              <select id="extraParamsMode">
+                <option value="list" data-i18n="optExtraParamModeList">List</option>
+                <option value="raw" data-i18n="optExtraParamModeRaw">JSON</option>
+              </select>
+            </div>
+            <div class="row-control chip-list" id="extraParamRows"></div>
+            <div class="row-control add-row" id="extraParamAddRow">
+              <input type="text" id="extraParamKey" class="ltr-input" data-i18n-placeholder="optExtraParamKeyPlaceholder" autocomplete="off" spellcheck="false">
+              <input type="text" id="extraParamValue" class="ltr-input" data-i18n-placeholder="optExtraParamValuePlaceholder" autocomplete="off" spellcheck="false">
+              <button class="btn-tonal" type="button" id="extraParamAddBtn" data-i18n="optAdd">Add</button>
+            </div>
+            <div class="row-control field-wide" id="extraParamRawRow" hidden>
+              <textarea id="extraParamRaw" class="ltr-input" rows="6" spellcheck="false"></textarea>
+            </div>
+            <div class="row-desc warn-text" id="extraParamError" hidden></div>
+          </div>
         </div>
       </section>
 
@@ -389,7 +421,7 @@
               <div class="row-desc" id="maxTokenDesc" data-i18n="optMaxTokenDesc"></div>
             </div>
             <div class="row-control">
-              <input type="number" id="maxToken" min="1" max="1000000" placeholder="65536">
+              <input type="number" id="maxToken" min="1" max="1000000" data-i18n-placeholder="maxTokenAuto">
               <span class="unit" data-i18n="optUnitTokens"></span>
             </div>
           </div>
@@ -429,7 +461,7 @@
               <div class="row-desc" data-i18n="optTimeoutDesc"></div>
             </div>
             <div class="row-control">
-              <input type="number" id="timeout" min="1" max="600" placeholder="180">
+              <input type="number" id="timeout" min="1" max="600" placeholder="300">
               <span class="unit" data-i18n="optUnitSeconds"></span>
             </div>
           </div>
@@ -520,6 +552,7 @@
 
   <script src="translations.js"></script>
   <script src="sitematch.js"></script>
+  <script src="modelcaps.js"></script>
   <script src="options.js"></script>
 </body>
 
