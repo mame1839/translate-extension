@@ -1,9 +1,6 @@
 const SHARED_FONT = `-apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Inter, "Hiragino Kaku Gothic ProN", "Hiragino Sans", "Yu Gothic UI", Meiryo, sans-serif`;
 
-const UI_TOKENS_CSS = `
-        :host { all: initial; }
-        * { box-sizing: border-box; }
-        .root {
+const UI_TOKEN_VARS = `
             --primary: #1a73e8;
             --on-primary: #ffffff;
             --primary-soft: rgba(26, 115, 232, 0.18);
@@ -26,16 +23,9 @@ const UI_TOKENS_CSS = `
             --on-warning-container: #6d5100;
             --ring: rgba(26, 115, 232, 0.35);
             --elev-3: 0 8px 24px -6px rgba(23, 23, 40, 0.22), 0 2px 8px rgba(23, 23, 40, 0.10);
-            --ease: cubic-bezier(0.2, 0, 0, 1);
-            font-family: ${SHARED_FONT};
-            font-size: 13.5px;
-            line-height: 1.5;
-            color: var(--text);
-            font-feature-settings: "kern" 1, "liga" 1, "palt" 1;
-            -webkit-font-smoothing: antialiased;
-        }
-        @media (prefers-color-scheme: dark) {
-            .root {
+            --ease: cubic-bezier(0.2, 0, 0, 1);`;
+
+const UI_TOKEN_VARS_DARK = `
                 --primary: #8ab4f8;
                 --on-primary: #062e6f;
                 --primary-soft: rgba(138, 180, 248, 0.20);
@@ -57,7 +47,21 @@ const UI_TOKENS_CSS = `
                 --warning-container: #574400;
                 --on-warning-container: #ffe08d;
                 --ring: rgba(138, 180, 248, 0.4);
-                --elev-3: 0 8px 24px -6px rgba(0, 0, 0, 0.55), 0 2px 8px rgba(0, 0, 0, 0.35);
+                --elev-3: 0 8px 24px -6px rgba(0, 0, 0, 0.55), 0 2px 8px rgba(0, 0, 0, 0.35);`;
+
+const UI_TOKENS_CSS = `
+        :host { all: initial; }
+        * { box-sizing: border-box; }
+        .root {${UI_TOKEN_VARS}
+            font-family: ${SHARED_FONT};
+            font-size: 13.5px;
+            line-height: 1.5;
+            color: var(--text);
+            font-feature-settings: "kern" 1, "liga" 1, "palt" 1;
+            -webkit-font-smoothing: antialiased;
+        }
+        @media (prefers-color-scheme: dark) {
+            .root {${UI_TOKEN_VARS_DARK}
             }
         }
     `;

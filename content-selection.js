@@ -4,25 +4,23 @@ const SELECTION_MAX_CHARS = 5000;
 
 const SELECTION_FONT = `-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, "Hiragino Kaku Gothic ProN", "Yu Gothic UI", Meiryo, sans-serif`;
 
-const SELECTION_EASE = 'cubic-bezier(0.2, 0, 0, 1)';
-
 const SELECTION_CSS = `
         :host { all: initial; }
         * { box-sizing: border-box; }
-        .sel-card {
+        .sel-card {${UI_TOKEN_VARS}
             width: 340px;
             max-width: calc(100vw - 24px);
             padding: 12px 14px 14px;
-            background: #ffffff;
-            border: 1px solid rgba(27, 27, 33, 0.09);
+            background: var(--surface);
+            border: 1px solid var(--outline-soft);
             border-radius: 16px;
             box-shadow: 0 2px 6px 2px rgba(23, 23, 40, 0.08), 0 1px 2px rgba(23, 23, 40, 0.10);
-            color: #1b1b21;
+            color: var(--text);
             font-family: ${SELECTION_FONT};
             font-size: 13.5px;
             line-height: 1.5;
             -webkit-font-smoothing: antialiased;
-            animation: selCardIn 160ms ${SELECTION_EASE};
+            animation: selCardIn 160ms var(--ease);
         }
         @keyframes selCardIn {
             from { opacity: 0; transform: translateY(-4px); }
@@ -51,12 +49,12 @@ const SELECTION_CSS = `
             font-size: 12px;
             font-weight: 600;
             letter-spacing: 0.04em;
-            color: #1a73e8;
+            color: var(--primary);
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
         }
-        .sel-title.error { color: #ba1a1a; }
+        .sel-title.error { color: var(--error); }
         .sel-icon-btn {
             width: 28px;
             height: 28px;
@@ -68,18 +66,18 @@ const SELECTION_CSS = `
             border: none;
             border-radius: 999px;
             background: transparent;
-            color: #4a4952;
+            color: var(--text-2);
             cursor: pointer;
-            transition: background-color 150ms ${SELECTION_EASE};
+            transition: background-color 150ms var(--ease);
         }
         .sel-icon-btn:hover { background: #f5f5fa; }
-        .sel-icon-btn:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.35); }
+        .sel-icon-btn:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--ring); }
         .sel-loading {
             display: flex;
             align-items: center;
             gap: 10px;
             padding: 2px 0 4px;
-            color: #4a4952;
+            color: var(--text-2);
         }
         .sel-spinner {
             width: 16px;
@@ -87,7 +85,7 @@ const SELECTION_CSS = `
             flex-shrink: 0;
             border-radius: 50%;
             border: 2px solid rgba(26, 115, 232, 0.25);
-            border-top-color: #1a73e8;
+            border-top-color: var(--primary);
             animation: selSpin 800ms linear infinite;
         }
         @keyframes selSpin { to { transform: rotate(360deg); } }
@@ -98,7 +96,7 @@ const SELECTION_CSS = `
             overflow-wrap: anywhere;
             white-space: pre-wrap;
             font-size: 14px;
-            color: #1b1b21;
+            color: var(--text);
         }
         .sel-error {
             margin: 0;
@@ -108,8 +106,8 @@ const SELECTION_CSS = `
             white-space: pre-wrap;
             padding: 10px 12px;
             border-radius: 12px;
-            background: #ffe1de;
-            color: #7a1210;
+            background: var(--error-container);
+            color: var(--on-error-container);
             font-size: 12.5px;
         }
         .sel-actions {
@@ -129,37 +127,26 @@ const SELECTION_CSS = `
             font-size: 13px;
             font-weight: 600;
             cursor: pointer;
-            transition: background-color 150ms ${SELECTION_EASE}, box-shadow 150ms ${SELECTION_EASE};
+            transition: background-color 150ms var(--ease), box-shadow 150ms var(--ease);
         }
         .sel-btn:hover { box-shadow: 0 1px 2px rgba(23, 23, 40, 0.10), 0 1px 3px 1px rgba(23, 23, 40, 0.06); }
-        .sel-btn:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.35); }
-        .sel-btn.secondary { background: transparent; color: #1a73e8; box-shadow: inset 0 0 0 1px rgba(27, 27, 33, 0.16); }
+        .sel-btn:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--ring); }
+        .sel-btn.secondary { background: transparent; color: var(--primary); box-shadow: inset 0 0 0 1px rgba(27, 27, 33, 0.16); }
         .sel-btn.secondary:hover { background: #f5f5fa; box-shadow: inset 0 0 0 1px rgba(27, 27, 33, 0.24); }
-        .sel-note { margin: 10px 0 0; overflow-wrap: anywhere; font-size: 12.5px; color: #4a4952; }
+        .sel-note { margin: 10px 0 0; overflow-wrap: anywhere; font-size: 12.5px; color: var(--text-2); }
         .sel-note.done { color: #146c2e; font-weight: 600; }
         @media (prefers-color-scheme: dark) {
-            .sel-card {
+            .sel-card {${UI_TOKEN_VARS_DARK}
                 background: #1a1a20;
-                border-color: rgba(232, 231, 240, 0.09);
-                color: #e5e4ea;
                 box-shadow: 0 2px 6px 2px rgba(0, 0, 0, 0.32), 0 1px 2px rgba(0, 0, 0, 0.4);
             }
             .sel-badge { background: #0842a0; color: #d3e3fd; }
-            .sel-title { color: #8ab4f8; }
-            .sel-title.error { color: #ffb4ab; }
-            .sel-icon-btn { color: #b6b5bf; }
             .sel-icon-btn:hover { background: #1e1e24; }
-            .sel-icon-btn:focus-visible { box-shadow: 0 0 0 3px rgba(138, 180, 248, 0.4); }
-            .sel-loading { color: #b6b5bf; }
-            .sel-spinner { border-color: rgba(138, 180, 248, 0.25); border-top-color: #8ab4f8; }
-            .sel-text { color: #e5e4ea; }
-            .sel-error { background: #6e2621; color: #ffdad5; }
+            .sel-spinner { border-color: rgba(138, 180, 248, 0.25); }
             .sel-btn { background: #0842a0; color: #d3e3fd; }
             .sel-btn:hover { box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 1px 3px 1px rgba(0, 0, 0, 0.25); }
-            .sel-btn:focus-visible { box-shadow: 0 0 0 3px rgba(138, 180, 248, 0.4); }
-            .sel-btn.secondary { background: transparent; color: #8ab4f8; box-shadow: inset 0 0 0 1px rgba(232, 231, 240, 0.18); }
+            .sel-btn.secondary { box-shadow: inset 0 0 0 1px rgba(232, 231, 240, 0.18); }
             .sel-btn.secondary:hover { background: #1e1e24; box-shadow: inset 0 0 0 1px rgba(232, 231, 240, 0.26); }
-            .sel-note { color: #b6b5bf; }
             .sel-note.done { color: #6dd58c; }
         }
     `;
