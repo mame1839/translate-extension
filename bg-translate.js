@@ -22,16 +22,7 @@ async function translateTextBatch(fragmentBatch, signal, streamContext = null) {
 
     const jsonText = JSON.stringify(payload, null, 2);
 
-    let translatedData;
-    if (provider === 'openai') {
-        translatedData = await translateWithOpenAI(jsonText, retryLimit, signal, langName, langCode, streamContext);
-    } else if (provider === 'anthropic') {
-        translatedData = await translateWithAnthropic(jsonText, retryLimit, signal, langName, langCode, streamContext);
-    } else if (provider === 'openai-compatible') {
-        translatedData = await translateWithOpenAICompatible(jsonText, retryLimit, signal, langName, langCode, streamContext);
-    } else {
-        translatedData = await translateWithGemini(jsonText, retryLimit, signal, langName, langCode, streamContext);
-    }
+    const translatedData = await translateWithProvider(provider, jsonText, retryLimit, signal, langName, langCode, streamContext);
 
     const translations = [];
     fragmentBatch.forEach((tu, index) => {

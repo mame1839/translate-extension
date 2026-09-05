@@ -137,155 +137,118 @@ function postProviderRequest(request, signal, timeout) {
     }, timeout, request.reasoningLevel);
 }
 
-async function translateWithGemini(text, retryLimit, signal, targetLanguage = 'English', targetLanguageCode, streamContext = null) {
-    const settings = await new Promise(resolve =>
-        chrome.storage.local.get(['geminiApiKey', 'geminiModel', 'geminiReasoning', 'maxToken', 'timeout'], resolve));
-    if (!settings.geminiApiKey) throw createTranslationError('apiKeyNotSet');
-    const actualTimeout = settings.timeout || DEFAULTS.timeout;
-    const prompt = createTranslationPrompt(text, targetLanguage, targetLanguageCode, await getPromptCustomSections());
-    const request = buildGeminiRequest(settings, prompt, settings.maxToken || DEFAULTS.maxToken, { json: true, stream: !!streamContext });
-    const onHttpError = (response, data) => handleGeminiHttpError(response, data, request.reasoningSent);
-    if (streamContext) {
-        return performTranslation(async () => parseTranslationResponse(await streamModelResponse({
-            url: request.url,
-            headers: request.headers,
-            body: request.body,
-            timeout: actualTimeout,
-            reasoningLevel: request.reasoningLevel,
-            signal,
-            onHttpError,
-            readChunk: readGeminiStreamChunk,
-            finalizeStream: finalizeGeminiStream,
-            streamContext,
-            provider: 'gemini'
-        })), retryLimit, signal);
+function readGeminiResponseText(data) {
+    if (!data || !Array.isArray(data.candidates) || data.candidates.length === 0) {
+        const blockReason = data?.promptFeedback?.blockReason;
+        if (blockReason) throw createTranslationError('invalidRequest', ` (blocked: ${blockReason})`);
+        throw createTranslationError('unknownError', ' (no candidates)');
     }
-    return performTranslation(async () => {
-        const { response, data } = await postProviderRequest(request, signal, actualTimeout);
-        if (!response.ok) onHttpError(response, data);
-        recordApiUsage('gemini', readUsageTokens(data));
-        if (!data || !Array.isArray(data.candidates) || data.candidates.length === 0) {
-            const blockReason = data?.promptFeedback?.blockReason;
-            if (blockReason) throw createTranslationError('invalidRequest', ` (blocked: ${blockReason})`);
-            throw createTranslationError('unknownError', ' (no candidates)');
-        }
-        const candidate = data.candidates[0];
-        if (candidate.finishReason === 'SAFETY' || candidate.finishReason === 'BLOCKLIST' || candidate.finishReason === 'PROHIBITED_CONTENT') {
-            throw createTranslationError('invalidRequest', ` (content blocked: ${candidate.finishReason})`);
-        }
-        const responseText = readGeminiTextParts(candidate.content?.parts);
-        if (candidate.finishReason === 'MAX_TOKENS') {
-            if (!responseText) throw createTranslationError('maxTokensError');
-            return parseTranslationResponse(responseText);
-        }
-        if (!responseText) throw createTranslationError('emptyResponse');
-        return parseTranslationResponse(responseText);
-    }, retryLimit, signal);
+    const candidate = data.candidates[0];
+    if (candidate.finishReason === 'SAFETY' || candidate.finishReason === 'BLOCKLIST' || candidate.finishReason === 'PROHIBITED_CONTENT') {
+        throw createTranslationError('invalidRequest', ` (content blocked: ${candidate.finishReason})`);
+    }
+    const responseText = readGeminiTextParts(candidate.content?.parts);
+    if (candidate.finishReason === 'MAX_TOKENS' && !responseText) throw createTranslationError('maxTokensError');
+    return responseText;
 }
 
-async function translateWithOpenAI(text, retryLimit, signal, targetLanguage = 'English', targetLanguageCode, streamContext = null) {
-    const settings = await new Promise(resolve =>
-        chrome.storage.local.get(['openaiApiKey', 'openaiModel', 'openaiReasoning', 'maxToken', 'timeout'], resolve));
-    if (!settings.openaiApiKey) throw createTranslationError('apiKeyNotSet');
-    const actualTimeout = settings.timeout || DEFAULTS.timeout;
-    const prompt = createTranslationPrompt(text, targetLanguage, targetLanguageCode, await getPromptCustomSections());
-    const request = buildOpenAIRequest(settings, prompt, settings.maxToken || DEFAULTS.maxToken, { json: true, stream: !!streamContext });
-    const onHttpError = (response, data) => handleOpenAIHttpError(response, data, request.reasoningSent);
-    if (streamContext) {
-        return performTranslation(async () => parseTranslationResponse(await streamModelResponse({
-            url: request.url,
-            headers: request.headers,
-            body: request.body,
-            timeout: actualTimeout,
-            reasoningLevel: request.reasoningLevel,
-            signal,
-            onHttpError,
+function readOpenAIResponseText(data) {
+    const choice = data?.choices?.[0];
+    if (!choice) throw createTranslationError('unknownError', ' (no choices)');
+    if (choice.finish_reason === 'length') throw createTranslationError('maxTokensError');
+    return choice.message?.content || '';
+}
+
+function readCompatibleResponseText(data) {
+    return stripLeadingThinkBlock(readOpenAIResponseText(data));
+}
+
+function readAnthropicResponseText(data) {
+    throwIfAnthropicRefused(data?.stop_reason, data?.stop_details);
+    if (anthropicOutputTruncated(data?.stop_reason)) throw createTranslationError('maxTokensError');
+    return readAnthropicTextContent(data?.content);
+}
+
+function providerSpec(provider) {
+    if (provider === 'openai') {
+        return {
+            name: 'openai',
+            settingsKeys: ['openaiApiKey', 'openaiModel', 'openaiReasoning', 'maxToken', 'timeout'],
+            assertConfigured: settings => { if (!settings.openaiApiKey) throw createTranslationError('apiKeyNotSet'); },
+            buildRequest: buildOpenAIRequest,
+            handleHttpError: handleOpenAIHttpError,
             readChunk: readOpenAIStreamChunk,
             finalizeStream: finalizeOpenAIStream,
-            streamContext,
-            provider: 'openai'
-        })), retryLimit, signal);
+            readResponseText: readOpenAIResponseText
+        };
     }
-    return performTranslation(async () => {
-        const { response, data } = await postProviderRequest(request, signal, actualTimeout);
-        if (!response.ok) onHttpError(response, data);
-        recordApiUsage('openai', readUsageTokens(data));
-        const choice = data?.choices?.[0];
-        if (!choice) throw createTranslationError('unknownError', ' (no choices)');
-        if (choice.finish_reason === 'length') throw createTranslationError('maxTokensError');
-        const responseText = choice.message?.content || '';
-        if (!responseText) throw createTranslationError('emptyResponse');
-        return parseTranslationResponse(responseText);
-    }, retryLimit, signal);
-}
-
-async function translateWithOpenAICompatible(text, retryLimit, signal, targetLanguage = 'English', targetLanguageCode, streamContext = null) {
-    const settings = await new Promise(resolve =>
-        chrome.storage.local.get(['compatibleApiKey', 'compatibleModel', 'compatibleEndpoint', 'compatibleReasoning', 'compatibleExtraParams', 'maxToken', 'timeout'], resolve));
-    if (!settings.compatibleEndpoint) throw createTranslationError('endpointNotSet');
-    if (!(settings.compatibleModel || '').trim()) throw createTranslationError('modelNotSet');
-    const actualTimeout = settings.timeout || DEFAULTS.timeout;
-    const prompt = createTranslationPrompt(text, targetLanguage, targetLanguageCode, await getPromptCustomSections());
-    const request = buildCompatibleRequest(settings, prompt, settings.maxToken || DEFAULTS.maxToken, { stream: !!streamContext });
-    const onHttpError = (response, data) => handleOpenAIHttpError(response, data, request.reasoningSent);
-    if (streamContext) {
-        return performTranslation(async () => parseTranslationResponse(await streamModelResponse({
-            url: request.url,
-            headers: request.headers,
-            body: request.body,
-            timeout: actualTimeout,
-            reasoningLevel: request.reasoningLevel,
-            signal,
-            onHttpError,
-            readChunk: readCompatibleStreamChunk,
-            finalizeStream: finalizeOpenAIStream,
-            streamContext,
-            provider: 'openai-compatible'
-        })), retryLimit, signal);
-    }
-    return performTranslation(async () => {
-        const { response, data } = await postProviderRequest(request, signal, actualTimeout);
-        if (!response.ok) onHttpError(response, data);
-        recordApiUsage('openai-compatible', readUsageTokens(data));
-        const choice = data?.choices?.[0];
-        if (!choice) throw createTranslationError('unknownError', ' (no choices)');
-        if (choice.finish_reason === 'length') throw createTranslationError('maxTokensError');
-        const responseText = stripLeadingThinkBlock(choice.message?.content || '');
-        if (!responseText) throw createTranslationError('emptyResponse');
-        return parseTranslationResponse(responseText);
-    }, retryLimit, signal);
-}
-
-async function translateWithAnthropic(text, retryLimit, signal, targetLanguage = 'English', targetLanguageCode, streamContext = null) {
-    const settings = await new Promise(resolve =>
-        chrome.storage.local.get(['anthropicApiKey', 'anthropicModel', 'anthropicReasoning', 'maxToken', 'timeout'], resolve));
-    if (!settings.anthropicApiKey) throw createTranslationError('apiKeyNotSet');
-    const actualTimeout = settings.timeout || DEFAULTS.timeout;
-    const prompt = createTranslationPrompt(text, targetLanguage, targetLanguageCode, await getPromptCustomSections());
-    const request = buildAnthropicRequest(settings, prompt, settings.maxToken || DEFAULTS.maxToken, { stream: !!streamContext });
-    const onHttpError = (response, data) => handleAnthropicHttpError(response, data, request.reasoningSent);
-    if (streamContext) {
-        return performTranslation(async () => parseTranslationResponse(await streamModelResponse({
-            url: request.url,
-            headers: request.headers,
-            body: request.body,
-            timeout: actualTimeout,
-            reasoningLevel: request.reasoningLevel,
-            signal,
-            onHttpError,
+    if (provider === 'anthropic') {
+        return {
+            name: 'anthropic',
+            settingsKeys: ['anthropicApiKey', 'anthropicModel', 'anthropicReasoning', 'maxToken', 'timeout'],
+            assertConfigured: settings => { if (!settings.anthropicApiKey) throw createTranslationError('apiKeyNotSet'); },
+            buildRequest: buildAnthropicRequest,
+            handleHttpError: handleAnthropicHttpError,
             readChunk: readAnthropicStreamChunk,
             finalizeStream: finalizeAnthropicStream,
+            readResponseText: readAnthropicResponseText
+        };
+    }
+    if (provider === 'openai-compatible') {
+        return {
+            name: 'openai-compatible',
+            settingsKeys: ['compatibleApiKey', 'compatibleModel', 'compatibleEndpoint', 'compatibleReasoning', 'compatibleExtraParams', 'maxToken', 'timeout'],
+            assertConfigured: settings => {
+                if (!settings.compatibleEndpoint) throw createTranslationError('endpointNotSet');
+                if (!(settings.compatibleModel || '').trim()) throw createTranslationError('modelNotSet');
+            },
+            buildRequest: buildCompatibleRequest,
+            handleHttpError: handleOpenAIHttpError,
+            readChunk: readCompatibleStreamChunk,
+            finalizeStream: finalizeOpenAIStream,
+            readResponseText: readCompatibleResponseText
+        };
+    }
+    return {
+        name: 'gemini',
+        settingsKeys: ['geminiApiKey', 'geminiModel', 'geminiReasoning', 'maxToken', 'timeout'],
+        assertConfigured: settings => { if (!settings.geminiApiKey) throw createTranslationError('apiKeyNotSet'); },
+        buildRequest: buildGeminiRequest,
+        handleHttpError: handleGeminiHttpError,
+        readChunk: readGeminiStreamChunk,
+        finalizeStream: finalizeGeminiStream,
+        readResponseText: readGeminiResponseText
+    };
+}
+
+async function translateWithProvider(provider, text, retryLimit, signal, targetLanguage = 'English', targetLanguageCode, streamContext = null) {
+    const spec = providerSpec(provider);
+    const settings = await new Promise(resolve => chrome.storage.local.get(spec.settingsKeys, resolve));
+    spec.assertConfigured(settings);
+    const actualTimeout = settings.timeout || DEFAULTS.timeout;
+    const prompt = createTranslationPrompt(text, targetLanguage, targetLanguageCode, await getPromptCustomSections());
+    const request = spec.buildRequest(settings, prompt, settings.maxToken || DEFAULTS.maxToken, { json: true, stream: !!streamContext });
+    const onHttpError = (response, data) => spec.handleHttpError(response, data, request.reasoningSent);
+    if (streamContext) {
+        return performTranslation(async () => parseTranslationResponse(await streamModelResponse({
+            url: request.url,
+            headers: request.headers,
+            body: request.body,
+            timeout: actualTimeout,
+            reasoningLevel: request.reasoningLevel,
+            signal,
+            onHttpError,
+            readChunk: spec.readChunk,
+            finalizeStream: spec.finalizeStream,
             streamContext,
-            provider: 'anthropic'
+            provider: spec.name
         })), retryLimit, signal);
     }
     return performTranslation(async () => {
         const { response, data } = await postProviderRequest(request, signal, actualTimeout);
         if (!response.ok) onHttpError(response, data);
-        recordApiUsage('anthropic', readUsageTokens(data));
-        throwIfAnthropicRefused(data?.stop_reason, data?.stop_details);
-        if (anthropicOutputTruncated(data?.stop_reason)) throw createTranslationError('maxTokensError');
-        const responseText = readAnthropicTextContent(data?.content);
+        recordApiUsage(spec.name, readUsageTokens(data));
+        const responseText = spec.readResponseText(data);
         if (!responseText) throw createTranslationError('emptyResponse');
         return parseTranslationResponse(responseText);
     }, retryLimit, signal);
