@@ -1,22 +1,3 @@
-const DEFAULTS = Object.freeze({
-    apiProvider: 'gemini',
-    geminiModel: 'gemini-3.5-flash-lite',
-    openaiModel: 'gpt-5.6-luna',
-    anthropicModel: 'claude-haiku-4-5-20251001',
-    compatibleModel: '',
-    geminiReasoning: '',
-    openaiReasoning: 'off',
-    anthropicReasoning: '',
-    compatibleReasoning: '',
-    batchSize: 500,
-    maxBatchLength: 65535,
-    delayBetweenRequests: 10000,
-    maxToken: null,
-    concurrencyLimit: 10,
-    maxRetries: 3,
-    timeout: 300
-});
-
 const MODEL_PLACEHOLDERS = {
     gemini: DEFAULTS.geminiModel,
     openai: DEFAULTS.openaiModel,
