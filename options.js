@@ -264,13 +264,7 @@ function renderExtraParamRows(params, t) {
         shown.appendChild(literal);
         main.appendChild(name);
         main.appendChild(shown);
-        const removeBtn = document.createElement('button');
-        removeBtn.type = 'button';
-        removeBtn.className = 'icon-btn';
-        removeBtn.title = t.optRemove;
-        removeBtn.setAttribute('aria-label', t.optRemove);
-        removeBtn.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
-        removeBtn.addEventListener('click', () => {
+        const removeBtn = createRemoveButton(t, () => {
             delete providerSettings['openai-compatible'].extraParams[key];
             setExtraParamsError('');
             renderExtraParams();
@@ -280,6 +274,17 @@ function renderExtraParamRows(params, t) {
         row.appendChild(removeBtn);
         container.appendChild(row);
     });
+}
+
+function createRemoveButton(t, onClick) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'icon-btn';
+    button.title = t.optRemove;
+    button.setAttribute('aria-label', t.optRemove);
+    button.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+    button.addEventListener('click', onClick);
+    return button;
 }
 
 function renderExtraParams() {
@@ -416,13 +421,7 @@ function renderSiteRows(containerId, entries) {
         host.className = 'host';
         host.textContent = entry;
         host.title = entry;
-        const removeBtn = document.createElement('button');
-        removeBtn.type = 'button';
-        removeBtn.className = 'icon-btn';
-        removeBtn.title = t.optRemove;
-        removeBtn.setAttribute('aria-label', t.optRemove);
-        removeBtn.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
-        removeBtn.addEventListener('click', () => {
+        const removeBtn = createRemoveButton(t, () => {
             entries.splice(index, 1);
             renderSiteRows(containerId, entries);
             scheduleSave();
@@ -824,13 +823,7 @@ function renderCachePages() {
         });
         main.appendChild(host);
         main.appendChild(meta);
-        const removeBtn = document.createElement('button');
-        removeBtn.type = 'button';
-        removeBtn.className = 'icon-btn';
-        removeBtn.title = t.optRemove;
-        removeBtn.setAttribute('aria-label', t.optRemove);
-        removeBtn.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
-        removeBtn.addEventListener('click', () => removeCachePage(page.key));
+        const removeBtn = createRemoveButton(t, () => removeCachePage(page.key));
         row.appendChild(main);
         row.appendChild(removeBtn);
         container.appendChild(row);
