@@ -32,6 +32,7 @@
         "content-lang.js",
         "content-scan.js",
         "content-apply.js",
+        "content-run.js",
         "content.js"
       ],
       "css": [
