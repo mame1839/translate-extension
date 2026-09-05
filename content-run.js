@@ -148,28 +148,12 @@ async function startTranslation(userInitiated = false) {
 
         await Promise.allSettled(batchPromises);
 
-        await new Promise(resolve => {
-            const deadline = Date.now() + 30000;
-            const interval = setInterval(() => {
-                if ((!isApplyingUpdates && domUpdateQueue.length === 0) || translationCancelled || translationHasError || Date.now() > deadline) {
-                    clearInterval(interval);
-                    resolve();
-                }
-            }, 50);
-        });
+        await waitForDomUpdatesToSettle();
 
         if (!translationCancelled && !fatalErrorCancelPending
             && runGeneration === translationRunGeneration && resendUnitIds.size > 0) {
             await resendOnce(resendUnitIds, runGeneration);
-            await new Promise(resolve => {
-                const deadline = Date.now() + 30000;
-                const interval = setInterval(() => {
-                    if ((!isApplyingUpdates && domUpdateQueue.length === 0) || translationCancelled || translationHasError || Date.now() > deadline) {
-                        clearInterval(interval);
-                        resolve();
-                    }
-                }, 50);
-            });
+            await waitForDomUpdatesToSettle();
         }
 
         if (runGeneration !== translationRunGeneration) {
@@ -473,6 +457,18 @@ async function processBatch(batch, runGeneration) {
 function unitAwaitingTranslation(id) {
     const block = translationUnits.get(id)?.block;
     return !!block && block.isConnected && block.dataset?.translationStatus !== 'translated';
+}
+
+function waitForDomUpdatesToSettle() {
+    return new Promise(resolve => {
+        const deadline = Date.now() + 30000;
+        const interval = setInterval(() => {
+            if ((!isApplyingUpdates && domUpdateQueue.length === 0) || translationCancelled || translationHasError || Date.now() > deadline) {
+                clearInterval(interval);
+                resolve();
+            }
+        }, 50);
+    });
 }
 
 async function resendOnce(unitIds, runGeneration) {
