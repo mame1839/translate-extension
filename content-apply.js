@@ -274,15 +274,7 @@ function rearrangeWithoutRebuilding(tu, translatedTemplate, fromCacheRestore) {
     }
     try { tu.block.dataset.tuTranslatedTemplate = translatedTemplate; } catch (e) { }
     try { tu.block.dataset.tuTemplate = tu.template; } catch (e) { }
-    try {
-        if (!('originalHtml' in tu.block.dataset)) tu.block.dataset.originalHtml = tu.originalInnerHTML;
-        tu.block.dataset.translatedHtml = tu.block.innerHTML;
-        tu.block.dataset.translationStatus = 'translated';
-    } catch (e) { }
-    if (highlightTranslated) tu.block.classList.add('translated-text');
-    else tu.block.classList.remove('translated-text');
-    countTranslatedUnitOnce(tu, fromCacheRestore);
-    return true;
+    return markBlockTranslated(tu, fromCacheRestore);
 }
 
 function applyTranslation(tu, translatedTemplate, fromCacheRestore) {
@@ -333,19 +325,21 @@ function applyTranslationByReplacement(tu, translatedTemplate, fromCacheRestore)
         }
 
         if (!applyTemplateWithPlaceholders(tu, translatedTemplate)) return markApplyFailed(tu, fromCacheRestore);
-
-        tu.block.dataset.translatedHtml = tu.block.innerHTML;
-        tu.block.dataset.translationStatus = 'translated';
-        if (highlightTranslated) {
-            tu.block.classList.add('translated-text');
-        } else {
-            tu.block.classList.remove('translated-text');
-        }
-        countTranslatedUnitOnce(tu, fromCacheRestore);
-        return true;
+        return markBlockTranslated(tu, fromCacheRestore);
     } catch (e) {
         return markApplyFailed(tu, fromCacheRestore);
     }
+}
+
+function markBlockTranslated(tu, fromCacheRestore) {
+    try {
+        if (!('originalHtml' in tu.block.dataset)) tu.block.dataset.originalHtml = tu.originalInnerHTML;
+        tu.block.dataset.translatedHtml = tu.block.innerHTML;
+        tu.block.dataset.translationStatus = 'translated';
+    } catch (e) { }
+    tu.block.classList.toggle('translated-text', highlightTranslated);
+    countTranslatedUnitOnce(tu, fromCacheRestore);
+    return true;
 }
 
 function countTranslatedUnitOnce(tu, fromCacheRestore) {
@@ -576,17 +570,7 @@ function applyTranslationInPlace(tu, translatedTemplate, fromCacheRestore) {
         try { tu.block.dataset.tuTranslatedTemplate = translatedTemplate; } catch (e) { }
         try { tu.block.dataset.tuTemplate = tu.template; } catch (e) { }
         if (!applyTemplateTextOnly(tu, translatedTemplate)) return markApplyFailed(tu, fromCacheRestore);
-        if (!('originalHtml' in tu.block.dataset)) {
-            try { tu.block.dataset.originalHtml = tu.originalInnerHTML; } catch (e) { }
-        }
-        try {
-            tu.block.dataset.translatedHtml = tu.block.innerHTML;
-            tu.block.dataset.translationStatus = 'translated';
-        } catch (e) { }
-        if (highlightTranslated) tu.block.classList.add('translated-text');
-        else tu.block.classList.remove('translated-text');
-        countTranslatedUnitOnce(tu, fromCacheRestore);
-        return true;
+        return markBlockTranslated(tu, fromCacheRestore);
     } catch (e) {
         return markApplyFailed(tu, fromCacheRestore);
     }
