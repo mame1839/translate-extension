@@ -163,7 +163,7 @@ function render(view, pageState) {
         els.progressPct.textContent = pct + '%';
         const stats = pageState.stats || {};
         els.progressBlocks.textContent = stats.totalFragments > 0
-            ? t.popupBlocksTemplate
+            ? t.blocksTemplate
                 .replace('{translated}', String(stats.translatedFragments ?? 0))
                 .replace('{total}', String(stats.totalFragments))
             : '';
@@ -203,7 +203,7 @@ function renderActions(view, pageState) {
             area.appendChild(actionButton('btn btn-filled', t.popupTranslatePage, startTranslation));
         }
     } else if (view === 'translating') {
-        area.appendChild(actionButton('btn btn-danger-tonal', t.cancelBtn, cancelTranslation));
+        area.appendChild(actionButton('btn btn-danger-tonal', t.cancelButton, cancelTranslation));
     } else if (view === 'translated') {
         if (pageState.hasUntranslatedText) {
             area.appendChild(actionButton('btn btn-tonal', t.popupTranslateRemaining, startTranslation));
@@ -211,7 +211,7 @@ function renderActions(view, pageState) {
         area.appendChild(buildSegmented(pageState));
         const row = document.createElement('div');
         row.className = 'action-row';
-        row.appendChild(actionButton('btn btn-text', t.popupRetranslate, retranslateFromScratch));
+        row.appendChild(actionButton('btn btn-text', t.retranslateButton, retranslateFromScratch));
         area.appendChild(row);
     } else if (view === 'excluded') {
         area.appendChild(actionButton('btn btn-outlined', t.popupTranslateAnyway, startTranslation));

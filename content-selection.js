@@ -473,7 +473,7 @@ function selectionErrorText(code, rawMessage) {
 
 function requestSelectionTranslation(text) {
     const requestId = ++selectionRequestId;
-    const genericError = selectionLabel('error', 'An error occurred');
+    const genericError = selectionLabel('errorOccurred', 'An error occurred');
     const handleFailure = (message) => {
         if (requestId !== selectionRequestId) return;
         renderSelectionError(message || genericError);
@@ -732,7 +732,7 @@ function onSelectionUndoClick() {
 function renderSelectionError(message) {
     if (!selectionShadowRoot) return;
     clearSelectionActions();
-    setSelectionTitle(selectionLabel('error', 'An error occurred'), true);
+    setSelectionTitle(selectionLabel('errorOccurred', 'An error occurred'), true);
     const box = document.createElement('div');
     box.className = 'sel-error';
     box.setAttribute('dir', 'auto');

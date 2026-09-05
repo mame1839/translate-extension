@@ -2,35 +2,7 @@ let promptMessage = 'Translate this page?';
 
 let translateButtonText = { yes: 'Translate', no: 'No', never: 'Never show for this site' };
 
-let st = {
-    translating: 'Translating…',
-    cancelling: 'Cancelling…',
-    translationCancelled: 'Translation cancelled.',
-    noTextFound: 'No translatable text found',
-    translationCompleted: 'Translation complete',
-    errorOccurred: 'An error occurred',
-    progressTemplate: 'Batch: {currentBatch}/{totalBatch}  ·  Blocks: {translatedUnits}/{totalUnits}',
-    closeButton: 'Close',
-    cancelButton: 'Cancel',
-    openOptions: 'Open settings',
-    reactWarning: 'This site uses a complex framework. Translation may break the UI.',
-    blocksTemplate: 'Blocks {translated} / {total}',
-    streamingNote: 'Applying text as it arrives',
-    minimizeLabel: 'Minimize',
-    restoreLabel: 'Restore',
-    errorTitle: 'Translation failed',
-    errorDetails: 'Technical details',
-    retryButton: 'Retry',
-    cacheRestoredTitle: 'Restored the saved translation',
-    retranslateButton: 'Re-translate',
-    translateRestButton: 'Translate the rest',
-    newContentTitle: 'New content on this page is not translated',
-    blocksTooLong: '{count} blocks are longer than the output token limit and were left untranslated. Raise the max output tokens in settings.',
-    cacheSaveFailed: 'Could not save the translation for this page. It will be translated again next time.',
-    cacheStorageFull: 'Storage is full. The translation for this page was not saved.',
-    waitingForModel: 'Waiting for the model · {elapsed} elapsed',
-    blocksTimedOut: '{count} sections stopped because reasoning ran past the timeout. Lower Reasoning or raise the timeout in settings, then try again.'
-};
+let st = TRANSLATIONS.en;
 
 const RTL_LANGS = new Set(['ar', 'ur', 'he', 'fa']);
 
@@ -39,43 +11,12 @@ let currentUiLang = 'en';
 let detectedPageLanguage = '';
 
 function applyStrings(lang) {
-    const hasLang = typeof TRANSLATIONS !== 'undefined' && !!TRANSLATIONS[lang];
-    const t = hasLang ? TRANSLATIONS[lang] : TRANSLATIONS['en'];
+    const hasLang = !!TRANSLATIONS[lang];
+    const t = TRANSLATIONS[hasLang ? lang : 'en'];
     currentUiLang = hasLang ? lang : 'en';
     promptMessage = t.promptMessage;
     translateButtonText = { yes: t.promptYes, no: t.promptNo, never: t.promptNever };
-    st = {
-        translating: t.translating,
-        cancelling: t.cancelling,
-        translationCancelled: t.cancelled,
-        noTextFound: t.noText,
-        translationCompleted: t.complete,
-        errorOccurred: t.error,
-        progressTemplate: t.progressTemplate,
-        closeButton: t.closeBtn,
-        cancelButton: t.cancelBtn,
-        openOptions: t.openOptions,
-        reactWarning: t.reactWarning,
-        blocksTemplate: t.popupBlocksTemplate,
-        streamingNote: t.panelStreamingNote,
-        minimizeLabel: t.panelMinimize,
-        restoreLabel: t.panelRestore,
-        errorTitle: t.errTitle,
-        errorDetails: t.errDetails,
-        retryButton: t.errRetry,
-        cacheRestoredTitle: t.cacheRestoredTitle,
-        retranslateButton: t.popupRetranslate,
-        translateRestButton: t.translateRestButton,
-        newContentTitle: t.newContentTitle,
-        blocksTooLong: t.blocksTooLong,
-        nothingTranslated: t.nothingTranslated,
-        cacheSaveFailed: t.cacheSaveFailed,
-        cacheStorageFull: t.cacheStorageFull,
-        someBlocksFailed: t.someBlocksFailed,
-        retryFailedButton: t.retryFailedButton,
-        waitingForModel: t.waitingForModel,
-        blocksTimedOut: t.blocksTimedOut
-    };
+    st = t;
 }
 
 const BLOCK_TAGS = new Set([
