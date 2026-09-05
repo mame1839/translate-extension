@@ -142,7 +142,7 @@ const SELECTION_CSS = `
             }
             .sel-badge { background: #0842a0; color: #d3e3fd; }
             .sel-icon-btn:hover { background: #1e1e24; }
-            .sel-spinner { border-color: rgba(138, 180, 248, 0.25); }
+            .sel-spinner { border-color: rgba(138, 180, 248, 0.25); border-top-color: var(--primary); }
             .sel-btn { background: #0842a0; color: #d3e3fd; }
             .sel-btn:hover { box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 1px 3px 1px rgba(0, 0, 0, 0.25); }
             .sel-btn.secondary { box-shadow: inset 0 0 0 1px rgba(232, 231, 240, 0.18); }
