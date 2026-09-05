@@ -38,13 +38,10 @@ function waitForMs(ms) {
 }
 
 function resolveWithTimeout(promise, timeoutMs, timeoutValue) {
-    return new Promise((resolve) => {
-        const timer = setTimeout(() => resolve(timeoutValue), timeoutMs);
-        promise.then(
-            (value) => { clearTimeout(timer); resolve(value); },
-            () => { clearTimeout(timer); resolve(timeoutValue); }
-        );
-    });
+    return Promise.race([
+        promise.catch(() => timeoutValue),
+        new Promise(resolve => setTimeout(() => resolve(timeoutValue), timeoutMs))
+    ]);
 }
 
 function collectLanguageDetectionSample() {
