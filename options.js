@@ -599,27 +599,14 @@ function buildUsageRow(provider, entry, t, lang) {
     return row;
 }
 
-function buildUsageEmptyRow(t) {
+function buildUsageMessageRow(text, className) {
     const row = document.createElement('div');
     row.className = 'row';
     const main = document.createElement('div');
     main.className = 'row-main';
     const desc = document.createElement('div');
-    desc.className = 'row-desc';
-    desc.textContent = t.usageEmpty;
-    main.appendChild(desc);
-    row.appendChild(main);
-    return row;
-}
-
-function buildUsageErrorRow(message) {
-    const row = document.createElement('div');
-    row.className = 'row';
-    const main = document.createElement('div');
-    main.className = 'row-main';
-    const desc = document.createElement('div');
-    desc.className = 'row-desc warn-text';
-    desc.textContent = message;
+    desc.className = className;
+    desc.textContent = text;
     main.appendChild(desc);
     row.appendChild(main);
     return row;
@@ -649,9 +636,9 @@ function renderUsageStats() {
     const lang = getUiLang();
     container.replaceChildren();
     if (usageFailureReason) {
-        container.appendChild(buildUsageErrorRow(backgroundUnreachable
+        container.appendChild(buildUsageMessageRow(backgroundUnreachable
             ? t.bgUnavailable + ' (' + usageFailureReason + ')'
-            : t.usageUnreadable.replace('{reason}', usageFailureReason)));
+            : t.usageUnreadable.replace('{reason}', usageFailureReason), 'row-desc warn-text'));
         since.textContent = '';
         return;
     }
@@ -662,7 +649,7 @@ function renderUsageStats() {
     const providers = usageStats.providers || {};
     const names = usedProviderNames(providers);
     if (names.length === 0) {
-        container.appendChild(buildUsageEmptyRow(t));
+        container.appendChild(buildUsageMessageRow(t.usageEmpty, 'row-desc'));
         since.textContent = '';
         return;
     }
