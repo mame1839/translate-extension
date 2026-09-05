@@ -22,6 +22,15 @@
     { code: 'ko',   name: 'Korean',                native: '한국어'             },
 ];
 
+function languageNativeName(code) {
+    if (!code) return '';
+    const primary = code.split('-')[0].toLowerCase();
+    const exact = LANGUAGES.find(entry => entry.code.toLowerCase() === code.toLowerCase());
+    if (exact) return exact.native;
+    const loose = LANGUAGES.find(entry => entry.code.split('-')[0].toLowerCase() === primary);
+    return loose ? loose.native : primary.toUpperCase();
+}
+
 const TRANSLATIONS = {
     en: {
         popupName: 'AI Translator',

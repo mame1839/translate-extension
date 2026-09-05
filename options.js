@@ -384,11 +384,6 @@ function updateProviderUI(provider) {
     renderExtraParams();
 }
 
-function languageNativeName(code) {
-    const entry = LANGUAGES.find(lang => lang.code === code);
-    return entry ? entry.native : code;
-}
-
 function saveCurrentProviderToMemory() {
     const settings = providerSettings[currentProvider];
     if (!settings) return;

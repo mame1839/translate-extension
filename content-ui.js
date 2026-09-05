@@ -405,20 +405,6 @@ function createActionsRow(buttons) {
     return actions;
 }
 
-function languageNativeName(code) {
-    if (!code) return '';
-    const primary = code.split('-')[0].toLowerCase();
-    try {
-        if (typeof LANGUAGES !== 'undefined' && Array.isArray(LANGUAGES)) {
-            const exact = LANGUAGES.find(entry => entry.code.toLowerCase() === code.toLowerCase());
-            if (exact) return exact.native;
-            const loose = LANGUAGES.find(entry => entry.code.split('-')[0].toLowerCase() === primary);
-            if (loose) return loose.native;
-        }
-    } catch (e) { }
-    return primary.toUpperCase();
-}
-
 function isolateBidi(text) {
     return '⁨' + text + '⁩';
 }
