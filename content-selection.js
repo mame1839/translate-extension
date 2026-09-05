@@ -2,8 +2,6 @@ const SELECTION_CONTAINER_ID = 'gemini-translator-selection-container';
 
 const SELECTION_MAX_CHARS = 5000;
 
-const SELECTION_RTL_LANGS = new Set(['ar', 'ur', 'he', 'fa']);
-
 const SELECTION_FONT = `-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, "Hiragino Kaku Gothic ProN", "Yu Gothic UI", Meiryo, sans-serif`;
 
 const SELECTION_EASE = 'cubic-bezier(0.2, 0, 0, 1)';
@@ -439,7 +437,7 @@ function showSelectionTranslation(rawText, replaceIntent) {
     chrome.storage.local.get(['targetLanguage'], function (items) {
         const lang = (items && items.targetLanguage) || 'en';
         selectionStrings = (typeof getT === 'function') ? getT(lang) : null;
-        selectionIsRtl = SELECTION_RTL_LANGS.has(String(lang).split('-')[0]);
+        selectionIsRtl = isRtlLang(lang);
         openSelectionPopup();
         if (!selectionShadowRoot) return;
         if (text.length > SELECTION_MAX_CHARS) {

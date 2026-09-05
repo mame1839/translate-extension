@@ -349,10 +349,6 @@ const ICON_ALERT = [
 
 const ICON_CHEVRON = [['path', { d: 'm9 18 6-6-6-6' }]];
 
-function isRtlLang(lang) {
-    return RTL_LANGS.has((lang || '').split('-')[0].toLowerCase());
-}
-
 function createUiRoot() {
     const root = document.createElement('div');
     root.className = 'root';

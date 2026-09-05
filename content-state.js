@@ -4,8 +4,6 @@ let translateButtonText = { yes: 'Translate', no: 'No', never: 'Never show for t
 
 let st = TRANSLATIONS.en;
 
-const RTL_LANGS = new Set(['ar', 'ur', 'he', 'fa']);
-
 let currentUiLang = 'en';
 
 let detectedPageLanguage = '';

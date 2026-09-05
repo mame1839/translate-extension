@@ -47,7 +47,6 @@ const providerSettings = {
     'openai-compatible': { apiKey: '', model: DEFAULTS.compatibleModel, reasoning: DEFAULTS.compatibleReasoning, endpoint: '', extraParams: {} }
 };
 
-const RTL_LANGS = new Set(['ar', 'ur', 'he', 'fa']);
 const STYLE_PRESETS = ['', 'formal', 'casual', 'technical'];
 const SECTION_IDS = ['general', 'provider', 'behavior', 'style', 'sites', 'advanced', 'data'];
 
@@ -130,7 +129,7 @@ function applyI18n(t) {
 
 function applyDir(lang) {
     document.documentElement.lang = lang;
-    document.documentElement.dir = RTL_LANGS.has(lang.split('-')[0]) ? 'rtl' : 'ltr';
+    document.documentElement.dir = isRtlLang(lang) ? 'rtl' : 'ltr';
 }
 
 function populateLanguageSelect(selected) {

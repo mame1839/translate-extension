@@ -22,6 +22,12 @@
     { code: 'ko',   name: 'Korean',                native: '한국어'             },
 ];
 
+const RTL_LANGS = new Set(['ar', 'ur', 'he', 'fa']);
+
+function isRtlLang(lang) {
+    return RTL_LANGS.has((lang || '').split('-')[0].toLowerCase());
+}
+
 function languageNativeName(code) {
     if (!code) return '';
     const primary = code.split('-')[0].toLowerCase();

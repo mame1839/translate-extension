@@ -1,4 +1,3 @@
-const RTL_LANGS = new Set(['ar', 'ur', 'he', 'fa']);
 
 const STATE_ICONS = {
     idle: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/></svg>',
@@ -35,7 +34,7 @@ async function initPopup() {
     const lang = items.targetLanguage || 'en';
     t = getT(lang);
     document.documentElement.lang = lang;
-    document.documentElement.dir = RTL_LANGS.has(lang.split('-')[0]) ? 'rtl' : 'ltr';
+    document.documentElement.dir = isRtlLang(lang) ? 'rtl' : 'ltr';
 
     els = {
         appTitle: document.getElementById('appTitle'),
