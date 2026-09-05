@@ -31,6 +31,7 @@
         "content-cache.js",
         "content-lang.js",
         "content-scan.js",
+        "content-apply.js",
         "content.js"
       ],
       "css": [
