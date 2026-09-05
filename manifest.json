@@ -33,6 +33,7 @@
         "content-scan.js",
         "content-apply.js",
         "content-run.js",
+        "content-autogate.js",
         "content.js"
       ],
       "css": [
