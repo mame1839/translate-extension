@@ -311,12 +311,6 @@ async function toggleTranslationView(view) {
     refreshPageState(true);
 }
 
-function normalizeSiteList(value) {
-    if (Array.isArray(value)) return value.map(entry => String(entry).trim()).filter(Boolean);
-    if (typeof value === 'string') return value.split(/\r?\n/).map(entry => entry.trim()).filter(Boolean);
-    return [];
-}
-
 async function applySiteListChange(listKey, opposingKey, enabled) {
     if (!activeTab || !pageSupported) return false;
     let origin = '';

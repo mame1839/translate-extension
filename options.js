@@ -408,12 +408,6 @@ function normalizeNumberField(id) {
     el(id).value = readNumberField(id) ?? '';
 }
 
-function normalizeSiteList(value) {
-    if (Array.isArray(value)) return value.map(entry => String(entry).trim()).filter(Boolean);
-    if (typeof value === 'string') return value.split(/\r?\n/).map(entry => entry.trim()).filter(Boolean);
-    return [];
-}
-
 function normalizeSiteEntry(raw) {
     const trimmed = String(raw || '').trim();
     if (!trimmed) return '';
