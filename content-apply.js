@@ -366,13 +366,7 @@ function countTranslatedUnitOnce(tu, fromCacheRestore) {
 }
 
 function isInsideReactCustomElement(node) {
-    let anc = node?.parentElement;
-    while (anc && anc !== document.documentElement) {
-        const name = anc.nodeName;
-        if (name === 'REACT-APP' || name === 'REACT-PARTIAL') return true;
-        anc = anc.parentElement;
-    }
-    return false;
+    return !!findAncestor(node?.parentElement, el => el.nodeName === 'REACT-APP' || el.nodeName === 'REACT-PARTIAL', false);
 }
 
 function shouldUseTextOnlyApply(node) {

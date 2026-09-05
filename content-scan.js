@@ -13,19 +13,15 @@ function isLikelyReactApp() {
     return false;
 }
 
-function isInsideExtensionUi(node) {
-    let current = node;
-    while (current) {
-        if (current.nodeType === Node.ELEMENT_NODE && current.dataset?.geminiIgnore === 'true') return true;
-        if (current.parentElement) {
-            current = current.parentElement;
-        } else if (current.getRootNode && current.getRootNode() instanceof ShadowRoot) {
-            current = current.getRootNode().host;
-        } else {
-            break;
-        }
+function findAncestor(node, matches, crossShadow) {
+    for (let current = node; current; current = current.parentElement || (crossShadow && current.getRootNode?.() instanceof ShadowRoot ? current.getRootNode().host : null)) {
+        if (matches(current)) return current;
     }
-    return false;
+    return null;
+}
+
+function isInsideExtensionUi(node) {
+    return !!findAncestor(node, el => el.dataset?.geminiIgnore === 'true', true);
 }
 
 function resetIfDivergedFromTranslation(block) {
@@ -178,14 +174,7 @@ function countVisibleFailedBlocks() {
 }
 
 function findBlockAncestor(node) {
-    let current = node;
-    while (current && current !== document.documentElement) {
-        if (current.nodeType === Node.ELEMENT_NODE && BLOCK_TAGS.has(current.nodeName)) {
-            return current;
-        }
-        current = current.parentElement || (current.getRootNode?.() instanceof ShadowRoot ? current.getRootNode().host : null);
-    }
-    return null;
+    return findAncestor(node, el => BLOCK_TAGS.has(el.nodeName), true);
 }
 
 function isFullyExcluded(element, ignoreVisibilityHidden) {
@@ -228,18 +217,17 @@ function isHiddenByComputedStyle(element) {
     }
 }
 
+function isEditableHost(el) {
+    if (el.isContentEditable === true) return true;
+    const editableAttr = el.getAttribute('contenteditable');
+    if (typeof editableAttr === 'string' && editableAttr.toLowerCase() !== 'false') return true;
+    return el.getAttribute('role') === 'textbox';
+}
+
 function isInsideEditableHost(node) {
-    let current = node && node.nodeType === Node.TEXT_NODE ? node.parentElement : node;
-    while (current && current.nodeType === Node.ELEMENT_NODE) {
-        if (current.isContentEditable === true) return true;
-        if (typeof current.getAttribute === 'function') {
-            const editableAttr = current.getAttribute('contenteditable');
-            if (typeof editableAttr === 'string' && editableAttr.toLowerCase() !== 'false') return true;
-            if (current.getAttribute('role') === 'textbox') return true;
-        }
-        current = current.parentElement || (current.getRootNode?.() instanceof ShadowRoot ? current.getRootNode().host : null);
-    }
-    return false;
+    const start = node && node.nodeType === Node.TEXT_NODE ? node.parentElement : node;
+    if (!start || start.nodeType !== Node.ELEMENT_NODE) return false;
+    return !!findAncestor(start, isEditableHost, true);
 }
 
 function blockContainsReactCustomElement(node) {
@@ -273,12 +261,7 @@ function isBlockLikeAnchorInShadowHost(node) {
 }
 
 function isInsideShadowHostingCustomElement(node) {
-    let anc = node?.parentElement;
-    while (anc && anc !== document.documentElement) {
-        if (isShadowHostingCustomElement(anc)) return true;
-        anc = anc.parentElement;
-    }
-    return false;
+    return !!findAncestor(node?.parentElement, isShadowHostingCustomElement, false);
 }
 
 function isTranslatableText(text) {

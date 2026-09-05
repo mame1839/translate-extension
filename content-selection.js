@@ -226,12 +226,8 @@ function createSelectionIcon(size, shapes) {
 }
 
 function isInsideSkippedContainer(node) {
-    let el = node && node.nodeType !== Node.ELEMENT_NODE ? node.parentElement : node;
-    while (el && el.nodeType === Node.ELEMENT_NODE && el !== document.documentElement) {
-        if (INLINE_SKIP_TAGS.has(el.nodeName)) return true;
-        el = el.parentElement || (el.getRootNode?.() instanceof ShadowRoot ? el.getRootNode().host : null);
-    }
-    return false;
+    const start = node && node.nodeType !== Node.ELEMENT_NODE ? node.parentElement : node;
+    return !!findAncestor(start, el => INLINE_SKIP_TAGS.has(el.nodeName), true);
 }
 
 function isEligibleReplaceBlock(block) {
