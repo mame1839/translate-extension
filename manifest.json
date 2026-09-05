@@ -28,6 +28,7 @@
         "content-state.js",
         "content-runtime.js",
         "content-ui.js",
+        "content-cache.js",
         "content.js"
       ],
       "css": [
