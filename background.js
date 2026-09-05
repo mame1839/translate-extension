@@ -81,6 +81,48 @@ try {
     chrome.runtime.onInstalled.addListener(handleExtensionInstalled);
 } catch (e) { }
 
+try {
+    chrome.contextMenus.onClicked.addListener(function (info, tab) {
+        if (info.menuItemId === "toggleTranslation" && tab?.id) {
+            sendTabMessage(tab.id, { action: "toggleTranslation" });
+        }
+    });
+} catch (e) { }
+
+try {
+    chrome.tabs.onRemoved.addListener(function (tabId) {
+        discardFramesForTab(tabId);
+        untrackSessionTab(tabId).catch(() => { });
+    });
+} catch (e) { }
+
+try {
+    chrome.tabs.onUpdated.addListener(function (tabId, changeInfo) {
+        if (changeInfo.status === 'loading') {
+            discardFramesForTab(tabId);
+        }
+        if (changeInfo.url) {
+            handleTabUrlChange(tabId, changeInfo.url).catch(() => { });
+        }
+    });
+} catch (e) { }
+
+try {
+    chrome.storage.onChanged.addListener(handleContextMenuSettingsChange);
+} catch (e) { }
+
+try {
+    chrome.contextMenus.onClicked.addListener(function (info, tab) {
+        if (info.menuItemId !== SELECTION_MENU_ID && info.menuItemId !== REPLACE_MENU_ID) return;
+        if (!tab?.id) return;
+        const text = (info.selectionText || '').trim();
+        if (!text) return;
+        const frameId = Number.isInteger(info.frameId) ? info.frameId : 0;
+        const replaceIntent = info.menuItemId === REPLACE_MENU_ID;
+        sendTabMessage(tab.id, { action: "showSelectionTranslation", text, replaceIntent }, { frameId });
+    });
+} catch (e) { }
+
 function handleContentScriptMessage(request, sender, sendResponse) {
     const tabId = sender.tab?.id;
     if (!tabId) return false;
@@ -196,48 +238,6 @@ function handleContentScriptMessage(request, sender, sendResponse) {
 
     return false;
 }
-
-try {
-    chrome.contextMenus.onClicked.addListener(function (info, tab) {
-        if (info.menuItemId === "toggleTranslation" && tab?.id) {
-            sendTabMessage(tab.id, { action: "toggleTranslation" });
-        }
-    });
-} catch (e) { }
-
-try {
-    chrome.tabs.onRemoved.addListener(function (tabId) {
-        discardFramesForTab(tabId);
-        untrackSessionTab(tabId).catch(() => { });
-    });
-} catch (e) { }
-
-try {
-    chrome.tabs.onUpdated.addListener(function (tabId, changeInfo) {
-        if (changeInfo.status === 'loading') {
-            discardFramesForTab(tabId);
-        }
-        if (changeInfo.url) {
-            handleTabUrlChange(tabId, changeInfo.url).catch(() => { });
-        }
-    });
-} catch (e) { }
-
-try {
-    chrome.storage.onChanged.addListener(handleContextMenuSettingsChange);
-} catch (e) { }
-
-try {
-    chrome.contextMenus.onClicked.addListener(function (info, tab) {
-        if (info.menuItemId !== SELECTION_MENU_ID && info.menuItemId !== REPLACE_MENU_ID) return;
-        if (!tab?.id) return;
-        const text = (info.selectionText || '').trim();
-        if (!text) return;
-        const frameId = Number.isInteger(info.frameId) ? info.frameId : 0;
-        const replaceIntent = info.menuItemId === REPLACE_MENU_ID;
-        sendTabMessage(tab.id, { action: "showSelectionTranslation", text, replaceIntent }, { frameId });
-    });
-} catch (e) { }
 
 function handleSelectionMessage(request, sender, sendResponse) {
     const tabId = sender.tab?.id;
