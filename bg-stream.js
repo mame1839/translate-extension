@@ -10,15 +10,7 @@ function parseCompletedTranslationPairs(partialText) {
             return result;
         }
     } catch (e) { }
-    const pairRe = /"(TU_\d+)"\s*:\s*"((?:[^"\\]|\\.)*)"(?=\s*[,}])/g;
-    let m;
-    while ((m = pairRe.exec(partialText)) !== null) {
-        try {
-            result.set(m[1], JSON.parse('"' + m[2] + '"'));
-        } catch (e) {
-            result.set(m[1], unescapeJsonString(m[2]));
-        }
-    }
+    forEachTuPair(partialText, /"(TU_\d+)"\s*:\s*"((?:[^"\\]|\\.)*)"(?=\s*[,}])/g, (key, value) => result.set(key, value));
     return result;
 }
 

@@ -126,15 +126,14 @@ function extractFirstBalancedObject(text) {
     return null;
 }
 
+function forEachTuPair(text, re, visit) {
+    let m;
+    while ((m = re.exec(text)) !== null) visit(m[1], unescapeJsonString(m[2]));
+}
+
 function extractEntriesByRegex(text) {
     const result = {};
-    const re = /"(TU_\d+)"\s*:\s*"([\s\S]*?)"\s*(?=,\s*"TU_\d+"\s*:\s*"|\}\s*$)/g;
-    let m;
-    while ((m = re.exec(text)) !== null) {
-        const key = m[1];
-        const rawValue = m[2];
-        result[key] = unescapeJsonString(rawValue);
-    }
+    forEachTuPair(text, /"(TU_\d+)"\s*:\s*"([\s\S]*?)"\s*(?=,\s*"TU_\d+"\s*:\s*"|\}\s*$)/g, (key, value) => { result[key] = value; });
     return result;
 }
 
