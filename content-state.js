@@ -185,7 +185,7 @@ let postFinishScanCount = 0;
 
 const POST_FINISH_MAX_SCANS = 1;
 
-const POST_FINISH_SCAN_DELAYS = [3000];
+const POST_FINISH_SCAN_DELAY_MS = 3000;
 
 let autoTranslateNewContent = false;
 

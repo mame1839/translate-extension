@@ -322,21 +322,19 @@ function scheduleRetranslationIfNeeded() {
 }
 
 function schedulePostFinishScans() {
-    for (const delay of POST_FINISH_SCAN_DELAYS) {
-        setTimeout(() => {
-            if (!translationStarted) return;
-            if (isTranslating || translationCancelled) return;
-            if (Date.now() < postNavigationCooldownUntil) return;
-            if (postFinishScanCount >= POST_FINISH_MAX_SCANS) return;
-            try {
-                if (!hasTranslatableUnitsInDocument()) return;
-                if (!canAutoTranslateNewContent()) {
-                    maybeShowContinueNotice();
-                    return;
-                }
-                postFinishScanCount++;
-                startAutoTranslation();
-            } catch (e) { }
-        }, delay);
-    }
+    setTimeout(() => {
+        if (!translationStarted) return;
+        if (isTranslating || translationCancelled) return;
+        if (Date.now() < postNavigationCooldownUntil) return;
+        if (postFinishScanCount >= POST_FINISH_MAX_SCANS) return;
+        try {
+            if (!hasTranslatableUnitsInDocument()) return;
+            if (!canAutoTranslateNewContent()) {
+                maybeShowContinueNotice();
+                return;
+            }
+            postFinishScanCount++;
+            startAutoTranslation();
+        } catch (e) { }
+    }, POST_FINISH_SCAN_DELAY_MS);
 }
