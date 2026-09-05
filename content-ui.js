@@ -532,7 +532,6 @@ function removeCacheRestoreNotice() {
 
 function translateRemainingFromNotice() {
     removeCacheRestoreNotice();
-    continueNoticeShown = false;
     continueNoticeCooldownUntil = 0;
     autoRetranslateRounds = 0;
     translationStarted = true;
@@ -549,7 +548,6 @@ function maybeShowContinueNotice() {
     if (restoreNoticeContainer) return;
     if (Date.now() < continueNoticeCooldownUntil) return;
     if (!hasTranslatableUnitsInDocument()) return;
-    continueNoticeShown = true;
     continueNoticeCooldownUntil = Date.now() + CONTINUE_NOTICE_COOLDOWN_MS;
     showCacheRestoreNotice(st.newContentTitle, false);
 }
@@ -590,7 +588,6 @@ function showCacheRestoreNotice(titleText, offerRetranslate) {
     if (offerRetranslate !== false) {
         const retranslateButton = createTextButton('btn btn-text', st.retranslateButton, function () {
             autoRetranslateRounds = 0;
-            continueNoticeShown = false;
             clearPageCacheAndRetranslate().catch(() => { });
         });
         actions.push(retranslateButton);

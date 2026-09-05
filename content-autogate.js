@@ -130,7 +130,6 @@ async function handleSpaNavigation() {
     clearPendingRetranslation();
     lastScrollScanHeight = -1;
     autoRetranslateRounds = 0;
-    continueNoticeShown = false;
     translationRunGeneration++;
     try { cleanupProcessingMarkers(); } catch (e) { }
     try { translationUnits.clear(); } catch (e) { }

@@ -203,8 +203,6 @@ let autoRetranslateRounds = 0;
 
 const AUTO_RETRANSLATE_MAX_ROUNDS = 3;
 
-let continueNoticeShown = false;
-
 let continueNoticeCooldownUntil = 0;
 
 const CONTINUE_NOTICE_COOLDOWN_MS = 60000;

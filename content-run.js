@@ -4,7 +4,6 @@ async function startTranslation(userInitiated = false) {
         translationCancelled = false;
         translationHasError = false;
         autoRetranslateRounds = 0;
-        continueNoticeShown = false;
     }
     const cooldownRemaining = postNavigationCooldownUntil - Date.now();
     if (cooldownRemaining > 0) {
