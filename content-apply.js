@@ -41,12 +41,7 @@ function applyTemplateWithPlaceholders(tu, template) {
         if (restored) newChildren.push(restored);
     }
 
-    if (typeof tu.block.replaceChildren === 'function') {
-        tu.block.replaceChildren(...newChildren);
-    } else {
-        while (tu.block.firstChild) tu.block.removeChild(tu.block.firstChild);
-        for (const child of newChildren) tu.block.appendChild(child);
-    }
+    tu.block.replaceChildren(...newChildren);
     reattachCommentAnchors(tu.commentAnchors);
     return true;
 }
@@ -118,12 +113,7 @@ function restoreSubtree(entry) {
         if (current[index] !== wanted[index]) identical = false;
     }
     if (identical) return;
-    if (typeof entry.node.replaceChildren === 'function') {
-        entry.node.replaceChildren(...wanted);
-    } else {
-        while (entry.node.firstChild) entry.node.removeChild(entry.node.firstChild);
-        for (const child of wanted) entry.node.appendChild(child);
-    }
+    entry.node.replaceChildren(...wanted);
 }
 
 function discardApplyThatDidNotMatch(tu, fromCacheRestore, snapshot) {
@@ -664,12 +654,7 @@ function setBlockContent(block, html) {
         ? collectContextParsedChildren(parsedBody, block.tagName)
         : Array.from(parsedBody.childNodes);
     if (!newChildren) return;
-    if (typeof block.replaceChildren === 'function') {
-        block.replaceChildren(...newChildren);
-    } else {
-        while (block.firstChild) block.removeChild(block.firstChild);
-        for (const child of newChildren) block.appendChild(child);
-    }
+    block.replaceChildren(...newChildren);
 }
 
 function restoreNode(parsedNode, placeholders) {
@@ -697,12 +682,7 @@ function restoreNode(parsedNode, placeholders) {
                 const restored = restoreNode(child, placeholders);
                 if (restored) newChildren.push(restored);
             }
-            if (typeof originalNode.replaceChildren === 'function') {
-                originalNode.replaceChildren(...newChildren);
-            } else {
-                while (originalNode.firstChild) originalNode.removeChild(originalNode.firstChild);
-                for (const child of newChildren) originalNode.appendChild(child);
-            }
+            originalNode.replaceChildren(...newChildren);
             return originalNode;
         }
         if (entry.type === 'block' || entry.type === 'skip') {
