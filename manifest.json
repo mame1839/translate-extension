@@ -25,6 +25,7 @@
       "js": [
         "translations.js",
         "sitematch.js",
+        "content-state.js",
         "content.js"
       ],
       "css": [
