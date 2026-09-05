@@ -436,17 +436,16 @@ function createSvgIcon(size, strokeWidth, shapes) {
     return svg;
 }
 
-function createTranslationPrompt(showWarning) {
-    if (promptContainer || document.getElementById('gemini-translator-prompt-container')) return;
-    promptContainer = document.createElement('div');
-    promptContainer.id = 'gemini-translator-prompt-container';
-    promptContainer.dataset.geminiIgnore = 'true';
-    promptContainer.style.cssText = 'position:fixed;top:0;right:0;z-index:2147483647;';
-    promptShadowRoot = attachUiShadowRoot(promptContainer);
+function createNoticeCard(id, title) {
+    const container = document.createElement('div');
+    container.id = id;
+    container.dataset.geminiIgnore = 'true';
+    container.style.cssText = 'position:fixed;top:0;right:0;z-index:2147483647;';
+    const shadow = attachUiShadowRoot(container);
 
     const style = document.createElement('style');
     style.textContent = PROMPT_CSS;
-    promptShadowRoot.appendChild(style);
+    shadow.appendChild(style);
 
     const root = createUiRoot();
     const card = createUiElement('div', 'card top');
@@ -455,7 +454,7 @@ function createTranslationPrompt(showWarning) {
     const brand = createUiElement('div', 'app-icon');
     brand.appendChild(createSvgIcon('15', '2.25', ICON_LOGO));
     const headText = createUiElement('div', 'head-text');
-    headText.appendChild(createUiElement('div', 'title', promptMessage));
+    headText.appendChild(createUiElement('div', 'title', title));
     const pairLabel = promptLanguagePairLabel();
     if (pairLabel) headText.appendChild(createUiElement('div', 'sub', pairLabel));
     const dismissButton = createIconButton(ICON_CLOSE, st.closeButton);
@@ -463,6 +462,14 @@ function createTranslationPrompt(showWarning) {
     head.appendChild(headText);
     head.appendChild(dismissButton);
     card.appendChild(head);
+    return { container, shadow, root, card, dismissButton };
+}
+
+function createTranslationPrompt(showWarning) {
+    if (promptContainer || document.getElementById('gemini-translator-prompt-container')) return;
+    const { container, shadow, root, card, dismissButton } = createNoticeCard('gemini-translator-prompt-container', promptMessage);
+    promptContainer = container;
+    promptShadowRoot = shadow;
 
     if (showWarning) {
         const warnDiv = createUiElement('div', 'warn');
@@ -556,31 +563,8 @@ function showCacheRestoreNotice(titleText, offerRetranslate) {
     if (!IS_TOP_FRAME) return;
     if (restoreNoticeContainer) return;
     if (!document.body) return;
-    restoreNoticeContainer = document.createElement('div');
-    restoreNoticeContainer.id = 'gemini-translator-restore-container';
-    restoreNoticeContainer.dataset.geminiIgnore = 'true';
-    restoreNoticeContainer.style.cssText = 'position:fixed;top:0;right:0;z-index:2147483647;';
-    const shadow = attachUiShadowRoot(restoreNoticeContainer);
-
-    const style = document.createElement('style');
-    style.textContent = PROMPT_CSS;
-    shadow.appendChild(style);
-
-    const root = createUiRoot();
-    const card = createUiElement('div', 'card top');
-
-    const head = createUiElement('div', 'head');
-    const brand = createUiElement('div', 'app-icon');
-    brand.appendChild(createSvgIcon('15', '2.25', ICON_LOGO));
-    const headText = createUiElement('div', 'head-text');
-    headText.appendChild(createUiElement('div', 'title', titleText || st.cacheRestoredTitle));
-    const pairLabel = promptLanguagePairLabel();
-    if (pairLabel) headText.appendChild(createUiElement('div', 'sub', pairLabel));
-    const dismissButton = createIconButton(ICON_CLOSE, st.closeButton);
-    head.appendChild(brand);
-    head.appendChild(headText);
-    head.appendChild(dismissButton);
-    card.appendChild(head);
+    const { container, shadow, root, card, dismissButton } = createNoticeCard('gemini-translator-restore-container', titleText || st.cacheRestoredTitle);
+    restoreNoticeContainer = container;
 
     const actions = [];
     const continueButton = createTextButton('btn btn-text', st.translateRestButton, translateRemainingFromNotice);
