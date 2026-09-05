@@ -30,6 +30,7 @@
         "content-ui.js",
         "content-cache.js",
         "content-lang.js",
+        "content-scan.js",
         "content.js"
       ],
       "css": [
