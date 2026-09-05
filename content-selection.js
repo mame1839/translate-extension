@@ -542,7 +542,7 @@ function clearSelectionActions() {
     if (actions && actions.parentNode) actions.parentNode.removeChild(actions);
 }
 
-function renderSelectionLoading() {
+function renderSelectionLoading(labelKey = 'selLoading', fallback = 'Translating…') {
     if (!selectionShadowRoot) return;
     clearSelectionActions();
     setSelectionTitle(selectionLabel('selTitle', 'Translation'), false);
@@ -551,7 +551,7 @@ function renderSelectionLoading() {
     const spinner = document.createElement('span');
     spinner.className = 'sel-spinner';
     const label = document.createElement('span');
-    label.textContent = selectionLabel('selLoading', 'Translating…');
+    label.textContent = selectionLabel(labelKey, fallback);
     wrap.appendChild(spinner);
     wrap.appendChild(label);
     setSelectionBody(wrap);
@@ -626,7 +626,7 @@ function onSelectionReplaceClick(translation) {
     }
     if (plan.kind !== 'blocks') return;
     const requestId = ++selectionRequestId;
-    renderSelectionReplacing();
+    renderSelectionLoading('selReplacing', 'Replacing…');
     runSelectionBlockReplace(plan.blocks).then(result => {
         if (requestId !== selectionRequestId) return;
         if (result && result.applied > 0) renderSelectionReplaced(false);
@@ -635,22 +635,6 @@ function onSelectionReplaceClick(translation) {
         if (requestId !== selectionRequestId) return;
         renderSelectionReplaceFailure(null);
     });
-}
-
-function renderSelectionReplacing() {
-    if (!selectionShadowRoot) return;
-    clearSelectionActions();
-    setSelectionTitle(selectionLabel('selTitle', 'Translation'), false);
-    const wrap = document.createElement('div');
-    wrap.className = 'sel-loading';
-    const spinner = document.createElement('span');
-    spinner.className = 'sel-spinner';
-    const label = document.createElement('span');
-    label.textContent = selectionLabel('selReplacing', 'Replacing…');
-    wrap.appendChild(spinner);
-    wrap.appendChild(label);
-    setSelectionBody(wrap);
-    positionSelectionPopup();
 }
 
 function renderSelectionReplaced(showUndo) {
