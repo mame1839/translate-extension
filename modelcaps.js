@@ -14,7 +14,15 @@ const DEFAULTS = Object.freeze({
     maxToken: null,
     concurrencyLimit: 10,
     maxRetries: 3,
-    timeout: 300
+    timeout: 300,
+    toggleBlueBackground: false,
+    realTimeTranslation: false,
+    showProgressPopup: true,
+    hidePromptAllSites: false,
+    showContextMenu: true,
+    autoRetranslateDomain: true,
+    autoTranslateNewContent: false,
+    streamingTranslation: false
 });
 
 const ANTHROPIC_MAX_OUTPUT_TOKENS = 64000;

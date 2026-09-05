@@ -52,8 +52,8 @@ function handleExtensionInstalled(details) {
             if (items.concurrencyLimit === undefined) toSet.concurrencyLimit = DEFAULTS.concurrencyLimit;
             if (items.maxRetries === undefined) toSet.maxRetries = DEFAULTS.maxRetries;
             if (items.timeout === undefined || storedTimeoutIsLegacyDefault(details, items)) toSet.timeout = DEFAULTS.timeout;
-            if (items.showContextMenu === undefined) toSet.showContextMenu = true;
-            if (items.autoRetranslateDomain === undefined) toSet.autoRetranslateDomain = true;
+            if (items.showContextMenu === undefined) toSet.showContextMenu = DEFAULTS.showContextMenu;
+            if (items.autoRetranslateDomain === undefined) toSet.autoRetranslateDomain = DEFAULTS.autoRetranslateDomain;
             if (Object.keys(toSet).length > 0) chrome.storage.local.set(toSet);
             chrome.contextMenus.removeAll(() => {
                 chrome.contextMenus.create({

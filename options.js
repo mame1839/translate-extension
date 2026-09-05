@@ -29,6 +29,7 @@ const providerSettings = {
 };
 
 const STYLE_PRESETS = ['', 'formal', 'casual', 'technical'];
+const BOOLEAN_SETTINGS = ['toggleBlueBackground', 'realTimeTranslation', 'showProgressPopup', 'hidePromptAllSites', 'showContextMenu', 'autoRetranslateDomain', 'autoTranslateNewContent', 'streamingTranslation'];
 const SECTION_IDS = ['general', 'provider', 'behavior', 'style', 'sites', 'advanced', 'data'];
 
 const USAGE_PROVIDER_LABELS = {
@@ -931,7 +932,7 @@ const resetHandlers = {
         populateLanguageSelect('en');
         applyDir('en');
         applyI18n(getT('en'));
-        el('toggleBlueBackground').checked = false;
+        el('toggleBlueBackground').checked = DEFAULTS.toggleBlueBackground;
     },
     provider: () => {
         providerSettings.gemini = { apiKey: '', model: DEFAULTS.geminiModel, reasoning: DEFAULTS.geminiReasoning };
@@ -943,13 +944,13 @@ const resetHandlers = {
         updateProviderUI(currentProvider);
     },
     behavior: () => {
-        el('realTimeTranslation').checked = false;
-        el('hidePromptAllSites').checked = false;
-        el('streamingTranslation').checked = false;
-        el('showProgressPopup').checked = true;
-        el('showContextMenu').checked = true;
-        el('autoRetranslateDomain').checked = true;
-        el('autoTranslateNewContent').checked = false;
+        el('realTimeTranslation').checked = DEFAULTS.realTimeTranslation;
+        el('hidePromptAllSites').checked = DEFAULTS.hidePromptAllSites;
+        el('streamingTranslation').checked = DEFAULTS.streamingTranslation;
+        el('showProgressPopup').checked = DEFAULTS.showProgressPopup;
+        el('showContextMenu').checked = DEFAULTS.showContextMenu;
+        el('autoRetranslateDomain').checked = DEFAULTS.autoRetranslateDomain;
+        el('autoTranslateNewContent').checked = DEFAULTS.autoTranslateNewContent;
     },
     style: () => {
         el('translationStyle').value = '';
@@ -976,7 +977,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             'geminiReasoning', 'openaiReasoning', 'anthropicReasoning', 'compatibleReasoning',
             'delayBetweenRequests', 'maxToken', 'concurrencyLimit',
             'maxRetries', 'timeout',
-            'toggleBlueBackground', 'realTimeTranslation', 'showProgressPopup', 'excludeList', 'alwaysTranslateList', 'hidePromptAllSites', 'showContextMenu', 'autoRetranslateDomain', 'autoTranslateNewContent', 'streamingTranslation',
+            'excludeList', 'alwaysTranslateList', ...BOOLEAN_SETTINGS,
             'translationStyle', 'customInstruction', 'glossaryText'
         ]);
 
@@ -1015,14 +1016,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         el('concurrencyLimit').value = items.concurrencyLimit ?? DEFAULTS.concurrencyLimit;
         el('maxRetries').value = items.maxRetries ?? DEFAULTS.maxRetries;
         el('timeout').value = items.timeout ?? DEFAULTS.timeout;
-        el('toggleBlueBackground').checked = items.toggleBlueBackground === true;
-        el('realTimeTranslation').checked = items.realTimeTranslation === true;
-        el('showProgressPopup').checked = items.showProgressPopup !== false;
-        el('hidePromptAllSites').checked = items.hidePromptAllSites === true;
-        el('showContextMenu').checked = items.showContextMenu !== false;
-        el('autoRetranslateDomain').checked = items.autoRetranslateDomain !== false;
-        el('autoTranslateNewContent').checked = items.autoTranslateNewContent === true;
-        el('streamingTranslation').checked = items.streamingTranslation === true;
+        BOOLEAN_SETTINGS.forEach(id => { el(id).checked = items[id] ?? DEFAULTS[id]; });
         el('translationStyle').value = STYLE_PRESETS.includes(items.translationStyle) ? items.translationStyle : '';
         el('customInstruction').value = items.customInstruction || '';
         el('glossaryText').value = items.glossaryText || '';
@@ -1105,9 +1099,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     });
 
-    ['toggleBlueBackground', 'realTimeTranslation', 'showProgressPopup', 'hidePromptAllSites', 'showContextMenu', 'autoRetranslateDomain', 'autoTranslateNewContent', 'streamingTranslation'].forEach(id => {
-        el(id).addEventListener('change', scheduleSave);
-    });
+    BOOLEAN_SETTINGS.forEach(id => el(id).addEventListener('change', scheduleSave));
 
     el('toggleKeyVisibility').addEventListener('click', () => {
         const input = el('apiKey');
