@@ -47,7 +47,6 @@ async function initPopup() {
         linearFill: document.getElementById('linearFill'),
         progressPct: document.getElementById('progressPct'),
         progressBlocks: document.getElementById('progressBlocks'),
-        errorNote: document.getElementById('errorNote'),
         actionArea: document.getElementById('actionArea'),
         alwaysRow: document.getElementById('alwaysRow'),
         alwaysRowLabel: document.getElementById('alwaysRowLabel'),
@@ -167,8 +166,6 @@ function render(view, pageState) {
                 .replace('{total}', String(stats.totalFragments))
             : '';
     }
-
-    els.errorNote.hidden = true;
 
     const siteRowsDisabled = view === 'unavailable';
     els.alwaysSwitch.checked = !!pageState.alwaysTranslate;
