@@ -29,6 +29,7 @@
         "content-runtime.js",
         "content-ui.js",
         "content-cache.js",
+        "content-lang.js",
         "content.js"
       ],
       "css": [
