@@ -40,11 +40,7 @@ const INLINE_SKIP_TAGS = new Set([
 
 const DEFAULTS = Object.freeze({
     batchSize: 500,
-    maxBatchLength: 65535,
-    delayBetweenRequests: 10000,
-    concurrencyLimit: 10,
-    maxRetries: 3,
-    timeout: 180
+    maxBatchLength: 65535
 });
 
 const IS_TOP_FRAME = (function () {
