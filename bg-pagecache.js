@@ -57,20 +57,23 @@ function reqAsPromise(req) {
     });
 }
 
+async function withPageCacheDB(onFailure, fn) {
+    let db;
+    try { db = await openPageCacheDB(); } catch (e) { return onFailure(e); }
+    try { return await fn(db); }
+    catch (e) { return onFailure(e); }
+    finally { try { db.close(); } catch (e) { } }
+}
+
 async function pageCacheGet(key) {
     if (!key) return { record: null, found: false, error: '' };
-    let db;
-    try { db = await openPageCacheDB(); } catch (e) { return { record: null, found: false, error: describeStorageFailure(e) }; }
-    try {
+    return withPageCacheDB(e => ({ record: null, found: false, error: describeStorageFailure(e) }), async db => {
         const tx = db.transaction(PAGE_CACHE_STORE, 'readonly');
         const store = tx.objectStore(PAGE_CACHE_STORE);
-        let result = null;
-        try { result = await reqAsPromise(store.get(key)); }
-        catch (e) { return { record: null, found: false, error: describeStorageFailure(e) }; }
+        const result = await reqAsPromise(store.get(key));
         try { await awaitTransaction(tx); } catch (e) { }
         return { record: result || null, found: !!result, error: '' };
-    } catch (e) { return { record: null, found: false, error: describeStorageFailure(e) }; }
-    finally { try { db.close(); } catch (e) { } }
+    });
 }
 
 function isQuotaExceededError(e) {
@@ -86,9 +89,7 @@ async function pageCachePutRecord(db, record) {
 
 async function pageCacheSet(key, cache) {
     if (!key || !cache) return { saved: false, error: '', quotaExhausted: false };
-    let db;
-    try { db = await openPageCacheDB(); } catch (e) { return { saved: false, error: describeStorageFailure(e), quotaExhausted: false }; }
-    try {
+    return withPageCacheDB(e => ({ saved: false, error: describeStorageFailure(e), quotaExhausted: false }), async db => {
         const record = { ...cache, key };
         if (!record.savedAt) record.savedAt = Date.now();
         let lastError = '';
@@ -106,24 +107,18 @@ async function pageCacheSet(key, cache) {
             if (evicted === 0) break;
         }
         return { saved: false, error: lastError, quotaExhausted: true };
-    } catch (e) { return { saved: false, error: describeStorageFailure(e), quotaExhausted: false }; }
-    finally { try { db.close(); } catch (e) { } }
+    });
 }
 
 async function pageCacheDelete(key) {
     if (!key) return { removed: false, error: '' };
-    let db;
-    try { db = await openPageCacheDB(); } catch (e) { return { removed: false, error: describeStorageFailure(e) }; }
-    try {
+    return withPageCacheDB(e => ({ removed: false, error: describeStorageFailure(e) }), async db => {
         const tx = db.transaction(PAGE_CACHE_STORE, 'readwrite');
         const store = tx.objectStore(PAGE_CACHE_STORE);
-        try { await reqAsPromise(store.delete(key)); }
-        catch (e) { return { removed: false, error: describeStorageFailure(e) }; }
-        try { await awaitTransaction(tx); }
-        catch (e) { return { removed: false, error: describeStorageFailure(e) }; }
+        await reqAsPromise(store.delete(key));
+        await awaitTransaction(tx);
         return { removed: true, error: '' };
-    } catch (e) { return { removed: false, error: describeStorageFailure(e) }; }
-    finally { try { db.close(); } catch (e) { } }
+    });
 }
 
 function cleanupLegacyPageCache() {
@@ -168,24 +163,18 @@ async function pageCacheDeleteOldest(db, count) {
 
 async function pageCachePrune(maxEntries) {
     const limit = Math.max(1, Number.isFinite(maxEntries) ? maxEntries : 500);
-    let db;
-    try { db = await openPageCacheDB(); } catch (e) { return 0; }
-    try {
+    return withPageCacheDB(() => 0, async db => {
         const total = await pageCacheCountEntries(db);
-        return await pageCacheDeleteOldest(db, total - limit);
-    } catch (e) { return 0; }
-    finally { try { db.close(); } catch (e) { } }
+        return pageCacheDeleteOldest(db, total - limit);
+    });
 }
 
 async function pageCacheEvictForQuota() {
-    let db;
-    try { db = await openPageCacheDB(); } catch (e) { return 0; }
-    try {
+    return withPageCacheDB(() => 0, async db => {
         const total = await pageCacheCountEntries(db);
         if (total <= 0) return 0;
-        return await pageCacheDeleteOldest(db, Math.max(1, Math.ceil(total * PAGE_CACHE_QUOTA_EVICT_RATIO)));
-    } catch (e) { return 0; }
-    finally { try { db.close(); } catch (e) { } }
+        return pageCacheDeleteOldest(db, Math.max(1, Math.ceil(total * PAGE_CACHE_QUOTA_EVICT_RATIO)));
+    });
 }
 
 function measureRecordBytes(record) {
@@ -232,23 +221,22 @@ function pageCacheSampleBytes(db) {
 }
 
 async function pageCacheStats() {
-    let db;
-    try { db = await openPageCacheDB(); } catch (e) { return { entries: 0, bytes: 0, error: describeStorageFailure(e), bytesError: '' }; }
-    let entries = 0;
-    let bytes = 0;
-    let error = '';
-    let bytesError = '';
-    try {
-        entries = await pageCacheCountEntries(db);
-        if (entries > 0) {
-            const sample = await pageCacheSampleBytes(db);
-            if (sample.error) bytesError = sample.error;
-            else if (sample.records > 0) bytes = Math.round(sample.bytes / sample.records * entries);
-            else bytesError = 'EmptySample: no record could be measured';
-        }
-    } catch (e) { error = describeStorageFailure(e); }
-    finally { try { db.close(); } catch (e) { } }
-    return { entries, bytes, error, bytesError };
+    return withPageCacheDB(e => ({ entries: 0, bytes: 0, error: describeStorageFailure(e), bytesError: '' }), async db => {
+        let entries = 0;
+        let bytes = 0;
+        let error = '';
+        let bytesError = '';
+        try {
+            entries = await pageCacheCountEntries(db);
+            if (entries > 0) {
+                const sample = await pageCacheSampleBytes(db);
+                if (sample.error) bytesError = sample.error;
+                else if (sample.records > 0) bytes = Math.round(sample.bytes / sample.records * entries);
+                else bytesError = 'EmptySample: no record could be measured';
+            }
+        } catch (e) { error = describeStorageFailure(e); }
+        return { entries, bytes, error, bytesError };
+    });
 }
 
 function pageCacheSummarize(record) {
@@ -264,54 +252,50 @@ function pageCacheSummarize(record) {
 async function pageCacheList(offset, limit) {
     const start = Math.max(0, Number.isFinite(offset) ? Math.floor(offset) : 0);
     const size = Math.min(PAGE_CACHE_LIST_PAGE_SIZE, Math.max(1, Number.isFinite(limit) ? Math.floor(limit) : PAGE_CACHE_LIST_PAGE_SIZE));
-    let db;
-    try { db = await openPageCacheDB(); } catch (e) { return { pages: [], total: 0, offset: start, error: describeStorageFailure(e) }; }
-    let total = 0;
-    let error = '';
-    const pages = [];
-    try {
-        total = await pageCacheCountEntries(db);
-        if (total > start) {
-            const tx = db.transaction(PAGE_CACHE_STORE, 'readonly');
-            const store = tx.objectStore(PAGE_CACHE_STORE);
-            const index = store.index('savedAt');
-            await new Promise((resolve) => {
-                let skipped = 0;
-                let cursorReq;
-                try { cursorReq = index.openCursor(null, 'prev'); } catch (e) { error = describeStorageFailure(e); resolve(); return; }
-                cursorReq.onsuccess = (event) => {
-                    const cursor = event.target.result;
-                    if (!cursor || pages.length >= size) { resolve(); return; }
-                    if (skipped < start) {
-                        skipped++;
+    return withPageCacheDB(e => ({ pages: [], total: 0, offset: start, error: describeStorageFailure(e) }), async db => {
+        let total = 0;
+        let error = '';
+        const pages = [];
+        try {
+            total = await pageCacheCountEntries(db);
+            if (total > start) {
+                const tx = db.transaction(PAGE_CACHE_STORE, 'readonly');
+                const store = tx.objectStore(PAGE_CACHE_STORE);
+                const index = store.index('savedAt');
+                await new Promise((resolve) => {
+                    let skipped = 0;
+                    let cursorReq;
+                    try { cursorReq = index.openCursor(null, 'prev'); } catch (e) { error = describeStorageFailure(e); resolve(); return; }
+                    cursorReq.onsuccess = (event) => {
+                        const cursor = event.target.result;
+                        if (!cursor || pages.length >= size) { resolve(); return; }
+                        if (skipped < start) {
+                            skipped++;
+                            cursor.continue();
+                            return;
+                        }
+                        try { pages.push(pageCacheSummarize(cursor.value)); } catch (e) { }
                         cursor.continue();
-                        return;
-                    }
-                    try { pages.push(pageCacheSummarize(cursor.value)); } catch (e) { }
-                    cursor.continue();
-                };
-                cursorReq.onerror = (e) => {
-                    try { e.preventDefault(); } catch (err) { }
-                    error = describeStorageFailure(cursorReq.error);
-                    resolve();
-                };
-            });
-            try { await awaitTransaction(tx); } catch (e) { }
-        }
-    } catch (e) { error = describeStorageFailure(e); }
-    finally { try { db.close(); } catch (e) { } }
-    return { pages, total, offset: start, error };
+                    };
+                    cursorReq.onerror = (e) => {
+                        try { e.preventDefault(); } catch (err) { }
+                        error = describeStorageFailure(cursorReq.error);
+                        resolve();
+                    };
+                });
+                try { await awaitTransaction(tx); } catch (e) { }
+            }
+        } catch (e) { error = describeStorageFailure(e); }
+        return { pages, total, offset: start, error };
+    });
 }
 
 async function pageCacheClearAll() {
-    let db;
-    try { db = await openPageCacheDB(); } catch (e) { return false; }
-    try {
+    return withPageCacheDB(() => false, async db => {
         const tx = db.transaction(PAGE_CACHE_STORE, 'readwrite');
         const store = tx.objectStore(PAGE_CACHE_STORE);
         await reqAsPromise(store.clear());
         await awaitTransaction(tx);
         return true;
-    } catch (e) { return false; }
-    finally { try { db.close(); } catch (e) { } }
+    });
 }
