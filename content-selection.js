@@ -203,28 +203,6 @@ function selectionLabel(key, fallback) {
     return (typeof value === 'string' && value) ? value : fallback;
 }
 
-function createSelectionIcon(size, shapes) {
-    const ns = 'http://www.w3.org/2000/svg';
-    const svg = document.createElementNS(ns, 'svg');
-    svg.setAttribute('width', size);
-    svg.setAttribute('height', size);
-    svg.setAttribute('viewBox', '0 0 24 24');
-    svg.setAttribute('fill', 'none');
-    svg.setAttribute('stroke', 'currentColor');
-    svg.setAttribute('stroke-width', '2.25');
-    svg.setAttribute('stroke-linecap', 'round');
-    svg.setAttribute('stroke-linejoin', 'round');
-    svg.setAttribute('aria-hidden', 'true');
-    for (const [shapeTag, shapeAttrs] of shapes) {
-        const shape = document.createElementNS(ns, shapeTag);
-        for (const [attrName, attrValue] of Object.entries(shapeAttrs)) {
-            shape.setAttribute(attrName, attrValue);
-        }
-        svg.appendChild(shape);
-    }
-    return svg;
-}
-
 function isInsideSkippedContainer(node) {
     const start = node && node.nodeType !== Node.ELEMENT_NODE ? node.parentElement : node;
     return !!findAncestor(start, el => INLINE_SKIP_TAGS.has(el.nodeName), true);
@@ -508,7 +486,7 @@ function openSelectionPopup() {
 
     const badge = document.createElement('span');
     badge.className = 'sel-badge';
-    badge.appendChild(createSelectionIcon('14', [
+    badge.appendChild(createSvgIcon('14', '2.25', [
         ['path', { d: 'm5 8 6 6' }],
         ['path', { d: 'm4 14 6-6 2-3' }],
         ['path', { d: 'M2 5h12' }],
@@ -528,7 +506,7 @@ function openSelectionPopup() {
     closeBtn.type = 'button';
     closeBtn.title = closeLabel;
     closeBtn.setAttribute('aria-label', closeLabel);
-    closeBtn.appendChild(createSelectionIcon('14', [
+    closeBtn.appendChild(createSvgIcon('14', '2.25', [
         ['line', { x1: '6', y1: '6', x2: '18', y2: '18' }],
         ['line', { x1: '18', y1: '6', x2: '6', y2: '18' }]
     ]));
