@@ -74,20 +74,6 @@ const DEFAULTS = Object.freeze({
     timeout: 300
 });
 
-const LANGUAGE_LIST = [
-    { code: 'en', name: 'English' },       { code: 'zh', name: 'Chinese (Simplified)' },
-    { code: 'zh-Hant', name: 'Chinese (Traditional)' },
-    { code: 'hi', name: 'Hindi' },          { code: 'es', name: 'Spanish' },
-    { code: 'fr', name: 'French' },         { code: 'ar', name: 'Arabic' },
-    { code: 'bn', name: 'Bengali' },        { code: 'ru', name: 'Russian' },
-    { code: 'pt', name: 'Portuguese' },     { code: 'ur', name: 'Urdu' },
-    { code: 'id', name: 'Indonesian' },     { code: 'de', name: 'German' },
-    { code: 'ja', name: 'Japanese' },       { code: 'sw', name: 'Swahili' },
-    { code: 'mr', name: 'Marathi' },        { code: 'te', name: 'Telugu' },
-    { code: 'tr', name: 'Turkish' },        { code: 'ta', name: 'Tamil' },
-    { code: 'vi', name: 'Vietnamese' },     { code: 'ko', name: 'Korean' },
-];
-
 function getHostnameFromUrl(url) {
     if (!url) return '';
     try { return new URL(url).hostname; } catch (e) { return ''; }

@@ -42,7 +42,7 @@ async function translateSelectionText(text, signal) {
     const provider = (apiProvider || DEFAULTS.apiProvider).trim();
     const retryLimit = maxRetries ?? DEFAULTS.maxRetries;
     const langCode = (targetLanguage || 'en').trim();
-    const langEntry = LANGUAGE_LIST.find(l => l.code === langCode);
+    const langEntry = LANGUAGES.find(l => l.code === langCode);
     const prompt = createSelectionPrompt(text, langEntry ? langEntry.name : 'English');
     if (provider === 'openai') return selectionRequestOpenAI(prompt, retryLimit, signal);
     if (provider === 'anthropic') return selectionRequestAnthropic(prompt, retryLimit, signal);

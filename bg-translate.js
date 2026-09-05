@@ -17,7 +17,7 @@ async function translateTextBatch(fragmentBatch, signal, streamContext = null) {
     const provider = (apiProvider || DEFAULTS.apiProvider).trim();
     const retryLimit = maxRetries ?? DEFAULTS.maxRetries;
     const langCode = (targetLanguage || 'en').trim();
-    const langEntry = LANGUAGE_LIST.find(l => l.code === langCode);
+    const langEntry = LANGUAGES.find(l => l.code === langCode);
     const langName = langEntry ? langEntry.name : 'English';
 
     const jsonText = JSON.stringify(payload, null, 2);
