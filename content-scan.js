@@ -510,39 +510,21 @@ function unitsNotReturned(batch, translations) {
     return missing;
 }
 
+function markUnitsFailed(blocks, reason) {
+    for (const block of blocks) {
+        if (!block || !block.isConnected) continue;
+        if (block.dataset?.translationStatus === 'translated') continue;
+        try {
+            block.dataset.translationStatus = 'failed';
+            block.dataset.translationFailReason = reason;
+        } catch (e) { }
+    }
+}
+
+function blocksOfUnits(ids) {
+    return Array.from(ids, id => translationUnits.get(id)?.block);
+}
+
 function markMissingBatchUnitsFailed(batch, translations) {
-    for (const id of unitsNotReturned(batch, translations)) {
-        const block = translationUnits.get(id)?.block;
-        if (!block || !block.isConnected) continue;
-        if (block.dataset?.translationStatus === 'translated') continue;
-        try {
-            block.dataset.translationStatus = 'failed';
-            block.dataset.translationFailReason = 'missing';
-        } catch (e) { }
-    }
-}
-
-function markBatchUnitsTimedOut(batch) {
-    if (!Array.isArray(batch)) return;
-    for (const item of batch) {
-        const block = translationUnits.get(item.id)?.block;
-        if (!block || !block.isConnected) continue;
-        if (block.dataset?.translationStatus === 'translated') continue;
-        try {
-            block.dataset.translationStatus = 'failed';
-            block.dataset.translationFailReason = 'timeout';
-        } catch (e) { }
-    }
-}
-
-function markOversizedUnitsSkipped(oversizedTus) {
-    for (const tu of oversizedTus) {
-        const block = tu?.block;
-        if (!block || !block.isConnected) continue;
-        if (block.dataset?.translationStatus === 'translated') continue;
-        try {
-            block.dataset.translationStatus = 'failed';
-            block.dataset.translationFailReason = 'oversized';
-        } catch (e) { }
-    }
+    markUnitsFailed(blocksOfUnits(unitsNotReturned(batch, translations)), 'missing');
 }
