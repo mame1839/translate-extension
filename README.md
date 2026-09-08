@@ -12,12 +12,12 @@
 
 ### 概要
 
-Google Gemini・OpenAI・Anthropic などの AI API を使ってウェブページをその場で翻訳する Chrome 拡張機能です。ページ構造やリンク・書式を保ったまま、21 言語に対応しています。
+Google Gemini・OpenAI・Anthropic などの AI API を使ってウェブページをその場で翻訳する Chrome 拡張機能です。ページ構造やリンク・書式を保ったまま、22 言語に対応しています。
 
 ### 主な機能
 
 - **4 つの AI プロバイダー対応** — Gemini・OpenAI・Anthropic・OpenAI 互換エンドポイントに対応しています
-- **21 言語に翻訳可能** — 英語・日本語・中国語・韓国語・アラビア語・ロシア語などに翻訳できます
+- **22 言語に翻訳可能** — 英語・日本語・中国語・韓国語・イタリア語・アラビア語・ロシア語などに翻訳できます
 - **ページ構造を保持** — リンク・太字・見出しなどの書式をそのまま維持します
 - **バッチ処理 & 並列リクエスト** — 大きなページも高速に翻訳します
 - **ページキャッシュ** — 翻訳結果を言語ごとに保存し、再訪時はポップアップから復元できます。ページ単位での削除も可能です
@@ -56,7 +56,7 @@ Google Gemini・OpenAI・Anthropic などの AI API を使ってウェブペー�
 
 ### 翻訳先対応言語
 
-英語 / 日本語 / 中国語（簡体・繁体）/ 韓国語 / スペイン語 / フランス語 / ドイツ語 / ポルトガル語 / ロシア語 / アラビア語 / ヒンディー語 / ベンガル語 / ウルドゥー語 / インドネシア語 / スワヒリ語 / マラーティー語 / テルグ語 / タミル語 / トルコ語 / ベトナム語
+英語 / 日本語 / 中国語（簡体・繁体）/ 韓国語 / スペイン語 / フランス語 / ドイツ語 / ポルトガル語 / ロシア語 / アラビア語 / ヒンディー語 / ベンガル語 / ウルドゥー語 / インドネシア語 / スワヒリ語 / マラーティー語 / テルグ語 / タミル語 / トルコ語 / ベトナム語 / イタリア語
 
 ### 主な設定項目
 
@@ -81,12 +81,12 @@ Copyright (C) 2026 mame1839
 
 ### Overview
 
-A Chrome extension that translates web pages in place using AI APIs — Google Gemini, OpenAI, Anthropic, or any OpenAI-compatible endpoint. Supports 21 languages while preserving page structure, links, and formatting.
+A Chrome extension that translates web pages in place using AI APIs — Google Gemini, OpenAI, Anthropic, or any OpenAI-compatible endpoint. Supports 22 languages while preserving page structure, links, and formatting.
 
 ### Features
 
 - **4 AI providers** — Gemini, OpenAI, Anthropic, and OpenAI-compatible endpoints
-- **21 target languages** — English, Japanese, Chinese, Korean, Arabic, Russian, and more
+- **22 target languages** — English, Japanese, Chinese, Korean, Italian, Arabic, Russian, and more
 - **Structure-preserving** — keeps links, bold text, headings, and layout intact
 - **Batch processing & concurrency** — translates large pages quickly
 - **Page cache** — saves translations per language; restore from the popup on revisit, delete per page
@@ -125,7 +125,7 @@ Click **Add to Chrome** on the [Chrome Web Store page](https://chromewebstore.go
 
 ### Supported Target Languages
 
-English / Japanese / Chinese (Simplified & Traditional) / Korean / Spanish / French / German / Portuguese / Russian / Arabic / Hindi / Bengali / Urdu / Indonesian / Swahili / Marathi / Telugu / Tamil / Turkish / Vietnamese
+English / Japanese / Chinese (Simplified & Traditional) / Korean / Spanish / French / German / Portuguese / Russian / Arabic / Hindi / Bengali / Urdu / Indonesian / Swahili / Marathi / Telugu / Tamil / Turkish / Vietnamese / Italian
 
 ### Key Settings
 
@@ -150,12 +150,12 @@ Copyright (C) 2026 mame1839
 
 ### 概述
 
-一款使用 AI API（Google Gemini、OpenAI、Anthropic 或兼容 OpenAI 的端点）直接在页面内翻译网页的 Chrome 扩展程序。支持 21 种语言，同时保留页面结构、链接和格式。
+一款使用 AI API（Google Gemini、OpenAI、Anthropic 或兼容 OpenAI 的端点）直接在页面内翻译网页的 Chrome 扩展程序。支持 22 种语言，同时保留页面结构、链接和格式。
 
 ### 主要功能
 
 - **支持 4 种 AI 提供商** — Gemini、OpenAI、Anthropic 及 OpenAI 兼容端点
-- **支持 21 种目标语言** — 英语、日语、中文、韩语、阿拉伯语、俄语等
+- **支持 22 种目标语言** — 英语、日语、中文、韩语、意大利语、阿拉伯语、俄语等
 - **保留页面结构** — 保持链接、粗体、标题和布局不变
 - **批量处理 & 并发请求** — 快速翻译大型页面
 - **页面缓存** — 按语言保存翻译结果，再次访问时可从弹出窗口恢复，也可按页面删除
@@ -194,7 +194,7 @@ Copyright (C) 2026 mame1839
 
 ### 支持的目标语言
 
-英语 / 日语 / 中文（简体・繁体）/ 韩语 / 西班牙语 / 法语 / 德语 / 葡萄牙语 / 俄语 / 阿拉伯语 / 印地语 / 孟加拉语 / 乌尔都语 / 印度尼西亚语 / 斯瓦希里语 / 马拉地语 / 泰卢固语 / 泰米尔语 / 土耳其语 / 越南语
+英语 / 日语 / 中文（简体・繁体）/ 韩语 / 西班牙语 / 法语 / 德语 / 葡萄牙语 / 俄语 / 阿拉伯语 / 印地语 / 孟加拉语 / 乌尔都语 / 印度尼西亚语 / 斯瓦希里语 / 马拉地语 / 泰卢固语 / 泰米尔语 / 土耳其语 / 越南语 / 意大利语
 
 ### 主要设置项
 
@@ -219,12 +219,12 @@ Copyright (C) 2026 mame1839
 
 ### 개요
 
-Google Gemini, OpenAI, Anthropic 또는 OpenAI 호환 엔드포인트 등의 AI API를 사용하여 웹 페이지를 즉석에서 번역하는 Chrome 확장 프로그램입니다. 페이지 구조, 링크, 서식을 유지하면서 21개 언어를 지원합니다.
+Google Gemini, OpenAI, Anthropic 또는 OpenAI 호환 엔드포인트 등의 AI API를 사용하여 웹 페이지를 즉석에서 번역하는 Chrome 확장 프로그램입니다. 페이지 구조, 링크, 서식을 유지하면서 22개 언어를 지원합니다.
 
 ### 주요 기능
 
 - **4가지 AI 공급자 지원** — Gemini, OpenAI, Anthropic, OpenAI 호환 엔드포인트
-- **21개 대상 언어** — 영어, 일본어, 중국어, 한국어, 아랍어, 러시아어 등
+- **22개 대상 언어** — 영어, 일본어, 중국어, 한국어, 이탈리아어, 아랍어, 러시아어 등
 - **페이지 구조 유지** — 링크, 굵은 글씨, 제목, 레이아웃 그대로 유지
 - **배치 처리 & 병렬 요청** — 대형 페이지도 빠르게 번역
 - **페이지 캐시** — 번역 결과를 언어별로 저장하고 재방문 시 팝업에서 복원. 페이지 단위 삭제도 가능
@@ -263,7 +263,7 @@ Google Gemini, OpenAI, Anthropic 또는 OpenAI 호환 엔드포인트 등의 AI 
 
 ### 지원 대상 언어
 
-영어 / 일본어 / 중국어（간체·번체）/ 한국어 / 스페인어 / 프랑스어 / 독일어 / 포르투갈어 / 러시아어 / 아랍어 / 힌디어 / 벵골어 / 우르두어 / 인도네시아어 / 스와힐리어 / 마라티어 / 텔루구어 / 타밀어 / 터키어 / 베트남어
+영어 / 일본어 / 중국어（간체·번체）/ 한국어 / 스페인어 / 프랑스어 / 독일어 / 포르투갈어 / 러시아어 / 아랍어 / 힌디어 / 벵골어 / 우르두어 / 인도네시아어 / 스와힐리어 / 마라티어 / 텔루구어 / 타밀어 / 터키어 / 베트남어 / 이탈리아어
 
 ### 주요 설정 항목
 
@@ -288,12 +288,12 @@ Copyright (C) 2026 mame1839
 
 ### Обзор
 
-Расширение для Chrome, которое переводит веб-страницы прямо на месте с помощью AI API — Google Gemini, OpenAI, Anthropic или любого совместимого с OpenAI эндпоинта. Поддерживает 21 язык, сохраняя структуру страницы, ссылки и форматирование.
+Расширение для Chrome, которое переводит веб-страницы прямо на месте с помощью AI API — Google Gemini, OpenAI, Anthropic или любого совместимого с OpenAI эндпоинта. Поддерживает 22 языка, сохраняя структуру страницы, ссылки и форматирование.
 
 ### Основные возможности
 
 - **4 провайдера AI** — Gemini, OpenAI, Anthropic и совместимые с OpenAI эндпоинты
-- **21 язык перевода** — английский, японский, китайский, корейский, арабский, русский и другие
+- **22 языка перевода** — английский, японский, китайский, корейский, итальянский, арабский, русский и другие
 - **Сохранение структуры** — ссылки, жирный текст, заголовки и разметка остаются нетронутыми
 - **Пакетная обработка и параллельные запросы** — быстрый перевод больших страниц
 - **Кэш страниц** — переводы сохраняются по языкам, восстанавливаются из всплывающего окна и удаляются постранично
@@ -332,7 +332,7 @@ Copyright (C) 2026 mame1839
 
 ### Поддерживаемые языки перевода
 
-Английский / Японский / Китайский (упрощённый и традиционный) / Корейский / Испанский / Французский / Немецкий / Португальский / Русский / Арабский / Хинди / Бенгальский / Урду / Индонезийский / Суахили / Маратхи / Телугу / Тамильский / Турецкий / Вьетнамский
+Английский / Японский / Китайский (упрощённый и традиционный) / Корейский / Испанский / Французский / Немецкий / Португальский / Русский / Арабский / Хинди / Бенгальский / Урду / Индонезийский / Суахили / Маратхи / Телугу / Тамильский / Турецкий / Вьетнамский / Итальянский
 
 ### Основные настройки
 
