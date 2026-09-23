@@ -100,7 +100,7 @@ const DEFAULTS = Object.freeze({
     geminiModel: 'gemini-3.5-flash-lite',
     openaiModel: 'gpt-5.6-luna',
     anthropicModel: 'claude-haiku-4-5-20251001',
-    deepseekModel: 'deepseek-v4-flash',
+    deepseekModel: 'deepseek-flash',
     compatibleModel: '',
     geminiReasoning: '',
     openaiReasoning: 'off',
@@ -133,6 +133,7 @@ const LANGUAGE_LIST = [
     { code: 'mr', name: 'Marathi' },        { code: 'te', name: 'Telugu' },
     { code: 'tr', name: 'Turkish' },        { code: 'ta', name: 'Tamil' },
     { code: 'vi', name: 'Vietnamese' },     { code: 'ko', name: 'Korean' },
+    { code: 'it', name: 'Italian' },
 ];
 
 const frameStates = new Map();
@@ -1072,6 +1073,14 @@ const PROMPT_EXAMPLE_OUTPUTS = {
         nestedEmphasisAnchor: '<t0>공식 <a1>문서</a1></t0>를 참조하세요.',
         disappearingArticle: '<t0></t0><t1>가이드</t1>를 읽어 주세요.',
         blockAndSkipPlaceholders: '개요 <b0></b0> <s1></s1> 아이콘을 참조하세요.'
+    },
+    it: {
+        anchorWithPreposition: 'Le sparatorie a <t0><a1>Siverek</a1></t0> e a <t2><a3>Onikişubat</a3></t2> provocano 12 morti.',
+        anchorAtSentenceStart: 'Fai clic <a0>qui</a0> per vedere <t1>i nostri prodotti</t1>.',
+        inlineLinks: 'Leggi i nostri <a0>Termini</a0> e la nostra <a1>Informativa sulla privacy</a1>.',
+        nestedEmphasisAnchor: 'Consulta la <t0><a1>documentazione</a1> ufficiale</t0>.',
+        disappearingArticle: 'Leggi <t0></t0><t1>la guida</t1>.',
+        blockAndSkipPlaceholders: 'Panoramica <b0></b0> Vedi l\'icona <s1></s1>.'
     }
 };
 
@@ -1256,6 +1265,16 @@ function handleOpenAIHttpError(response, data, reasoningSent) {
         default:
             throw createTranslationError('unknownError', `\n${message}`);
     }
+}
+
+function handleDeepSeekHttpError(response, data, reasoningSent) {
+    const message = data?.error?.message || `HTTP Error ${response.status}`;
+    if (response.status === 402) throw createTranslationError('insufficientQuota', `\n${message}`);
+    if (response.status === 422) {
+        const detail = [message, data?.error?.code, data?.error?.param].filter(Boolean).join(' | ');
+        throw createInvalidRequestError(detail, reasoningSent);
+    }
+    handleOpenAIHttpError(response, data, reasoningSent);
 }
 
 function handleGeminiHttpError(response, data, reasoningSent) {
@@ -1497,6 +1516,19 @@ function finalizeOpenAIStream(acc) {
     if (!acc.fullText) throw createTranslationError('emptyResponse');
 }
 
+function assertDeepSeekFinishReason(reason) {
+    if (reason === 'stop') return;
+    if (reason === 'length') throw createTranslationError('maxTokensError');
+    if (reason === 'content_filter') throw createTranslationError('contentRefused');
+    if (reason === 'insufficient_system_resource' || reason === 'aborted') throw createTranslationError('serverError');
+    throw createTranslationError('unknownError', ` (finish_reason: ${reason ?? 'missing'})`);
+}
+
+function finalizeDeepSeekStream(acc) {
+    assertDeepSeekFinishReason(acc.finishReason);
+    if (!acc.fullText) throw createTranslationError('emptyResponse');
+}
+
 const THINK_OPEN_TAG = '<think>';
 const THINK_CLOSE_TAG = '</think>';
 
@@ -1695,19 +1727,17 @@ function buildDeepSeekRequest(settings, prompt, maxOutputTokens, options) {
     const caps = resolveModelCapabilities('deepseek', actualModel);
     const level = resolveReasoningLevel(settings.deepseekReasoning, actualModel === DEFAULTS.deepseekModel, DEFAULTS.deepseekReasoning);
     const modelLimit = caps.maxOutputTokens ?? DEEPSEEK_MAX_OUTPUT_TOKENS;
-    const requested = explicitOutputTokens(maxOutputTokens);
-    const outputLimit = requested === null ? null : Math.min(requested, modelLimit);
+    const outputLimit = Math.min(explicitOutputTokens(maxOutputTokens) ?? modelLimit, modelLimit);
     const reasoning = buildReasoningFields(caps, level, outputLimit, options.stream);
     const body = {
         model: actualModel,
         messages: [{ role: 'user', content: prompt }]
     };
-    // Official API defaults to thinking enabled; always send an explicit toggle.
     if (reasoning) Object.assign(body, reasoning);
     else body.thinking = { type: 'disabled' };
     const thinkingOn = body.thinking && body.thinking.type === 'enabled';
     if (!thinkingOn) body.temperature = 0.2;
-    if (outputLimit !== null) body.max_tokens = outputLimit;
+    body.max_tokens = outputLimit;
     if (options.json) body.response_format = { type: 'json_object' };
     if (options.stream) {
         body.stream = true;
@@ -1895,7 +1925,7 @@ async function translateWithDeepSeek(text, retryLimit, signal, targetLanguage = 
     const actualTimeout = settings.timeout || DEFAULTS.timeout;
     const prompt = createTranslationPrompt(text, targetLanguage, targetLanguageCode, await getPromptCustomSections());
     const request = buildDeepSeekRequest(settings, prompt, settings.maxToken || DEFAULTS.maxToken, { json: true, stream: !!streamContext });
-    const onHttpError = (response, data) => handleOpenAIHttpError(response, data, request.reasoningSent);
+    const onHttpError = (response, data) => handleDeepSeekHttpError(response, data, request.reasoningSent);
     if (streamContext) {
         return performTranslation(async () => parseTranslationResponse(await streamModelResponse({
             url: request.url,
@@ -1906,7 +1936,7 @@ async function translateWithDeepSeek(text, retryLimit, signal, targetLanguage = 
             signal,
             onHttpError,
             readChunk: readOpenAIStreamChunk,
-            finalizeStream: finalizeOpenAIStream,
+            finalizeStream: finalizeDeepSeekStream,
             streamContext,
             provider: 'deepseek'
         })), retryLimit, signal);
@@ -1917,7 +1947,7 @@ async function translateWithDeepSeek(text, retryLimit, signal, targetLanguage = 
         recordApiUsage('deepseek', readUsageTokens(data));
         const choice = data?.choices?.[0];
         if (!choice) throw createTranslationError('unknownError', ' (no choices)');
-        if (choice.finish_reason === 'length') throw createTranslationError('maxTokensError');
+        assertDeepSeekFinishReason(choice.finish_reason);
         const responseText = choice.message?.content || '';
         if (!responseText) throw createTranslationError('emptyResponse');
         return parseTranslationResponse(responseText);
@@ -2308,11 +2338,12 @@ async function selectionRequestDeepSeek(prompt, retryLimit, signal) {
     const request = buildDeepSeekRequest(settings, prompt, selectionOutputTokenLimit(settings.maxToken), { json: false, stream: false });
     return performTranslation(async () => {
         const { response, data } = await postProviderRequest(request, signal, actualTimeout);
-        if (!response.ok) handleOpenAIHttpError(response, data, request.reasoningSent);
+        if (!response.ok) handleDeepSeekHttpError(response, data, request.reasoningSent);
         recordApiUsage('deepseek', readUsageTokens(data));
         const choice = data?.choices?.[0];
         if (!choice) throw new Error(`${errorMessages.unknownError} (no choices)`);
-        return finishSelectionText(choice.message?.content || '', choice.finish_reason === 'length');
+        assertDeepSeekFinishReason(choice.finish_reason);
+        return finishSelectionText(choice.message?.content || '', false);
     }, retryLimit, signal);
 }
 

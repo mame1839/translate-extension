@@ -1,5 +1,5 @@
 const ANTHROPIC_MAX_OUTPUT_TOKENS = 64000;
-const DEEPSEEK_MAX_OUTPUT_TOKENS = 384000;
+const DEEPSEEK_MAX_OUTPUT_TOKENS = 393216;
 
 const REASONING_LEVELS = Object.freeze(['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max']);
 
@@ -141,9 +141,10 @@ function modelCapsForCompatible() {
     return createModelCaps({ recognized: false, mechanism: 'passthrough', levels: REASONING_LEVELS, defaultLevel: '' });
 }
 
-function modelCapsForDeepSeek() {
-    // Official V4 chat models share one thinking API: thinking.type plus reasoning_effort.
-    // Default off so page translation stays fast; the API itself defaults to thinking enabled.
+function modelCapsForDeepSeek(id) {
+    if (!['deepseek-flash', 'deepseek-v4-pro', 'deepseek-v4-flash'].includes(id)) {
+        return createModelCaps({ maxOutputTokens: DEEPSEEK_MAX_OUTPUT_TOKENS });
+    }
     return createModelCaps({
         recognized: true,
         mechanism: 'thinkingToggle',
@@ -158,7 +159,7 @@ function resolveModelCapabilities(provider, modelId) {
     if (provider === 'gemini') return modelCapsForGemini(id);
     if (provider === 'openai') return modelCapsForOpenAI(id);
     if (provider === 'anthropic') return modelCapsForAnthropic(id);
-    if (provider === 'deepseek') return modelCapsForDeepSeek();
+    if (provider === 'deepseek') return modelCapsForDeepSeek(id);
     if (provider === 'openai-compatible') return modelCapsForCompatible();
     return createModelCaps({});
 }

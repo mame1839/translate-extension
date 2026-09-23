@@ -3,7 +3,7 @@ const DEFAULTS = Object.freeze({
     geminiModel: 'gemini-3.5-flash-lite',
     openaiModel: 'gpt-5.6-luna',
     anthropicModel: 'claude-haiku-4-5-20251001',
-    deepseekModel: 'deepseek-v4-flash',
+    deepseekModel: 'deepseek-flash',
     compatibleModel: '',
     geminiReasoning: '',
     openaiReasoning: 'off',
