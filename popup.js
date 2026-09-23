@@ -1,13 +1,11 @@
-const RTL_LANGS = new Set(['ar', 'ur', 'he', 'fa']);
-
 const STATE_ICONS = {
     idle: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/></svg>',
     translating: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M21 12a9 9 0 1 1-6.2-8.56"><animateTransform attributeName="transform" type="rotate" from="0 12 12" to="360 12 12" dur="1s" repeatCount="indefinite"/></path></svg>',
     translated: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>',
     excluded: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><line x1="5.6" y1="5.6" x2="18.4" y2="18.4"/></svg>',
-    unavailable: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><line x1="5.6" y1="5.6" x2="18.4" y2="18.4"/></svg>',
     error: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="12.5"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>'
 };
+STATE_ICONS.unavailable = STATE_ICONS.excluded;
 
 const SEGMENT_CHECK = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>';
 
@@ -35,7 +33,7 @@ async function initPopup() {
     const lang = items.targetLanguage || 'en';
     t = getT(lang);
     document.documentElement.lang = lang;
-    document.documentElement.dir = RTL_LANGS.has(lang.split('-')[0]) ? 'rtl' : 'ltr';
+    document.documentElement.dir = isRtlLang(lang) ? 'rtl' : 'ltr';
 
     els = {
         appTitle: document.getElementById('appTitle'),
@@ -48,7 +46,6 @@ async function initPopup() {
         linearFill: document.getElementById('linearFill'),
         progressPct: document.getElementById('progressPct'),
         progressBlocks: document.getElementById('progressBlocks'),
-        errorNote: document.getElementById('errorNote'),
         actionArea: document.getElementById('actionArea'),
         alwaysRow: document.getElementById('alwaysRow'),
         alwaysRowLabel: document.getElementById('alwaysRowLabel'),
@@ -163,13 +160,11 @@ function render(view, pageState) {
         els.progressPct.textContent = pct + '%';
         const stats = pageState.stats || {};
         els.progressBlocks.textContent = stats.totalFragments > 0
-            ? t.popupBlocksTemplate
+            ? t.blocksTemplate
                 .replace('{translated}', String(stats.translatedFragments ?? 0))
                 .replace('{total}', String(stats.totalFragments))
             : '';
     }
-
-    els.errorNote.hidden = true;
 
     const siteRowsDisabled = view === 'unavailable';
     els.alwaysSwitch.checked = !!pageState.alwaysTranslate;
@@ -203,7 +198,7 @@ function renderActions(view, pageState) {
             area.appendChild(actionButton('btn btn-filled', t.popupTranslatePage, startTranslation));
         }
     } else if (view === 'translating') {
-        area.appendChild(actionButton('btn btn-danger-tonal', t.cancelBtn, cancelTranslation));
+        area.appendChild(actionButton('btn btn-danger-tonal', t.cancelButton, cancelTranslation));
     } else if (view === 'translated') {
         if (pageState.hasUntranslatedText) {
             area.appendChild(actionButton('btn btn-tonal', t.popupTranslateRemaining, startTranslation));
@@ -211,7 +206,7 @@ function renderActions(view, pageState) {
         area.appendChild(buildSegmented(pageState));
         const row = document.createElement('div');
         row.className = 'action-row';
-        row.appendChild(actionButton('btn btn-text', t.popupRetranslate, retranslateFromScratch));
+        row.appendChild(actionButton('btn btn-text', t.retranslateButton, retranslateFromScratch));
         area.appendChild(row);
     } else if (view === 'excluded') {
         area.appendChild(actionButton('btn btn-outlined', t.popupTranslateAnyway, startTranslation));
@@ -310,12 +305,6 @@ async function toggleTranslationView(view) {
     } catch (e) { }
     busy = false;
     refreshPageState(true);
-}
-
-function normalizeSiteList(value) {
-    if (Array.isArray(value)) return value.map(entry => String(entry).trim()).filter(Boolean);
-    if (typeof value === 'string') return value.split(/\r?\n/).map(entry => entry.trim()).filter(Boolean);
-    return [];
 }
 
 async function applySiteListChange(listKey, opposingKey, enabled) {

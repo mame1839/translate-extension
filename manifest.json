@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "__MSG_appName__",
-  "version": "7.1.0",
+  "version": "7.3.0",
   "description": "__MSG_appDescription__",
   "minimum_chrome_version": "102",
   "permissions": [
@@ -25,6 +25,16 @@
       "js": [
         "translations.js",
         "sitematch.js",
+        "content-state.js",
+        "content-runtime.js",
+        "content-ui.js",
+        "content-cache.js",
+        "content-lang.js",
+        "content-scan.js",
+        "content-apply.js",
+        "content-run.js",
+        "content-autogate.js",
+        "content-selection.js",
         "content.js"
       ],
       "css": [

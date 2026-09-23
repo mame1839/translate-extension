@@ -1,3 +1,32 @@
+const DEFAULTS = Object.freeze({
+    apiProvider: 'gemini',
+    geminiModel: 'gemini-3.5-flash-lite',
+    openaiModel: 'gpt-5.6-luna',
+    anthropicModel: 'claude-haiku-4-5-20251001',
+    deepseekModel: 'deepseek-flash',
+    compatibleModel: '',
+    geminiReasoning: '',
+    openaiReasoning: 'off',
+    anthropicReasoning: '',
+    deepseekReasoning: 'off',
+    compatibleReasoning: '',
+    batchSize: 500,
+    maxBatchLength: 65535,
+    delayBetweenRequests: 10000,
+    maxToken: null,
+    concurrencyLimit: 10,
+    maxRetries: 3,
+    timeout: 300,
+    toggleBlueBackground: false,
+    realTimeTranslation: false,
+    showProgressPopup: true,
+    hidePromptAllSites: false,
+    showContextMenu: true,
+    autoRetranslateDomain: true,
+    autoTranslateNewContent: false,
+    streamingTranslation: false
+});
+
 const ANTHROPIC_MAX_OUTPUT_TOKENS = 64000;
 const DEEPSEEK_MAX_OUTPUT_TOKENS = 393216;
 

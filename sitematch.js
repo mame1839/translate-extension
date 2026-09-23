@@ -47,6 +47,12 @@ function siteEntryMatchesUrl(entry, currentUrl) {
     return pagePath === entryPath || pagePath.startsWith(entryPath + '/');
 }
 
+function normalizeSiteList(value) {
+    if (Array.isArray(value)) return value.map(entry => String(entry).trim()).filter(Boolean);
+    if (typeof value === 'string') return value.split(/\r?\n/).map(entry => entry.trim()).filter(Boolean);
+    return [];
+}
+
 function siteListMatchesUrl(list, currentUrl) {
     if (!Array.isArray(list)) return false;
     return list.some(entry => siteEntryMatchesUrl(entry, currentUrl));

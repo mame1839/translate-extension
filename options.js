@@ -1,24 +1,3 @@
-const DEFAULTS = Object.freeze({
-    apiProvider: 'gemini',
-    geminiModel: 'gemini-3.5-flash-lite',
-    openaiModel: 'gpt-5.6-luna',
-    anthropicModel: 'claude-haiku-4-5-20251001',
-    deepseekModel: 'deepseek-flash',
-    compatibleModel: '',
-    geminiReasoning: '',
-    openaiReasoning: 'off',
-    anthropicReasoning: '',
-    deepseekReasoning: 'off',
-    compatibleReasoning: '',
-    batchSize: 500,
-    maxBatchLength: 65535,
-    delayBetweenRequests: 10000,
-    maxToken: null,
-    concurrencyLimit: 10,
-    maxRetries: 3,
-    timeout: 300
-});
-
 const MODEL_PLACEHOLDERS = {
     gemini: DEFAULTS.geminiModel,
     openai: DEFAULTS.openaiModel,
@@ -51,8 +30,8 @@ const providerSettings = {
     'openai-compatible': { apiKey: '', model: DEFAULTS.compatibleModel, reasoning: DEFAULTS.compatibleReasoning, endpoint: '', extraParams: {} }
 };
 
-const RTL_LANGS = new Set(['ar', 'ur', 'he', 'fa']);
 const STYLE_PRESETS = ['', 'formal', 'casual', 'technical'];
+const BOOLEAN_SETTINGS = ['toggleBlueBackground', 'realTimeTranslation', 'showProgressPopup', 'hidePromptAllSites', 'showContextMenu', 'autoRetranslateDomain', 'autoTranslateNewContent', 'streamingTranslation'];
 const SECTION_IDS = ['general', 'provider', 'behavior', 'style', 'sites', 'advanced', 'data'];
 
 const USAGE_PROVIDER_LABELS = {
@@ -135,7 +114,7 @@ function applyI18n(t) {
 
 function applyDir(lang) {
     document.documentElement.lang = lang;
-    document.documentElement.dir = RTL_LANGS.has(lang.split('-')[0]) ? 'rtl' : 'ltr';
+    document.documentElement.dir = isRtlLang(lang) ? 'rtl' : 'ltr';
 }
 
 function populateLanguageSelect(selected) {
@@ -288,13 +267,7 @@ function renderExtraParamRows(params, t) {
         shown.appendChild(literal);
         main.appendChild(name);
         main.appendChild(shown);
-        const removeBtn = document.createElement('button');
-        removeBtn.type = 'button';
-        removeBtn.className = 'icon-btn';
-        removeBtn.title = t.optRemove;
-        removeBtn.setAttribute('aria-label', t.optRemove);
-        removeBtn.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
-        removeBtn.addEventListener('click', () => {
+        const removeBtn = createRemoveButton(t, () => {
             delete providerSettings['openai-compatible'].extraParams[key];
             setExtraParamsError('');
             renderExtraParams();
@@ -304,6 +277,17 @@ function renderExtraParamRows(params, t) {
         row.appendChild(removeBtn);
         container.appendChild(row);
     });
+}
+
+function createRemoveButton(t, onClick) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'icon-btn';
+    button.title = t.optRemove;
+    button.setAttribute('aria-label', t.optRemove);
+    button.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+    button.addEventListener('click', onClick);
+    return button;
 }
 
 function renderExtraParams() {
@@ -389,11 +373,6 @@ function updateProviderUI(provider) {
     renderExtraParams();
 }
 
-function languageNativeName(code) {
-    const entry = LANGUAGES.find(lang => lang.code === code);
-    return entry ? entry.native : code;
-}
-
 function saveCurrentProviderToMemory() {
     const settings = providerSettings[currentProvider];
     if (!settings) return;
@@ -417,12 +396,6 @@ function readNumberField(id) {
 
 function normalizeNumberField(id) {
     el(id).value = readNumberField(id) ?? '';
-}
-
-function normalizeSiteList(value) {
-    if (Array.isArray(value)) return value.map(entry => String(entry).trim()).filter(Boolean);
-    if (typeof value === 'string') return value.split(/\r?\n/).map(entry => entry.trim()).filter(Boolean);
-    return [];
 }
 
 function normalizeSiteEntry(raw) {
@@ -451,13 +424,7 @@ function renderSiteRows(containerId, entries) {
         host.className = 'host';
         host.textContent = entry;
         host.title = entry;
-        const removeBtn = document.createElement('button');
-        removeBtn.type = 'button';
-        removeBtn.className = 'icon-btn';
-        removeBtn.title = t.optRemove;
-        removeBtn.setAttribute('aria-label', t.optRemove);
-        removeBtn.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
-        removeBtn.addEventListener('click', () => {
+        const removeBtn = createRemoveButton(t, () => {
             entries.splice(index, 1);
             renderSiteRows(containerId, entries);
             scheduleSave();
@@ -638,27 +605,14 @@ function buildUsageRow(provider, entry, t, lang) {
     return row;
 }
 
-function buildUsageEmptyRow(t) {
+function buildUsageMessageRow(text, className) {
     const row = document.createElement('div');
     row.className = 'row';
     const main = document.createElement('div');
     main.className = 'row-main';
     const desc = document.createElement('div');
-    desc.className = 'row-desc';
-    desc.textContent = t.usageEmpty;
-    main.appendChild(desc);
-    row.appendChild(main);
-    return row;
-}
-
-function buildUsageErrorRow(message) {
-    const row = document.createElement('div');
-    row.className = 'row';
-    const main = document.createElement('div');
-    main.className = 'row-main';
-    const desc = document.createElement('div');
-    desc.className = 'row-desc warn-text';
-    desc.textContent = message;
+    desc.className = className;
+    desc.textContent = text;
     main.appendChild(desc);
     row.appendChild(main);
     return row;
@@ -688,9 +642,9 @@ function renderUsageStats() {
     const lang = getUiLang();
     container.replaceChildren();
     if (usageFailureReason) {
-        container.appendChild(buildUsageErrorRow(backgroundUnreachable
+        container.appendChild(buildUsageMessageRow(backgroundUnreachable
             ? t.bgUnavailable + ' (' + usageFailureReason + ')'
-            : t.usageUnreadable.replace('{reason}', usageFailureReason)));
+            : t.usageUnreadable.replace('{reason}', usageFailureReason), 'row-desc warn-text'));
         since.textContent = '';
         return;
     }
@@ -701,7 +655,7 @@ function renderUsageStats() {
     const providers = usageStats.providers || {};
     const names = usedProviderNames(providers);
     if (names.length === 0) {
-        container.appendChild(buildUsageEmptyRow(t));
+        container.appendChild(buildUsageMessageRow(t.usageEmpty, 'row-desc'));
         since.textContent = '';
         return;
     }
@@ -862,13 +816,7 @@ function renderCachePages() {
         });
         main.appendChild(host);
         main.appendChild(meta);
-        const removeBtn = document.createElement('button');
-        removeBtn.type = 'button';
-        removeBtn.className = 'icon-btn';
-        removeBtn.title = t.optRemove;
-        removeBtn.setAttribute('aria-label', t.optRemove);
-        removeBtn.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
-        removeBtn.addEventListener('click', () => removeCachePage(page.key));
+        const removeBtn = createRemoveButton(t, () => removeCachePage(page.key));
         row.appendChild(main);
         row.appendChild(removeBtn);
         container.appendChild(row);
@@ -970,7 +918,7 @@ const resetHandlers = {
         populateLanguageSelect('en');
         applyDir('en');
         applyI18n(getT('en'));
-        el('toggleBlueBackground').checked = false;
+        el('toggleBlueBackground').checked = DEFAULTS.toggleBlueBackground;
     },
     provider: () => {
         providerSettings.gemini = { apiKey: '', model: DEFAULTS.geminiModel, reasoning: DEFAULTS.geminiReasoning };
@@ -983,13 +931,13 @@ const resetHandlers = {
         updateProviderUI(currentProvider);
     },
     behavior: () => {
-        el('realTimeTranslation').checked = false;
-        el('hidePromptAllSites').checked = false;
-        el('streamingTranslation').checked = false;
-        el('showProgressPopup').checked = true;
-        el('showContextMenu').checked = true;
-        el('autoRetranslateDomain').checked = true;
-        el('autoTranslateNewContent').checked = false;
+        el('realTimeTranslation').checked = DEFAULTS.realTimeTranslation;
+        el('hidePromptAllSites').checked = DEFAULTS.hidePromptAllSites;
+        el('streamingTranslation').checked = DEFAULTS.streamingTranslation;
+        el('showProgressPopup').checked = DEFAULTS.showProgressPopup;
+        el('showContextMenu').checked = DEFAULTS.showContextMenu;
+        el('autoRetranslateDomain').checked = DEFAULTS.autoRetranslateDomain;
+        el('autoTranslateNewContent').checked = DEFAULTS.autoTranslateNewContent;
     },
     style: () => {
         el('translationStyle').value = '';
@@ -1017,7 +965,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             'geminiReasoning', 'openaiReasoning', 'anthropicReasoning', 'deepseekReasoning', 'compatibleReasoning',
             'delayBetweenRequests', 'maxToken', 'concurrencyLimit',
             'maxRetries', 'timeout',
-            'toggleBlueBackground', 'realTimeTranslation', 'showProgressPopup', 'excludeList', 'alwaysTranslateList', 'hidePromptAllSites', 'showContextMenu', 'autoRetranslateDomain', 'autoTranslateNewContent', 'streamingTranslation',
+            'excludeList', 'alwaysTranslateList', ...BOOLEAN_SETTINGS,
             'translationStyle', 'customInstruction', 'glossaryText'
         ]);
 
@@ -1060,14 +1008,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         el('concurrencyLimit').value = items.concurrencyLimit ?? DEFAULTS.concurrencyLimit;
         el('maxRetries').value = items.maxRetries ?? DEFAULTS.maxRetries;
         el('timeout').value = items.timeout ?? DEFAULTS.timeout;
-        el('toggleBlueBackground').checked = items.toggleBlueBackground === true;
-        el('realTimeTranslation').checked = items.realTimeTranslation === true;
-        el('showProgressPopup').checked = items.showProgressPopup !== false;
-        el('hidePromptAllSites').checked = items.hidePromptAllSites === true;
-        el('showContextMenu').checked = items.showContextMenu !== false;
-        el('autoRetranslateDomain').checked = items.autoRetranslateDomain !== false;
-        el('autoTranslateNewContent').checked = items.autoTranslateNewContent === true;
-        el('streamingTranslation').checked = items.streamingTranslation === true;
+        BOOLEAN_SETTINGS.forEach(id => { el(id).checked = items[id] ?? DEFAULTS[id]; });
         el('translationStyle').value = STYLE_PRESETS.includes(items.translationStyle) ? items.translationStyle : '';
         el('customInstruction').value = items.customInstruction || '';
         el('glossaryText').value = items.glossaryText || '';
@@ -1150,9 +1091,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     });
 
-    ['toggleBlueBackground', 'realTimeTranslation', 'showProgressPopup', 'hidePromptAllSites', 'showContextMenu', 'autoRetranslateDomain', 'autoTranslateNewContent', 'streamingTranslation'].forEach(id => {
-        el(id).addEventListener('change', scheduleSave);
-    });
+    BOOLEAN_SETTINGS.forEach(id => el(id).addEventListener('change', scheduleSave));
 
     el('toggleKeyVisibility').addEventListener('click', () => {
         const input = el('apiKey');
