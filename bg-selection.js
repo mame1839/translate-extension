@@ -46,6 +46,7 @@ async function translateSelectionText(text, signal) {
     const prompt = createSelectionPrompt(text, langEntry ? langEntry.name : 'English');
     if (provider === 'openai') return selectionRequestOpenAI(prompt, retryLimit, signal);
     if (provider === 'anthropic') return selectionRequestAnthropic(prompt, retryLimit, signal);
+    if (provider === 'deepseek') return selectionRequestDeepSeek(prompt, retryLimit, signal);
     if (provider === 'openai-compatible') return selectionRequestCompatible(prompt, retryLimit, signal);
     return selectionRequestGemini(prompt, retryLimit, signal);
 }
@@ -144,5 +145,22 @@ async function selectionRequestAnthropic(prompt, retryLimit, signal) {
         recordApiUsage('anthropic', readUsageTokens(data));
         throwIfAnthropicRefused(data?.stop_reason, data?.stop_details);
         return finishSelectionText(readAnthropicTextContent(data?.content), anthropicOutputTruncated(data?.stop_reason));
+    }, retryLimit, signal);
+}
+
+async function selectionRequestDeepSeek(prompt, retryLimit, signal) {
+    const settings = await new Promise(resolve =>
+        chrome.storage.local.get(['deepseekApiKey', 'deepseekModel', 'deepseekReasoning', 'maxToken', 'timeout'], resolve));
+    if (!settings.deepseekApiKey) throw new Error(errorMessages.apiKeyNotSet);
+    const actualTimeout = settings.timeout || DEFAULTS.timeout;
+    const request = buildDeepSeekRequest(settings, prompt, selectionOutputTokenLimit(settings.maxToken), { json: false, stream: false });
+    return performTranslation(async () => {
+        const { response, data } = await postProviderRequest(request, signal, actualTimeout);
+        if (!response.ok) handleDeepSeekHttpError(response, data, request.reasoningSent);
+        recordApiUsage('deepseek', readUsageTokens(data));
+        const choice = data?.choices?.[0];
+        if (!choice) throw new Error(`${errorMessages.unknownError} (no choices)`);
+        assertDeepSeekFinishReason(choice.finish_reason);
+        return finishSelectionText(choice.message?.content || '', false);
     }, retryLimit, signal);
 }

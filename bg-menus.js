@@ -36,7 +36,7 @@ function handleExtensionInstalled(details) {
     }
     cleanupLegacyPageCache();
     chrome.storage.local.get(
-        ['apiProvider', 'targetLanguage', 'geminiModel', 'openaiModel', 'anthropicModel', 'compatibleModel',
+        ['apiProvider', 'targetLanguage', 'geminiModel', 'openaiModel', 'anthropicModel', 'deepseekModel', 'compatibleModel',
          'batchSize', 'maxBatchLength', 'delayBetweenRequests', 'maxToken', 'concurrencyLimit', 'maxRetries', 'timeout', 'showContextMenu', 'autoRetranslateDomain'],
         function (items) {
             const toSet = {};
@@ -45,6 +45,7 @@ function handleExtensionInstalled(details) {
             if (!items.geminiModel) toSet.geminiModel = DEFAULTS.geminiModel;
             if (!items.openaiModel) toSet.openaiModel = DEFAULTS.openaiModel;
             if (!items.anthropicModel) toSet.anthropicModel = DEFAULTS.anthropicModel;
+            if (!items.deepseekModel) toSet.deepseekModel = DEFAULTS.deepseekModel;
             if (items.batchSize === undefined) toSet.batchSize = DEFAULTS.batchSize;
             if (items.maxBatchLength === undefined) toSet.maxBatchLength = DEFAULTS.maxBatchLength;
             if (items.delayBetweenRequests === undefined) toSet.delayBetweenRequests = DEFAULTS.delayBetweenRequests;

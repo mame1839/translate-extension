@@ -149,6 +149,19 @@ function finalizeOpenAIStream(acc) {
     if (!acc.fullText) throw createTranslationError('emptyResponse');
 }
 
+function assertDeepSeekFinishReason(reason) {
+    if (reason === 'stop') return;
+    if (reason === 'length') throw createTranslationError('maxTokensError');
+    if (reason === 'content_filter') throw createTranslationError('contentRefused');
+    if (reason === 'insufficient_system_resource' || reason === 'aborted') throw createTranslationError('serverError');
+    throw createTranslationError('unknownError', ` (finish_reason: ${reason ?? 'missing'})`);
+}
+
+function finalizeDeepSeekStream(acc) {
+    assertDeepSeekFinishReason(acc.finishReason);
+    if (!acc.fullText) throw createTranslationError('emptyResponse');
+}
+
 const THINK_OPEN_TAG = '<think>';
 
 const THINK_CLOSE_TAG = '</think>';

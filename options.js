@@ -2,6 +2,7 @@ const MODEL_PLACEHOLDERS = {
     gemini: DEFAULTS.geminiModel,
     openai: DEFAULTS.openaiModel,
     anthropic: DEFAULTS.anthropicModel,
+    deepseek: DEFAULTS.deepseekModel,
     'openai-compatible': DEFAULTS.compatibleModel
 };
 
@@ -18,13 +19,14 @@ const REASONING_LEVEL_LABEL_KEYS = {
 const PROVIDER_ROW_DESCS = {
     apiKeyDesc: { base: 'optApiKeyDesc', 'openai-compatible': 'optCompatibleApiKeyDesc' },
     aiModelDesc: { base: 'optModelDesc', 'openai-compatible': 'optCompatibleModelDesc' },
-    maxTokenDesc: { base: 'optMaxTokenDesc', anthropic: 'optAnthropicMaxTokenDesc' }
+    maxTokenDesc: { base: 'optMaxTokenDesc', anthropic: 'optAnthropicMaxTokenDesc', deepseek: 'optAnthropicMaxTokenDesc' }
 };
 
 const providerSettings = {
     gemini: { apiKey: '', model: DEFAULTS.geminiModel, reasoning: DEFAULTS.geminiReasoning },
     openai: { apiKey: '', model: DEFAULTS.openaiModel, reasoning: DEFAULTS.openaiReasoning },
     anthropic: { apiKey: '', model: DEFAULTS.anthropicModel, reasoning: DEFAULTS.anthropicReasoning },
+    deepseek: { apiKey: '', model: DEFAULTS.deepseekModel, reasoning: DEFAULTS.deepseekReasoning },
     'openai-compatible': { apiKey: '', model: DEFAULTS.compatibleModel, reasoning: DEFAULTS.compatibleReasoning, endpoint: '', extraParams: {} }
 };
 
@@ -36,10 +38,11 @@ const USAGE_PROVIDER_LABELS = {
     gemini: 'Google (Gemini)',
     openai: 'OpenAI (ChatGPT)',
     anthropic: 'Anthropic (Claude)',
+    deepseek: 'DeepSeek',
     'openai-compatible': 'OpenAI Compatible'
 };
 
-const USAGE_PROVIDER_ORDER = ['gemini', 'openai', 'anthropic', 'openai-compatible'];
+const USAGE_PROVIDER_ORDER = ['gemini', 'openai', 'anthropic', 'deepseek', 'openai-compatible'];
 
 const BYTE_UNITS = ['B', 'KB', 'MB', 'GB'];
 
@@ -502,12 +505,15 @@ async function saveNow() {
         openaiModel: providerSettings.openai.model.trim() || DEFAULTS.openaiModel,
         anthropicApiKey: providerSettings.anthropic.apiKey,
         anthropicModel: providerSettings.anthropic.model.trim() || DEFAULTS.anthropicModel,
+        deepseekApiKey: providerSettings.deepseek.apiKey,
+        deepseekModel: providerSettings.deepseek.model.trim() || DEFAULTS.deepseekModel,
         compatibleApiKey: providerSettings['openai-compatible'].apiKey,
         compatibleModel: providerSettings['openai-compatible'].model.trim(),
         compatibleEndpoint: compatibleEndpointRaw,
         geminiReasoning: providerSettings.gemini.reasoning,
         openaiReasoning: providerSettings.openai.reasoning,
         anthropicReasoning: providerSettings.anthropic.reasoning,
+        deepseekReasoning: providerSettings.deepseek.reasoning,
         compatibleReasoning: providerSettings['openai-compatible'].reasoning,
         compatibleExtraParams: providerSettings['openai-compatible'].extraParams,
         delayBetweenRequests: readNumberField('delayBetweenRequests') * 1000,
@@ -918,6 +924,7 @@ const resetHandlers = {
         providerSettings.gemini = { apiKey: '', model: DEFAULTS.geminiModel, reasoning: DEFAULTS.geminiReasoning };
         providerSettings.openai = { apiKey: '', model: DEFAULTS.openaiModel, reasoning: DEFAULTS.openaiReasoning };
         providerSettings.anthropic = { apiKey: '', model: DEFAULTS.anthropicModel, reasoning: DEFAULTS.anthropicReasoning };
+        providerSettings.deepseek = { apiKey: '', model: DEFAULTS.deepseekModel, reasoning: DEFAULTS.deepseekReasoning };
         providerSettings['openai-compatible'] = { apiKey: '', model: DEFAULTS.compatibleModel, reasoning: DEFAULTS.compatibleReasoning, endpoint: '', extraParams: {} };
         currentProvider = DEFAULTS.apiProvider;
         el('apiProvider').value = currentProvider;
@@ -953,8 +960,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             'geminiApiKey', 'geminiModel',
             'openaiApiKey', 'openaiModel',
             'anthropicApiKey', 'anthropicModel',
+            'deepseekApiKey', 'deepseekModel',
             'compatibleApiKey', 'compatibleModel', 'compatibleEndpoint', 'compatibleExtraParams',
-            'geminiReasoning', 'openaiReasoning', 'anthropicReasoning', 'compatibleReasoning',
+            'geminiReasoning', 'openaiReasoning', 'anthropicReasoning', 'deepseekReasoning', 'compatibleReasoning',
             'delayBetweenRequests', 'maxToken', 'concurrencyLimit',
             'maxRetries', 'timeout',
             'excludeList', 'alwaysTranslateList', ...BOOLEAN_SETTINGS,
@@ -971,6 +979,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         providerSettings.openai.model = items.openaiModel || DEFAULTS.openaiModel;
         providerSettings.anthropic.apiKey = items.anthropicApiKey || '';
         providerSettings.anthropic.model = items.anthropicModel || DEFAULTS.anthropicModel;
+        providerSettings.deepseek.apiKey = items.deepseekApiKey || '';
+        providerSettings.deepseek.model = items.deepseekModel || DEFAULTS.deepseekModel;
         providerSettings['openai-compatible'].apiKey = items.compatibleApiKey || '';
         providerSettings['openai-compatible'].model = items.compatibleModel || DEFAULTS.compatibleModel;
         providerSettings['openai-compatible'].endpoint = items.compatibleEndpoint || '';
@@ -981,6 +991,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             providerSettings.openai.model === DEFAULTS.openaiModel, DEFAULTS.openaiReasoning);
         providerSettings.anthropic.reasoning = resolveReasoningLevel(items.anthropicReasoning,
             providerSettings.anthropic.model === DEFAULTS.anthropicModel, DEFAULTS.anthropicReasoning);
+        providerSettings.deepseek.reasoning = resolveReasoningLevel(items.deepseekReasoning,
+            providerSettings.deepseek.model === DEFAULTS.deepseekModel, DEFAULTS.deepseekReasoning);
         providerSettings['openai-compatible'].reasoning = resolveReasoningLevel(items.compatibleReasoning,
             providerSettings['openai-compatible'].model === DEFAULTS.compatibleModel, DEFAULTS.compatibleReasoning);
 

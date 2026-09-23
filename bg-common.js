@@ -183,6 +183,16 @@ function handleOpenAIHttpError(response, data, reasoningSent) {
     }
 }
 
+function handleDeepSeekHttpError(response, data, reasoningSent) {
+    const message = data?.error?.message || `HTTP Error ${response.status}`;
+    if (response.status === 402) throw createTranslationError('insufficientQuota', `\n${message}`);
+    if (response.status === 422) {
+        const detail = [message, data?.error?.code, data?.error?.param].filter(Boolean).join(' | ');
+        throw createInvalidRequestError(detail, reasoningSent);
+    }
+    handleOpenAIHttpError(response, data, reasoningSent);
+}
+
 function handleGeminiHttpError(response, data, reasoningSent) {
     const message = data?.error?.message || `HTTP Error ${response.status}`;
     const status = data?.error?.status || '';

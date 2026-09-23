@@ -3,10 +3,12 @@ const DEFAULTS = Object.freeze({
     geminiModel: 'gemini-3.5-flash-lite',
     openaiModel: 'gpt-5.6-luna',
     anthropicModel: 'claude-haiku-4-5-20251001',
+    deepseekModel: 'deepseek-flash',
     compatibleModel: '',
     geminiReasoning: '',
     openaiReasoning: 'off',
     anthropicReasoning: '',
+    deepseekReasoning: 'off',
     compatibleReasoning: '',
     batchSize: 500,
     maxBatchLength: 65535,
@@ -26,6 +28,7 @@ const DEFAULTS = Object.freeze({
 });
 
 const ANTHROPIC_MAX_OUTPUT_TOKENS = 64000;
+const DEEPSEEK_MAX_OUTPUT_TOKENS = 393216;
 
 const REASONING_LEVELS = Object.freeze(['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max']);
 
@@ -167,11 +170,25 @@ function modelCapsForCompatible() {
     return createModelCaps({ recognized: false, mechanism: 'passthrough', levels: REASONING_LEVELS, defaultLevel: '' });
 }
 
+function modelCapsForDeepSeek(id) {
+    if (!['deepseek-flash', 'deepseek-v4-pro', 'deepseek-v4-flash'].includes(id)) {
+        return createModelCaps({ maxOutputTokens: DEEPSEEK_MAX_OUTPUT_TOKENS });
+    }
+    return createModelCaps({
+        recognized: true,
+        mechanism: 'thinkingToggle',
+        levels: ['off', 'low', 'high', 'max'],
+        defaultLevel: 'off',
+        maxOutputTokens: DEEPSEEK_MAX_OUTPUT_TOKENS
+    });
+}
+
 function resolveModelCapabilities(provider, modelId) {
     const id = typeof modelId === 'string' ? modelId.trim().toLowerCase() : '';
     if (provider === 'gemini') return modelCapsForGemini(id);
     if (provider === 'openai') return modelCapsForOpenAI(id);
     if (provider === 'anthropic') return modelCapsForAnthropic(id);
+    if (provider === 'deepseek') return modelCapsForDeepSeek(id);
     if (provider === 'openai-compatible') return modelCapsForCompatible();
     return createModelCaps({});
 }
@@ -221,6 +238,9 @@ function buildReasoningFields(caps, level, maxTokens, streaming) {
             if (budget < 1024) return null;
             return { thinking: { type: 'enabled', budget_tokens: budget } };
         }
+        case 'thinkingToggle':
+            if (level === 'off') return { thinking: { type: 'disabled' } };
+            return { thinking: { type: 'enabled' }, reasoning_effort: level };
         default:
             return null;
     }

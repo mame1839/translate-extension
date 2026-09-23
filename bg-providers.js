@@ -128,6 +128,39 @@ function buildAnthropicRequest(settings, prompt, maxOutputTokens, options) {
     };
 }
 
+function buildDeepSeekRequest(settings, prompt, maxOutputTokens, options) {
+    const actualModel = (settings.deepseekModel || '').trim() || DEFAULTS.deepseekModel;
+    const caps = resolveModelCapabilities('deepseek', actualModel);
+    const level = resolveReasoningLevel(settings.deepseekReasoning, actualModel === DEFAULTS.deepseekModel, DEFAULTS.deepseekReasoning);
+    const modelLimit = caps.maxOutputTokens ?? DEEPSEEK_MAX_OUTPUT_TOKENS;
+    const outputLimit = Math.min(explicitOutputTokens(maxOutputTokens) ?? modelLimit, modelLimit);
+    const reasoning = buildReasoningFields(caps, level, outputLimit, options.stream);
+    const body = {
+        model: actualModel,
+        messages: [{ role: 'user', content: prompt }]
+    };
+    if (reasoning) Object.assign(body, reasoning);
+    else body.thinking = { type: 'disabled' };
+    const thinkingOn = body.thinking && body.thinking.type === 'enabled';
+    if (!thinkingOn) body.temperature = 0.2;
+    body.max_tokens = outputLimit;
+    if (options.json) body.response_format = { type: 'json_object' };
+    if (options.stream) {
+        body.stream = true;
+        body.stream_options = { include_usage: true };
+    }
+    return {
+        url: 'https://api.deepseek.com/chat/completions',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${settings.deepseekApiKey}`
+        },
+        body: JSON.stringify(body),
+        reasoningSent: true,
+        reasoningLevel: thinkingOn ? level : ''
+    };
+}
+
 function postProviderRequest(request, signal, timeout) {
     return fetchJsonWithTimeout(request.url, {
         method: 'POST',
@@ -156,6 +189,13 @@ function readOpenAIResponseText(data) {
     const choice = data?.choices?.[0];
     if (!choice) throw createTranslationError('unknownError', ' (no choices)');
     if (choice.finish_reason === 'length') throw createTranslationError('maxTokensError');
+    return choice.message?.content || '';
+}
+
+function readDeepSeekResponseText(data) {
+    const choice = data?.choices?.[0];
+    if (!choice) throw createTranslationError('unknownError', ' (no choices)');
+    assertDeepSeekFinishReason(choice.finish_reason);
     return choice.message?.content || '';
 }
 
@@ -192,6 +232,18 @@ function providerSpec(provider) {
             readChunk: readAnthropicStreamChunk,
             finalizeStream: finalizeAnthropicStream,
             readResponseText: readAnthropicResponseText
+        };
+    }
+    if (provider === 'deepseek') {
+        return {
+            name: 'deepseek',
+            settingsKeys: ['deepseekApiKey', 'deepseekModel', 'deepseekReasoning', 'maxToken', 'timeout'],
+            assertConfigured: settings => { if (!settings.deepseekApiKey) throw createTranslationError('apiKeyNotSet'); },
+            buildRequest: buildDeepSeekRequest,
+            handleHttpError: handleDeepSeekHttpError,
+            readChunk: readOpenAIStreamChunk,
+            finalizeStream: finalizeDeepSeekStream,
+            readResponseText: readDeepSeekResponseText
         };
     }
     if (provider === 'openai-compatible') {
