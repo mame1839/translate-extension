@@ -166,6 +166,14 @@ const PROMPT_EXAMPLE_OUTPUTS = {
         nestedEmphasisAnchor: '<t0>공식 <a1>문서</a1></t0>를 참조하세요.',
         disappearingArticle: '<t0></t0><t1>가이드</t1>를 읽어 주세요.',
         blockAndSkipPlaceholders: '개요 <b0></b0> <s1></s1> 아이콘을 참조하세요.'
+    },
+    it: {
+        anchorWithPreposition: 'Le sparatorie a <t0><a1>Siverek</a1></t0> e a <t2><a3>Onikişubat</a3></t2> provocano 12 morti.',
+        anchorAtSentenceStart: 'Fai clic <a0>qui</a0> per vedere <t1>i nostri prodotti</t1>.',
+        inlineLinks: 'Leggi i nostri <a0>Termini</a0> e la nostra <a1>Informativa sulla privacy</a1>.',
+        nestedEmphasisAnchor: 'Consulta la <t0><a1>documentazione</a1> ufficiale</t0>.',
+        disappearingArticle: 'Leggi <t0></t0><t1>la guida</t1>.',
+        blockAndSkipPlaceholders: 'Panoramica <b0></b0> Vedi l\'icona <s1></s1>.'
     }
 };
 
