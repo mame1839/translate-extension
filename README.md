@@ -12,11 +12,11 @@
 
 ### 概要
 
-Google Gemini・OpenAI・Anthropic などの AI API を使ってウェブページをその場で翻訳する Chrome 拡張機能です。ページ構造やリンク・書式を保ったまま、22 言語に対応しています。
+Google Gemini・OpenAI・Anthropic・DeepSeek などの AI API を使ってウェブページをその場で翻訳する Chrome 拡張機能です。ページ構造やリンク・書式を保ったまま、22 言語に対応しています。
 
 ### 主な機能
 
-- **4 つの AI プロバイダー対応** — Gemini・OpenAI・Anthropic・OpenAI 互換エンドポイントに対応しています
+- **5 つの AI プロバイダー対応** — Gemini・OpenAI・Anthropic・DeepSeek・OpenAI 互換エンドポイントに対応しています
 - **22 言語に翻訳可能** — 英語・日本語・中国語・韓国語・イタリア語・アラビア語・ロシア語などに翻訳できます
 - **ページ構造を保持** — リンク・太字・見出しなどの書式をそのまま維持します
 - **バッチ処理 & 並列リクエスト** — 大きなページも高速に翻訳します
@@ -52,6 +52,7 @@ Google Gemini・OpenAI・Anthropic などの AI API を使ってウェブペー�
 | Google Gemini | `gemini-3.5-flash-lite` |
 | OpenAI | `gpt-5.6-luna` |
 | Anthropic | `claude-haiku-4-5-20251001` |
+| DeepSeek | `deepseek-flash` |
 | OpenAI 互換 | 任意のモデル |
 
 ### 翻訳先対応言語
@@ -81,11 +82,11 @@ Copyright (C) 2026 mame1839
 
 ### Overview
 
-A Chrome extension that translates web pages in place using AI APIs — Google Gemini, OpenAI, Anthropic, or any OpenAI-compatible endpoint. Supports 22 languages while preserving page structure, links, and formatting.
+A Chrome extension that translates web pages in place using AI APIs — Google Gemini, OpenAI, Anthropic, DeepSeek, or any OpenAI-compatible endpoint. Supports 22 languages while preserving page structure, links, and formatting.
 
 ### Features
 
-- **4 AI providers** — Gemini, OpenAI, Anthropic, and OpenAI-compatible endpoints
+- **5 AI providers** — Gemini, OpenAI, Anthropic, DeepSeek, and OpenAI-compatible endpoints
 - **22 target languages** — English, Japanese, Chinese, Korean, Italian, Arabic, Russian, and more
 - **Structure-preserving** — keeps links, bold text, headings, and layout intact
 - **Batch processing & concurrency** — translates large pages quickly
@@ -121,6 +122,7 @@ Click **Add to Chrome** on the [Chrome Web Store page](https://chromewebstore.go
 | Google Gemini | `gemini-3.5-flash-lite` |
 | OpenAI | `gpt-5.6-luna` |
 | Anthropic | `claude-haiku-4-5-20251001` |
+| DeepSeek | `deepseek-flash` |
 | OpenAI Compatible | Any model |
 
 ### Supported Target Languages
@@ -150,11 +152,11 @@ Copyright (C) 2026 mame1839
 
 ### 概述
 
-一款使用 AI API（Google Gemini、OpenAI、Anthropic 或兼容 OpenAI 的端点）直接在页面内翻译网页的 Chrome 扩展程序。支持 22 种语言，同时保留页面结构、链接和格式。
+一款使用 AI API（Google Gemini、OpenAI、Anthropic、DeepSeek 或兼容 OpenAI 的端点）直接在页面内翻译网页的 Chrome 扩展程序。支持 22 种语言，同时保留页面结构、链接和格式。
 
 ### 主要功能
 
-- **支持 4 种 AI 提供商** — Gemini、OpenAI、Anthropic 及 OpenAI 兼容端点
+- **支持 5 种 AI 提供商** — Gemini、OpenAI、Anthropic、DeepSeek 及 OpenAI 兼容端点
 - **支持 22 种目标语言** — 英语、日语、中文、韩语、意大利语、阿拉伯语、俄语等
 - **保留页面结构** — 保持链接、粗体、标题和布局不变
 - **批量处理 & 并发请求** — 快速翻译大型页面
@@ -190,6 +192,7 @@ Copyright (C) 2026 mame1839
 | Google Gemini | `gemini-3.5-flash-lite` |
 | OpenAI | `gpt-5.6-luna` |
 | Anthropic | `claude-haiku-4-5-20251001` |
+| DeepSeek | `deepseek-flash` |
 | OpenAI 兼容 | 任意模型 |
 
 ### 支持的目标语言
@@ -219,11 +222,11 @@ Copyright (C) 2026 mame1839
 
 ### 개요
 
-Google Gemini, OpenAI, Anthropic 또는 OpenAI 호환 엔드포인트 등의 AI API를 사용하여 웹 페이지를 즉석에서 번역하는 Chrome 확장 프로그램입니다. 페이지 구조, 링크, 서식을 유지하면서 22개 언어를 지원합니다.
+Google Gemini, OpenAI, Anthropic, DeepSeek 또는 OpenAI 호환 엔드포인트 등의 AI API를 사용하여 웹 페이지를 즉석에서 번역하는 Chrome 확장 프로그램입니다. 페이지 구조, 링크, 서식을 유지하면서 22개 언어를 지원합니다.
 
 ### 주요 기능
 
-- **4가지 AI 공급자 지원** — Gemini, OpenAI, Anthropic, OpenAI 호환 엔드포인트
+- **5가지 AI 공급자 지원** — Gemini, OpenAI, Anthropic, DeepSeek, OpenAI 호환 엔드포인트
 - **22개 대상 언어** — 영어, 일본어, 중국어, 한국어, 이탈리아어, 아랍어, 러시아어 등
 - **페이지 구조 유지** — 링크, 굵은 글씨, 제목, 레이아웃 그대로 유지
 - **배치 처리 & 병렬 요청** — 대형 페이지도 빠르게 번역
@@ -259,6 +262,7 @@ Google Gemini, OpenAI, Anthropic 또는 OpenAI 호환 엔드포인트 등의 AI 
 | Google Gemini | `gemini-3.5-flash-lite` |
 | OpenAI | `gpt-5.6-luna` |
 | Anthropic | `claude-haiku-4-5-20251001` |
+| DeepSeek | `deepseek-flash` |
 | OpenAI 호환 | 임의 모델 |
 
 ### 지원 대상 언어
@@ -288,11 +292,11 @@ Copyright (C) 2026 mame1839
 
 ### Обзор
 
-Расширение для Chrome, которое переводит веб-страницы прямо на месте с помощью AI API — Google Gemini, OpenAI, Anthropic или любого совместимого с OpenAI эндпоинта. Поддерживает 22 языка, сохраняя структуру страницы, ссылки и форматирование.
+Расширение для Chrome, которое переводит веб-страницы прямо на месте с помощью AI API — Google Gemini, OpenAI, Anthropic, DeepSeek или любого совместимого с OpenAI эндпоинта. Поддерживает 22 языка, сохраняя структуру страницы, ссылки и форматирование.
 
 ### Основные возможности
 
-- **4 провайдера AI** — Gemini, OpenAI, Anthropic и совместимые с OpenAI эндпоинты
+- **5 провайдеров AI** — Gemini, OpenAI, Anthropic, DeepSeek и совместимые с OpenAI эндпоинты
 - **22 языка перевода** — английский, японский, китайский, корейский, итальянский, арабский, русский и другие
 - **Сохранение структуры** — ссылки, жирный текст, заголовки и разметка остаются нетронутыми
 - **Пакетная обработка и параллельные запросы** — быстрый перевод больших страниц
@@ -328,6 +332,7 @@ Copyright (C) 2026 mame1839
 | Google Gemini | `gemini-3.5-flash-lite` |
 | OpenAI | `gpt-5.6-luna` |
 | Anthropic | `claude-haiku-4-5-20251001` |
+| DeepSeek | `deepseek-flash` |
 | Совместимый с OpenAI | Любая модель |
 
 ### Поддерживаемые языки перевода
