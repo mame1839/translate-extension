@@ -1,0 +1,14 @@
+{
+  "appName": {
+    "message": "AI Website Translator",
+    "description": "Extension name (max 45 chars)"
+  },
+  "appDescription": {
+    "message": "Traduci qualsiasi pagina web con le API AI (Gemini, OpenAI, Anthropic, compatibili OpenAI). Oltre 20 lingue.",
+    "description": "Extension description (max 132 chars)"
+  },
+  "contextMenuToggle": {
+    "message": "Attiva/disattiva traduzione",
+    "description": "Context menu item to toggle translation"
+  }
+}
