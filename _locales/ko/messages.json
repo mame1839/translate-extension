@@ -4,7 +4,7 @@
     "description": "Extension name (max 45 chars)"
   },
   "appDescription": {
-    "message": "Gemini, OpenAI, Anthropic 등 AI API로 모든 웹페이지를 번역하세요. 20개 이상의 언어를 지원합니다.",
+    "message": "Gemini, OpenAI, Anthropic, DeepSeek 또는 OpenAI 호환 API로 웹페이지를 번역하세요. 22개 언어를 지원합니다.",
     "description": "Extension description (max 132 chars)"
   },
   "contextMenuToggle": {

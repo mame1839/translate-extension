@@ -4,7 +4,7 @@
     "description": "Extension name (max 45 chars)"
   },
   "appDescription": {
-    "message": "Переводите веб-страницы с помощью AI API (Gemini, OpenAI, Anthropic, совместимые). Поддерживает 20+ языков.",
+    "message": "Переводите веб-страницы с Gemini, OpenAI, Anthropic, DeepSeek или API, совместимыми с OpenAI. Поддерживаются 22 языка.",
     "description": "Extension description (max 132 chars)"
   },
   "contextMenuToggle": {

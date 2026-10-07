@@ -4,7 +4,7 @@
     "description": "Extension name (max 45 chars)"
   },
   "appDescription": {
-    "message": "AI API (Gemini, OpenAI, Anthropic) తో ఏదైనా వెబ్‌పేజీని అనువదించండి. 20+ భాషలకు మద్దతు ఉంది.",
+    "message": "Gemini, OpenAI, Anthropic, DeepSeek లేదా OpenAI అనుకూల APIలతో వెబ్‌పేజీలను అనువదించండి. 22 భాషలకు మద్దతు.",
     "description": "Extension description (max 132 chars)"
   },
   "contextMenuToggle": {

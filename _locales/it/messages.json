@@ -4,7 +4,7 @@
     "description": "Extension name (max 45 chars)"
   },
   "appDescription": {
-    "message": "Traduci qualsiasi pagina web con le API AI (Gemini, OpenAI, Anthropic, compatibili OpenAI). Oltre 20 lingue.",
+    "message": "Traduci pagine web con Gemini, OpenAI, Anthropic, DeepSeek o API compatibili con OpenAI. Supporta 22 lingue.",
     "description": "Extension description (max 132 chars)"
   },
   "contextMenuToggle": {

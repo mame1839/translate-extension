@@ -4,7 +4,7 @@
     "description": "Extension name (max 45 chars)"
   },
   "appDescription": {
-    "message": "Terjemahkan halaman web apa pun dengan AI API (Gemini, OpenAI, Anthropic, kompatibel OpenAI). Mendukung 20+ bahasa.",
+    "message": "Terjemahkan halaman web dengan Gemini, OpenAI, Anthropic, DeepSeek, atau API kompatibel OpenAI. Mendukung 22 bahasa.",
     "description": "Extension description (max 132 chars)"
   },
   "contextMenuToggle": {

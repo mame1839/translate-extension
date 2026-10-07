@@ -4,7 +4,7 @@
     "description": "Extension name (max 45 chars)"
   },
   "appDescription": {
-    "message": "ترجم أي صفحة ويب باستخدام AI API (Gemini وOpenAI وAnthropic). يدعم أكثر من 20 لغة.",
+    "message": "ترجم صفحات الويب إلى 22 لغة باستخدام Gemini أو OpenAI أو Anthropic أو DeepSeek أو واجهات API المتوافقة مع OpenAI.",
     "description": "Extension description (max 132 chars)"
   },
   "contextMenuToggle": {
