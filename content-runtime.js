@@ -111,6 +111,7 @@ function rememberTranslatedDomain(callback) {
             return;
         }
         if (typeof callback === 'function') callback(true, '');
+        else clearSessionSaveFailure();
     });
 }
 

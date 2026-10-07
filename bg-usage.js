@@ -2,13 +2,11 @@ const USAGE_STATS_KEY = 'usageStats';
 
 const USAGE_FLUSH_DELAY_MS = 1500;
 
-const pendingUsage = new Map();
+let pendingUsage = new Map();
 
 let usageFlushTimer = null;
 
 let usageWriteChain = Promise.resolve();
-
-let usageResetEpoch = 0;
 
 function toUsageCount(value) {
     const parsed = Number(value);
@@ -79,25 +77,27 @@ function scheduleUsageFlush() {
     }, USAGE_FLUSH_DELAY_MS);
 }
 
+function mergePendingUsage(target, delta) {
+    for (const [name, entry] of delta) {
+        const pending = target.get(name) || createProviderUsage();
+        pending.inputTokens += entry.inputTokens;
+        pending.outputTokens += entry.outputTokens;
+        pending.requests += entry.requests;
+        target.set(name, pending);
+    }
+}
+
 function flushPendingUsage() {
-    if (pendingUsage.size === 0) return usageWriteChain;
+    const batch = pendingUsage;
+    if (batch.size === 0) return usageWriteChain.catch(() => { });
     usageWriteChain = usageWriteChain.catch(() => { }).then(async () => {
-        if (pendingUsage.size === 0) return;
-        const delta = new Map(pendingUsage);
-        const epoch = usageResetEpoch;
-        pendingUsage.clear();
+        if (batch.size === 0) return;
+        const delta = new Map(batch);
+        batch.clear();
         try {
             await storeUsageDelta(delta);
         } catch (error) {
-            if (epoch === usageResetEpoch) {
-                for (const [name, entry] of delta) {
-                    const pending = pendingUsage.get(name) || createProviderUsage();
-                    pending.inputTokens += entry.inputTokens;
-                    pending.outputTokens += entry.outputTokens;
-                    pending.requests += entry.requests;
-                    pendingUsage.set(name, pending);
-                }
-            }
+            mergePendingUsage(batch, delta);
             throw error;
         }
     });
@@ -165,6 +165,7 @@ async function storeUsageDelta(delta) {
 }
 
 async function getUsageStatsSnapshot() {
+    await usageWriteChain.catch(() => { });
     await flushPendingUsage();
     return readStoredUsageStats();
 }
@@ -174,10 +175,19 @@ async function resetUsageStats() {
         clearTimeout(usageFlushTimer);
         usageFlushTimer = null;
     }
-    usageResetEpoch++;
-    pendingUsage.clear();
+    const beforeReset = pendingUsage;
+    const afterReset = new Map();
+    pendingUsage = afterReset;
     const cleared = createUsageStats();
-    usageWriteChain = usageWriteChain.catch(() => { }).then(() => writeUsageStats(cleared));
+    usageWriteChain = usageWriteChain.catch(() => { }).then(async () => {
+        try {
+            await writeUsageStats(cleared);
+        } catch (error) {
+            mergePendingUsage(afterReset, beforeReset);
+            if (pendingUsage === afterReset && afterReset.size > 0) scheduleUsageFlush();
+            throw error;
+        }
+    });
     await usageWriteChain;
     return cleared;
 }
