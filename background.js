@@ -191,22 +191,20 @@ function handleContentScriptMessage(request, sender, sendResponse) {
 
     if (request.action === "sessionMarkTranslated") {
         const hostname = topFrameHostname(sender);
-        if (hostname) {
-            markSessionTranslated(tabId, hostname).catch(() => { });
-        }
-        sendResponse({ ok: true });
-        return false;
+        if (!hostname) { sendResponse({ ok: false, error: 'Hostname unavailable' }); return false; }
+        markSessionTranslated(tabId, hostname)
+            .then(() => sendResponse({ ok: true }))
+            .catch(e => sendResponse({ ok: false, error: describeStorageFailure(e) }));
+        return true;
     }
 
     if (request.action === "sessionIsDomainKnown") {
         const hostname = topFrameHostname(sender);
         if (!hostname) { sendResponse({ known: false }); return false; }
-        isSessionDomainKnown(hostname).then(known => {
-            if (known) {
-                markSessionTranslated(tabId, hostname).catch(() => { });
-            }
+        isSessionDomainKnown(hostname).then(async known => {
+            if (known) await markSessionTranslated(tabId, hostname);
             sendResponse({ known });
-        }).catch(() => sendResponse({ known: false }));
+        }).catch(e => sendResponse({ known: null, error: describeStorageFailure(e) }));
         return true;
     }
 

@@ -75,13 +75,16 @@ function createAbortError() {
 function sleep(ms, signal) {
     return new Promise((resolve, reject) => {
         if (signal?.aborted) return reject(createAbortError());
-        const timeoutId = setTimeout(resolve, ms);
-        if (signal) {
-            signal.addEventListener('abort', () => {
-                clearTimeout(timeoutId);
-                reject(createAbortError());
-            }, { once: true });
-        }
+        const onAbort = () => {
+            clearTimeout(timeoutId);
+            signal.removeEventListener('abort', onAbort);
+            reject(createAbortError());
+        };
+        const timeoutId = setTimeout(() => {
+            signal?.removeEventListener('abort', onAbort);
+            resolve();
+        }, ms);
+        signal?.addEventListener('abort', onAbort, { once: true });
     });
 }
 
@@ -96,7 +99,8 @@ async function fetchJsonWithTimeout(resource, options = {}, timeout, reasoningLe
     const controller = new AbortController();
     const timeoutId = timeout > 0 ? setTimeout(() => controller.abort(), timeout * 1000) : null;
     const externalSignal = options.signal;
-    options.signal = combineSignals(externalSignal, controller.signal);
+    const combined = combineSignals(externalSignal, controller.signal);
+    options.signal = combined.signal;
     try {
         const response = await fetch(resource, options);
         let data = null;
@@ -117,23 +121,26 @@ async function fetchJsonWithTimeout(resource, options = {}, timeout, reasoningLe
         throw createTranslationError('fetchError', `: ${error.message}`);
     } finally {
         if (timeoutId) clearTimeout(timeoutId);
+        combined.cleanup();
     }
 }
 
 function combineSignals(...signals) {
     const controller = new AbortController();
+    const sources = signals.filter(Boolean);
+    const cleanup = () => sources.forEach(signal => signal.removeEventListener('abort', onAbort));
     const onAbort = () => {
         controller.abort();
-        signals.forEach(signal => signal?.removeEventListener?.('abort', onAbort));
+        cleanup();
     };
-    for (const signal of signals.filter(s => s)) {
+    for (const signal of sources) {
         if (signal.aborted) {
-            controller.abort();
+            onAbort();
             break;
         }
         signal.addEventListener('abort', onAbort, { once: true });
     }
-    return controller.signal;
+    return { signal: controller.signal, cleanup };
 }
 
 function parseRetryAfterHeaderMs(response) {

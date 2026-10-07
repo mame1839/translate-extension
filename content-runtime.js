@@ -96,13 +96,22 @@ function showExtensionContextLostPanel() {
 
 function querySessionDomainKnown(callback) {
     sendRuntimeMessage({ action: 'sessionIsDomainKnown' }, (response, failure) => {
-        if (failure) { callback(false); return; }
-        callback(!!response?.known);
+        if (failure || response?.error) { callback(null, failure || response.error); return; }
+        if (typeof response?.known !== 'boolean') { callback(null, 'Session state unavailable'); return; }
+        callback(response.known);
     });
 }
 
-function rememberTranslatedDomain() {
-    sendRuntimeMessage({ action: 'sessionMarkTranslated' });
+function rememberTranslatedDomain(callback) {
+    sendRuntimeMessage({ action: 'sessionMarkTranslated' }, (response, failure) => {
+        if (failure || response?.error || response?.ok !== true) {
+            const error = failure || response?.error || 'Session state unavailable';
+            if (typeof callback === 'function') callback(false, error);
+            else showSessionStateFailure(error, 'save');
+            return;
+        }
+        if (typeof callback === 'function') callback(true, '');
+    });
 }
 
 function broadcastCancelToAllFrames() {

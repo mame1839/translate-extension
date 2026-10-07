@@ -57,14 +57,15 @@ async function streamModelResponse(streamRequest) {
         timeoutId = timeout > 0 ? setTimeout(() => timeoutController.abort(), timeout * 1000) : null;
     };
     armIdleTimeout();
-    const combinedSignal = combineSignals(signal, timeoutController.signal);
+    const combined = combineSignals(signal, timeoutController.signal);
     const timedOut = () => timeoutController.signal.aborted && !signal?.aborted;
     const acc = { fullText: '', finishReason: '', sentKeys: new Set(), usage: createUsageTokens() };
     let response;
     try {
-        response = await fetch(url, { method: 'POST', headers, body, signal: combinedSignal });
+        response = await fetch(url, { method: 'POST', headers, body, signal: combined.signal });
     } catch (error) {
         if (timeoutId) clearTimeout(timeoutId);
+        combined.cleanup();
         if (error.name === 'AbortError') {
             if (timedOut()) throw createTimeoutError(reasoningLevel, timeout);
             throw createAbortError();
@@ -107,6 +108,7 @@ async function streamModelResponse(streamRequest) {
         throw error;
     } finally {
         if (timeoutId) clearTimeout(timeoutId);
+        combined.cleanup();
     }
 }
 
