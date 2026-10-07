@@ -1,7 +1,7 @@
 const DEFAULTS = Object.freeze({
     apiProvider: 'gemini',
     geminiModel: 'gemini-3.5-flash-lite',
-    openaiModel: 'gpt-5.6-luna',
+    openaiModel: 'gpt-6-luna',
     anthropicModel: 'claude-haiku-4-5-20251001',
     deepseekModel: 'deepseek-flash',
     compatibleModel: '',
@@ -108,6 +108,15 @@ function modelCapsForOpenAI(id) {
         const minor = gpt[2] === undefined ? 0 : parseInt(gpt[2], 10);
         if (major < 5) return createModelCaps({ recognized: true });
         const byEffort = { recognized: true, mechanism: 'reasoningEffort' };
+        if (major === 6) {
+            if (id === 'gpt-6-luna' || id === 'gpt-6-sol') {
+                return createModelCaps(Object.assign(byEffort, { levels: ['off', 'low', 'medium', 'high', 'xhigh', 'max'], defaultLevel: 'medium' }));
+            }
+            if (id === 'gpt-6-astra' || id === 'gpt-6.1-sol') {
+                return createModelCaps(Object.assign(byEffort, { levels: ['low', 'medium', 'high', 'xhigh', 'max'], defaultLevel: id === 'gpt-6.1-sol' ? 'medium' : '' }));
+            }
+            return createModelCaps({});
+        }
         if (major === 5 && minor === 0) {
             return createModelCaps(Object.assign(byEffort, { levels: ['minimal', 'low', 'medium', 'high'], defaultLevel: 'medium' }));
         }
@@ -116,7 +125,7 @@ function modelCapsForOpenAI(id) {
         }
         const levels = ['off', 'low', 'medium', 'high', 'xhigh'];
         if (major === 5 && minor <= 4) return createModelCaps(Object.assign(byEffort, { levels, defaultLevel: 'off' }));
-        if (major === 5 && minor <= 6) return createModelCaps(Object.assign(byEffort, { levels, defaultLevel: 'medium' }));
+        if (major === 5 && minor <= 6) return createModelCaps(Object.assign(byEffort, { levels: minor === 6 ? levels.concat('max') : levels, defaultLevel: 'medium' }));
         return createModelCaps(Object.assign(byEffort, { levels, defaultLevel: '' }));
     }
     if (OPENAI_O_SERIES_PATTERN.test(id)) {
