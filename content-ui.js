@@ -610,7 +610,9 @@ const ERROR_CODE_MESSAGE_KEYS = {
     reasoningNotSupported: 'errReasoningNotSupported',
     reasoningTimeout: 'errReasoningTimeout',
     unknownError: 'errUnknown',
-    extensionReloaded: 'errExtensionReloaded'
+    extensionReloaded: 'errExtensionReloaded',
+    sessionStateFailed: 'errSessionState',
+    originalRestoreFailed: 'errOriginalRestoreFailed'
 };
 
 const ERROR_CODE_ACTIONS = {
@@ -700,6 +702,38 @@ function createErrorActionButtons(code, errorMessage) {
         ];
     }
     return [createTextButton('btn btn-text', st.closeButton, removeStatusIndicator)];
+}
+
+let sessionSaveFailed = false;
+
+function clearSessionSaveFailure() {
+    currentSessionDomainKnown = true;
+    sessionSaveFailed = false;
+    const note = getStatusCard()?.querySelector('#translationSessionNote');
+    if (note) note.remove();
+}
+
+function appendSessionSaveFailureNote() {
+    if (!sessionSaveFailed) return;
+    const card = getStatusCard();
+    if (!card || card.querySelector('#translationSessionNote')) return;
+    const note = createUiElement('div', 'sub', st.sessionSaveFailed);
+    note.id = 'translationSessionNote';
+    card.appendChild(note);
+}
+
+function showSessionStateFailure(error, purpose) {
+    if (extensionContextLost) return;
+    if (purpose === 'save') {
+        sessionSaveFailed = true;
+        cancelStatusAutoDismiss();
+        if (!ensureStatusPanelForError()) return;
+        if (!isTranslating && !isApplyingUpdates && statusPanelPhase !== 'error' && statusPanelPhase !== 'cancelled') renderStatusPanel('done');
+        appendSessionSaveFailureNote();
+        return;
+    }
+    translationHasError = true;
+    if (ensureStatusPanelForError()) showErrorPopup(error || st.errSessionState, 'sessionStateFailed');
 }
 
 function showErrorPopup(errorMessage, code) {
@@ -848,6 +882,9 @@ function renderStatusPanel(phase, detail) {
         if (failed.timedOut > 0 && st.blocksTimedOut) {
             headText.appendChild(createUiElement('div', 'sub', st.blocksTimedOut.replace('{count}', failed.timedOut)));
         }
+        if (failed.restore > 0) {
+            headText.appendChild(createUiElement('div', 'sub', st.errOriginalRestoreFailed));
+        }
     }
     head.appendChild(headText);
 
@@ -894,6 +931,7 @@ function renderStatusPanel(phase, detail) {
         }
     }
 
+    appendSessionSaveFailureNote();
     const closeStatusBtn = card.querySelector('#closeStatusBtn');
     if (closeStatusBtn) addUserClickListener(closeStatusBtn, removeStatusIndicator);
     const minimizeButton = card.querySelector('#minimizeStatusBtn');

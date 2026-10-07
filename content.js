@@ -19,12 +19,22 @@ function initTranslation() {
                 const currentUrl = window.location.href;
                 const isExcluded = siteListMatchesUrl(items.excludeList, currentUrl);
                 const isAlwaysTranslate = !isExcluded && siteListMatchesUrl(items.alwaysTranslateList, currentUrl);
+                let sessionDomainState = null;
+                async function getSessionDomainState() {
+                    if (!sessionDomainState) {
+                        sessionDomainState = await new Promise(resolve => querySessionDomainKnown((known, error) => {
+                            currentSessionDomainKnown = known === true;
+                            resolve({ known: known === true, error: error || '' });
+                        }));
+                    }
+                    return sessionDomainState;
+                }
                 if (!isReactSpa && !isExcluded) {
                     const restored = await tryRestoreFromCache(chosenLang);
                     const optedIntoAutoTranslation = (restored || cacheRestoreActive) && (items.realTimeTranslation === true
                         || isAlwaysTranslate
-                        || (items.autoRetranslateDomain !== false && await new Promise(resolve => querySessionDomainKnown(resolve))));
-                    if (optedIntoAutoTranslation) {
+                        || (items.autoRetranslateDomain !== false && (await getSessionDomainState()).known));
+                    if (optedIntoAutoTranslation && isAutomaticPageTranslationAllowed()) {
                         let restoredBlocks = 0;
                         try { restoredBlocks = applyCacheRestore(); } catch (e) { }
                         if (restoredBlocks > 0) {
@@ -48,15 +58,15 @@ function initTranslation() {
                 detectedPageLanguage = languageDecision.detectedSourceLanguage;
 
                 const translationStarter = () => {
-                    if (isTranslating) return;
-                    if (!translationStarted) return;
+                    if (isTranslating || isApplyingUpdates || translationCancelled || translationHasError) return;
+                    if (!translationStarted || !isAutomaticPageTranslationAllowed()) return;
                     startTranslation();
                 };
 
                 const autoRetranslateEnabled = items.autoRetranslateDomain !== false;
 
                 const beginAutoTranslation = () => {
-                    if (isExcluded) return;
+                    if (!isAutomaticPageTranslationAllowed() || translationCancelled || translationHasError) return;
                     if (languageDecision.skipAutoTranslation) {
                         if (languageDecision.skipAutoTranslationIsLowConfidence) showPromptIfNeeded(true);
                         return;
@@ -77,13 +87,14 @@ function initTranslation() {
                 }
 
                 if (autoRetranslateEnabled && !isExcluded && !isReactSpa) {
-                    querySessionDomainKnown((known) => {
-                        if (known) {
-                            beginAutoTranslation();
-                            return;
-                        }
-                        showPromptIfNeeded();
-                    });
+                    const sessionState = await getSessionDomainState();
+                    if (isCurrentUrlExcluded()) return;
+                    if (sessionState.error) showSessionStateFailure(sessionState.error, 'query');
+                    else if (sessionState.known) {
+                        beginAutoTranslation();
+                        return;
+                    }
+                    showPromptIfNeeded();
                     return;
                 }
 
@@ -91,7 +102,7 @@ function initTranslation() {
 
                 function showPromptIfNeeded(promptEvenIfTargetLanguage) {
                     if (!IS_TOP_FRAME) return;
-                    if (isExcluded) return;
+                    if (isCurrentUrlExcluded()) return;
                     if (languageDecision.pageIsTargetLanguage && !promptEvenIfTargetLanguage) return;
                     if (items.hidePromptAllSites !== true) {
                         createTranslationPrompt(false);

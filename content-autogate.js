@@ -19,10 +19,19 @@ function isExcludedSubframe() {
     return !IS_TOP_FRAME && isCurrentUrlExcluded();
 }
 
+function isAutomaticPageTranslationAllowed() {
+    if (isCurrentUrlExcluded()) return false;
+    return currentRealTimeTranslation || siteListMatchesUrl(currentAlwaysTranslateList, window.location.href)
+        || (currentAutoRetranslateDomain && currentSessionDomainKnown);
+}
+
 function adoptSettingSnapshot(items) {
     autoTranslateNewContent = items.autoTranslateNewContent === true;
     hidePromptForAllSites = items.hidePromptAllSites === true;
     currentExcludeList = Array.isArray(items.excludeList) ? items.excludeList : [];
+    currentRealTimeTranslation = items.realTimeTranslation === true;
+    currentAlwaysTranslateList = Array.isArray(items.alwaysTranslateList) ? items.alwaysTranslateList : [];
+    currentAutoRetranslateDomain = items.autoRetranslateDomain !== false;
 }
 
 function watchSettingChanges() {
@@ -33,6 +42,9 @@ function watchSettingChanges() {
         if (changes.autoTranslateNewContent) autoTranslateNewContent = changes.autoTranslateNewContent.newValue === true;
         if (changes.hidePromptAllSites) hidePromptForAllSites = changes.hidePromptAllSites.newValue === true;
         if (changes.excludeList) currentExcludeList = Array.isArray(changes.excludeList.newValue) ? changes.excludeList.newValue : [];
+        if (changes.realTimeTranslation) currentRealTimeTranslation = changes.realTimeTranslation.newValue === true;
+        if (changes.alwaysTranslateList) currentAlwaysTranslateList = Array.isArray(changes.alwaysTranslateList.newValue) ? changes.alwaysTranslateList.newValue : [];
+        if (changes.autoRetranslateDomain) currentAutoRetranslateDomain = changes.autoRetranslateDomain.newValue !== false;
     });
 }
 
@@ -306,8 +318,11 @@ function scheduleRetranslationIfNeeded() {
     if (translationCancelled || translationHasError) return;
     if (isTranslating || isApplyingUpdates) return;
     if (!pendingNewContentRetranslation && !pendingAuthorizedRetranslation) return;
-    const authorized = (pendingAuthorizedRetranslation && autoTranslationBudgetLeft())
-        || (pendingNewContentRetranslation && canAutoTranslateNewContent());
+    const authorizedPending = pendingAuthorizedRetranslation;
+    const newContentPending = pendingNewContentRetranslation;
+    const userInitiatedPending = pendingStartIsUserInitiated;
+    const authorized = (authorizedPending && (userInitiatedPending || (autoTranslationBudgetLeft() && isAutomaticPageTranslationAllowed())))
+        || (newContentPending && canAutoTranslateNewContent());
     clearPendingRetranslation();
     if (!authorized) {
         maybeShowContinueNotice();
@@ -315,8 +330,11 @@ function scheduleRetranslationIfNeeded() {
     }
     clearTimeout(observerDebounceTimer);
     observerDebounceTimer = setTimeout(() => {
-        if (translationStarted && !isTranslating && !translationCancelled && !translationHasError) {
-            startAutoTranslation();
+        const stillAuthorized = (authorizedPending && (userInitiatedPending || (autoTranslationBudgetLeft() && isAutomaticPageTranslationAllowed())))
+            || (newContentPending && canAutoTranslateNewContent());
+        if (stillAuthorized && translationStarted && !isTranslating && !isApplyingUpdates && !translationCancelled && !translationHasError) {
+            if (authorizedPending && userInitiatedPending) startTranslation(true);
+            else startAutoTranslation();
         }
     }, 600);
 }

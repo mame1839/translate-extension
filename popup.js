@@ -25,6 +25,7 @@ let pageSupported = false;
 let busy = false;
 let lastSignature = '';
 let lastView = '';
+let pageStateRequestId = 0;
 
 document.addEventListener('DOMContentLoaded', initPopup);
 
@@ -126,7 +127,9 @@ function resolveViewState(pageState) {
 }
 
 async function refreshPageState(force) {
+    const requestId = ++pageStateRequestId;
     const pageState = await queryPageState();
+    if (requestId !== pageStateRequestId) return;
     const view = resolveViewState(pageState);
     const stats = pageState.stats || {};
     const signature = [

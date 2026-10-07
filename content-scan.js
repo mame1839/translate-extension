@@ -140,10 +140,11 @@ function cleanupProcessingMarkers() {
 }
 
 function countFailedBlocksByReason() {
-    const counts = { timedOut: 0, other: 0 };
+    const counts = { timedOut: 0, other: 0, restore: 0 };
     forEachMarkedElement('[data-translation-status="failed"]', el => {
         const reason = el.dataset?.translationFailReason;
         if (reason === 'oversized') return;
+        if ('translatedHtml' in el.dataset) counts.restore++;
         if (reason === 'timeout') counts.timedOut++;
         else counts.other++;
     });
@@ -173,19 +174,16 @@ function isFullyExcluded(element, ignoreVisibilityHidden) {
     if (element.hidden === true) return true;
     if (element.hasAttribute && element.hasAttribute('hidden')) return true;
     if (element.namespaceURI && element.namespaceURI !== 'http://www.w3.org/1999/xhtml') return true;
-    if (BLOCK_TAGS.has(element.nodeName)) {
-        let hidden;
-        const cached = scanCache ? scanCache.hiddenBlockStyles.get(element) : undefined;
-        if (cached !== undefined) {
-            hidden = cached;
-        } else {
-            hidden = isHiddenByComputedStyle(element);
-            if (scanCache) scanCache.hiddenBlockStyles.set(element, hidden);
-        }
-        if (ignoreVisibilityHidden && hidden === 'visibility') return false;
-        return hidden !== '';
+    let hidden;
+    const cached = scanCache ? scanCache.hiddenBlockStyles.get(element) : undefined;
+    if (cached !== undefined) {
+        hidden = cached;
+    } else {
+        hidden = isHiddenByComputedStyle(element);
+        if (scanCache) scanCache.hiddenBlockStyles.set(element, hidden);
     }
-    return false;
+    if (hidden === 'display') return true;
+    return BLOCK_TAGS.has(element.nodeName) && !ignoreVisibilityHidden && hidden === 'visibility';
 }
 
 function isHiddenByComputedStyle(element) {
@@ -278,7 +276,8 @@ function collectBlocksAcrossRoots(rejectNode) {
         if (!root || visited.has(root)) continue;
         visited.add(root);
 
-        if (root.nodeType === Node.ELEMENT_NODE && BLOCK_TAGS.has(root.nodeName)) {
+        if (root.nodeType === Node.ELEMENT_NODE && findAncestor(root, element => isFullyExcluded(element, true), true)) continue;
+        if (root.nodeType === Node.ELEMENT_NODE && BLOCK_TAGS.has(root.nodeName) && !isFullyExcluded(root)) {
             blocks.push(root);
         }
 
