@@ -92,6 +92,7 @@ try {
 try {
     chrome.tabs.onRemoved.addListener(function (tabId) {
         discardFramesForTab(tabId);
+        abortSelectionTranslationsForTab(tabId);
         untrackSessionTab(tabId).catch(() => { });
     });
 } catch (e) { }
@@ -100,6 +101,7 @@ try {
     chrome.tabs.onUpdated.addListener(function (tabId, changeInfo) {
         if (changeInfo.status === 'loading') {
             discardFramesForTab(tabId);
+            abortSelectionTranslationsForTab(tabId);
         }
         if (changeInfo.url) {
             handleTabUrlChange(tabId, changeInfo.url).catch(() => { });

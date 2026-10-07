@@ -8,6 +8,8 @@ let usageFlushTimer = null;
 
 let usageWriteChain = Promise.resolve();
 
+let usageResetEpoch = 0;
+
 function toUsageCount(value) {
     const parsed = Number(value);
     return Number.isFinite(parsed) && parsed > 0 ? Math.round(parsed) : 0;
@@ -71,15 +73,34 @@ function scheduleUsageFlush() {
     if (usageFlushTimer !== null) return;
     usageFlushTimer = setTimeout(() => {
         usageFlushTimer = null;
-        flushPendingUsage();
+        flushPendingUsage().catch(() => {
+            if (pendingUsage.size > 0) scheduleUsageFlush();
+        });
     }, USAGE_FLUSH_DELAY_MS);
 }
 
 function flushPendingUsage() {
     if (pendingUsage.size === 0) return usageWriteChain;
-    const delta = new Map(pendingUsage);
-    pendingUsage.clear();
-    usageWriteChain = usageWriteChain.then(() => storeUsageDelta(delta)).catch(() => { });
+    usageWriteChain = usageWriteChain.catch(() => { }).then(async () => {
+        if (pendingUsage.size === 0) return;
+        const delta = new Map(pendingUsage);
+        const epoch = usageResetEpoch;
+        pendingUsage.clear();
+        try {
+            await storeUsageDelta(delta);
+        } catch (error) {
+            if (epoch === usageResetEpoch) {
+                for (const [name, entry] of delta) {
+                    const pending = pendingUsage.get(name) || createProviderUsage();
+                    pending.inputTokens += entry.inputTokens;
+                    pending.outputTokens += entry.outputTokens;
+                    pending.requests += entry.requests;
+                    pendingUsage.set(name, pending);
+                }
+            }
+            throw error;
+        }
+    });
     return usageWriteChain;
 }
 
@@ -105,24 +126,26 @@ function normalizeUsageStats(raw) {
 }
 
 function readStoredUsageStats() {
-    return new Promise(resolve => {
+    return new Promise((resolve, reject) => {
         try {
             chrome.storage.local.get([USAGE_STATS_KEY], items => {
-                void chrome.runtime.lastError;
+                const error = chrome.runtime.lastError;
+                if (error) return reject(new Error(error.message || String(error)));
                 resolve(normalizeUsageStats(items && items[USAGE_STATS_KEY]));
             });
-        } catch (e) { resolve(createUsageStats()); }
+        } catch (e) { reject(e); }
     });
 }
 
 function writeUsageStats(stats) {
-    return new Promise(resolve => {
+    return new Promise((resolve, reject) => {
         try {
             chrome.storage.local.set({ [USAGE_STATS_KEY]: stats }, () => {
-                void chrome.runtime.lastError;
+                const error = chrome.runtime.lastError;
+                if (error) return reject(new Error(error.message || String(error)));
                 resolve();
             });
-        } catch (e) { resolve(); }
+        } catch (e) { reject(e); }
     });
 }
 
@@ -151,9 +174,10 @@ async function resetUsageStats() {
         clearTimeout(usageFlushTimer);
         usageFlushTimer = null;
     }
+    usageResetEpoch++;
     pendingUsage.clear();
     const cleared = createUsageStats();
-    usageWriteChain = usageWriteChain.then(() => writeUsageStats(cleared)).catch(() => { });
+    usageWriteChain = usageWriteChain.catch(() => { }).then(() => writeUsageStats(cleared));
     await usageWriteChain;
     return cleared;
 }

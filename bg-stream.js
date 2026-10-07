@@ -122,7 +122,11 @@ function readGeminiTextParts(parts) {
 
 function readGeminiStreamChunk(chunk, acc) {
     const candidate = chunk?.candidates?.[0];
-    if (!candidate) return '';
+    if (!candidate) {
+        const blockReason = chunk?.promptFeedback?.blockReason;
+        if (blockReason) throw createTranslationError('invalidRequest', ` (blocked: ${blockReason})`);
+        return '';
+    }
     if (candidate.finishReason) acc.finishReason = candidate.finishReason;
     return readGeminiTextParts(candidate.content?.parts);
 }
