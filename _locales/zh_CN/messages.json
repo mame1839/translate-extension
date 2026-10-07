@@ -4,7 +4,7 @@
     "description": "Extension name (max 45 chars)"
   },
   "appDescription": {
-    "message": "使用 AI API（Gemini、OpenAI、Anthropic 等）翻译任意网页，支持简繁中文等 20 余种语言。",
+    "message": "使用 Gemini、OpenAI、Anthropic、DeepSeek 或兼容 OpenAI 的 API 翻译网页。支持 22 种语言。",
     "description": "Extension description (max 132 chars)"
   },
   "contextMenuToggle": {

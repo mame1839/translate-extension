@@ -4,7 +4,7 @@
     "description": "Extension name (max 45 chars)"
   },
   "appDescription": {
-    "message": "AI API (Gemini, OpenAI, Anthropic) மூலம் எந்த வலைப்பக்கத்தையும் மொழிபெயர்க்கவும். 20+ மொழிகள் ஆதரிக்கப்படுகின்றன.",
+    "message": "Gemini, OpenAI, Anthropic, DeepSeek அல்லது OpenAI இணக்க API மூலம் வலைப்பக்கங்களை மொழிபெயர்க்கவும். 22 மொழிகள் ஆதரவு.",
     "description": "Extension description (max 132 chars)"
   },
   "contextMenuToggle": {

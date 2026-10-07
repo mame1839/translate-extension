@@ -16,6 +16,7 @@ async function startTranslation(userInitiated = false) {
             pendingStartIsUserInitiated = false;
             if (!translationStarted || isTranslating) return;
             if (!wasUserInitiated && (translationCancelled || translationHasError)) return;
+            if (!wasUserInitiated && !isAutomaticPageTranslationAllowed() && !canAutoTranslateNewContent()) return;
             startTranslation(wasUserInitiated);
         }, cooldownRemaining + 200);
         return;
@@ -59,7 +60,13 @@ async function startTranslation(userInitiated = false) {
         const allTus = collectTranslationUnits();
         if (allTus.length === 0) {
             isTranslating = false;
-            reportNoTranslatableText(userInitiated);
+            if (countFailedBlocksByReason().restore > 0) {
+                const error = new Error(st.errOriginalRestoreFailed);
+                error.translationErrorCode = 'originalRestoreFailed';
+                handleTranslationError(error, lang);
+            } else {
+                reportNoTranslatableText(userInitiated);
+            }
             return;
         }
 
@@ -342,8 +349,15 @@ function resetPageTranslationState() {
     try {
         forEachMarkedElement('[data-translation-status]', block => {
             if (block.dataset.geminiIgnore === 'true') return;
-            if (block.dataset.translationStatus === 'translated') {
-                try { revertBlockToOriginal(block); } catch (e) { }
+            if (block.dataset.translationStatus === 'translated' ||
+                (block.dataset.translationStatus === 'failed' && 'translatedHtml' in block.dataset)) {
+                let restored = false;
+                try { restored = revertBlockToOriginal(block); } catch (e) { }
+                if (!restored) {
+                    block.dataset.translationStatus = 'failed';
+                    block.dataset.translationFailReason = 'restore';
+                    return;
+                }
             }
             block.classList.remove('translated-text');
             delete block.dataset.translationStatus;
@@ -351,6 +365,7 @@ function resetPageTranslationState() {
             delete block.dataset.tuTranslatedTemplate;
             delete block.dataset.originalHtml;
             delete block.dataset.translatedHtml;
+            delete block.dataset.translationFailReason;
         });
     } finally {
         watchForNewContent();
@@ -417,6 +432,7 @@ function reportNoTranslatableText(userInitiated) {
 
 function clearFailedMarkersForRetry() {
     forEachMarkedElement('[data-translation-status="failed"]', el => {
+        if ('translatedHtml' in el.dataset) return;
         delete el.dataset.translationStatus;
         delete el.dataset.translationFailReason;
     });
@@ -516,7 +532,7 @@ function finishTranslation() {
     const completionMessage = oversizedSkippedCount > 0 ? oversizedSkippedLabel() : st.translationCompleted;
     sendRuntimeMessage({ action: "translationComplete", message: completionMessage });
     saveCurrentTranslationToCache().catch(() => { });
-    if (oversizedSkippedCount === 0 && countVisibleFailedBlocks() === 0) {
+    if (oversizedSkippedCount === 0 && countVisibleFailedBlocks() === 0 && !sessionSaveFailed) {
         cancelStatusAutoDismiss();
         statusAutoDismissTimer = setTimeout(() => {
             statusAutoDismissTimer = null;

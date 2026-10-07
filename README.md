@@ -50,7 +50,7 @@ Google Gemini・OpenAI・Anthropic・DeepSeek などの AI API を使ってウ�
 | プロバイダー | デフォルトモデル |
 |---|---|
 | Google Gemini | `gemini-3.5-flash-lite` |
-| OpenAI | `gpt-5.6-luna` |
+| OpenAI | `gpt-6-luna` |
 | Anthropic | `claude-haiku-4-5-20251001` |
 | DeepSeek | `deepseek-flash` |
 | OpenAI 互換 | 任意のモデル |
@@ -120,7 +120,7 @@ Click **Add to Chrome** on the [Chrome Web Store page](https://chromewebstore.go
 | Provider | Default Model |
 |---|---|
 | Google Gemini | `gemini-3.5-flash-lite` |
-| OpenAI | `gpt-5.6-luna` |
+| OpenAI | `gpt-6-luna` |
 | Anthropic | `claude-haiku-4-5-20251001` |
 | DeepSeek | `deepseek-flash` |
 | OpenAI Compatible | Any model |
@@ -190,7 +190,7 @@ Copyright (C) 2026 mame1839
 | 提供商 | 默认模型 |
 |---|---|
 | Google Gemini | `gemini-3.5-flash-lite` |
-| OpenAI | `gpt-5.6-luna` |
+| OpenAI | `gpt-6-luna` |
 | Anthropic | `claude-haiku-4-5-20251001` |
 | DeepSeek | `deepseek-flash` |
 | OpenAI 兼容 | 任意模型 |
@@ -260,7 +260,7 @@ Google Gemini, OpenAI, Anthropic, DeepSeek 또는 OpenAI 호환 엔드포인트 
 | 공급자 | 기본 모델 |
 |---|---|
 | Google Gemini | `gemini-3.5-flash-lite` |
-| OpenAI | `gpt-5.6-luna` |
+| OpenAI | `gpt-6-luna` |
 | Anthropic | `claude-haiku-4-5-20251001` |
 | DeepSeek | `deepseek-flash` |
 | OpenAI 호환 | 임의 모델 |
@@ -330,7 +330,7 @@ Copyright (C) 2026 mame1839
 | Провайдер | Модель по умолчанию |
 |---|---|
 | Google Gemini | `gemini-3.5-flash-lite` |
-| OpenAI | `gpt-5.6-luna` |
+| OpenAI | `gpt-6-luna` |
 | Anthropic | `claude-haiku-4-5-20251001` |
 | DeepSeek | `deepseek-flash` |
 | Совместимый с OpenAI | Любая модель |

@@ -2,7 +2,7 @@ const USAGE_STATS_KEY = 'usageStats';
 
 const USAGE_FLUSH_DELAY_MS = 1500;
 
-const pendingUsage = new Map();
+let pendingUsage = new Map();
 
 let usageFlushTimer = null;
 
@@ -71,15 +71,36 @@ function scheduleUsageFlush() {
     if (usageFlushTimer !== null) return;
     usageFlushTimer = setTimeout(() => {
         usageFlushTimer = null;
-        flushPendingUsage();
+        flushPendingUsage().catch(() => {
+            if (pendingUsage.size > 0) scheduleUsageFlush();
+        });
     }, USAGE_FLUSH_DELAY_MS);
 }
 
+function mergePendingUsage(target, delta) {
+    for (const [name, entry] of delta) {
+        const pending = target.get(name) || createProviderUsage();
+        pending.inputTokens += entry.inputTokens;
+        pending.outputTokens += entry.outputTokens;
+        pending.requests += entry.requests;
+        target.set(name, pending);
+    }
+}
+
 function flushPendingUsage() {
-    if (pendingUsage.size === 0) return usageWriteChain;
-    const delta = new Map(pendingUsage);
-    pendingUsage.clear();
-    usageWriteChain = usageWriteChain.then(() => storeUsageDelta(delta)).catch(() => { });
+    const batch = pendingUsage;
+    if (batch.size === 0) return usageWriteChain.catch(() => { });
+    usageWriteChain = usageWriteChain.catch(() => { }).then(async () => {
+        if (batch.size === 0) return;
+        const delta = new Map(batch);
+        batch.clear();
+        try {
+            await storeUsageDelta(delta);
+        } catch (error) {
+            mergePendingUsage(batch, delta);
+            throw error;
+        }
+    });
     return usageWriteChain;
 }
 
@@ -105,24 +126,26 @@ function normalizeUsageStats(raw) {
 }
 
 function readStoredUsageStats() {
-    return new Promise(resolve => {
+    return new Promise((resolve, reject) => {
         try {
             chrome.storage.local.get([USAGE_STATS_KEY], items => {
-                void chrome.runtime.lastError;
+                const error = chrome.runtime.lastError;
+                if (error) return reject(new Error(error.message || String(error)));
                 resolve(normalizeUsageStats(items && items[USAGE_STATS_KEY]));
             });
-        } catch (e) { resolve(createUsageStats()); }
+        } catch (e) { reject(e); }
     });
 }
 
 function writeUsageStats(stats) {
-    return new Promise(resolve => {
+    return new Promise((resolve, reject) => {
         try {
             chrome.storage.local.set({ [USAGE_STATS_KEY]: stats }, () => {
-                void chrome.runtime.lastError;
+                const error = chrome.runtime.lastError;
+                if (error) return reject(new Error(error.message || String(error)));
                 resolve();
             });
-        } catch (e) { resolve(); }
+        } catch (e) { reject(e); }
     });
 }
 
@@ -142,6 +165,7 @@ async function storeUsageDelta(delta) {
 }
 
 async function getUsageStatsSnapshot() {
+    await usageWriteChain.catch(() => { });
     await flushPendingUsage();
     return readStoredUsageStats();
 }
@@ -151,9 +175,19 @@ async function resetUsageStats() {
         clearTimeout(usageFlushTimer);
         usageFlushTimer = null;
     }
-    pendingUsage.clear();
+    const beforeReset = pendingUsage;
+    const afterReset = new Map();
+    pendingUsage = afterReset;
     const cleared = createUsageStats();
-    usageWriteChain = usageWriteChain.then(() => writeUsageStats(cleared)).catch(() => { });
+    usageWriteChain = usageWriteChain.catch(() => { }).then(async () => {
+        try {
+            await writeUsageStats(cleared);
+        } catch (error) {
+            mergePendingUsage(afterReset, beforeReset);
+            if (pendingUsage === afterReset && afterReset.size > 0) scheduleUsageFlush();
+            throw error;
+        }
+    });
     await usageWriteChain;
     return cleared;
 }

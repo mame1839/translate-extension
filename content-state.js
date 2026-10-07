@@ -193,6 +193,14 @@ let hidePromptForAllSites = false;
 
 let currentExcludeList = [];
 
+let currentRealTimeTranslation = false;
+
+let currentAlwaysTranslateList = [];
+
+let currentAutoRetranslateDomain = true;
+
+let currentSessionDomainKnown = false;
+
 let settingWatcherAttached = false;
 
 let autoRetranslateRounds = 0;

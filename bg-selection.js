@@ -9,6 +9,13 @@ function abortSelectionTranslation(key) {
     try { controller.abort(); } catch (e) { }
 }
 
+function abortSelectionTranslationsForTab(tabId) {
+    const prefix = `${tabId}:`;
+    for (const key of selectionControllers.keys()) {
+        if (key.startsWith(prefix)) abortSelectionTranslation(key);
+    }
+}
+
 async function runSelectionTranslation(key, rawText, sendResponse) {
     abortSelectionTranslation(key);
     const text = typeof rawText === 'string' ? rawText.trim() : '';

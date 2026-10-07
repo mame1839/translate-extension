@@ -594,8 +594,6 @@ function normalizeTranslatedTemplate(tpl, placeholders) {
         if (ph.type === 'block' || ph.type === 'skip') {
             if (nodeKeepingIds.has(i)) continue;
             s += `<${ph.ph}></${ph.ph}>`;
-        } else if (ph.type === 'anchor' && ph.originalText) {
-            s += `<${ph.ph}>${escapeHtml(ph.originalText)}</${ph.ph}>`;
         }
     }
     return s;

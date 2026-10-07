@@ -1,7 +1,7 @@
 let sessionMutex = Promise.resolve();
 
 function withSessionLock(fn) {
-    const run = sessionMutex.then(() => fn().catch(() => { }));
+    const run = sessionMutex.then(fn);
     sessionMutex = run.catch(() => { });
     return run;
 }

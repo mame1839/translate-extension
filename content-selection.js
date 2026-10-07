@@ -199,6 +199,7 @@ function isEligibleReplaceBlock(block) {
     if (!block || !block.isConnected) return false;
     const status = block.dataset ? block.dataset.translationStatus : undefined;
     if (status === 'translated' || status === 'processing' || status === 'original') return false;
+    if (status === 'failed' && 'translatedHtml' in block.dataset) return false;
     if (isFullyExcluded(block)) return false;
     return true;
 }
@@ -263,7 +264,7 @@ function classifySelectionForReplace(range) {
         const value = startContainer.nodeValue || '';
         const slice = value.slice(startOffset, endOffset);
         if (endOffset > startOffset && isTranslatableText(slice)) {
-            return { kind: 'node', node: startContainer, startOffset, endOffset };
+            return { kind: 'node', node: startContainer, startOffset, endOffset, expectedText: slice };
         }
     }
     const blocks = blocksTouchedByRange(range);
@@ -271,21 +272,29 @@ function classifySelectionForReplace(range) {
     return { kind: 'blocks', blocks };
 }
 
-function replaceSingleTextNode(node, startOffset, endOffset, translation) {
+function replaceSingleTextNode(node, startOffset, endOffset, translation, expectedText) {
     if (!node || node.nodeType !== Node.TEXT_NODE || !node.isConnected) return false;
     if (typeof translation !== 'string') return false;
     const value = node.nodeValue || '';
     if (startOffset < 0 || endOffset > value.length || endOffset <= startOffset) return false;
-    if (!selectionNodeOriginals.has(node)) selectionNodeOriginals.set(node, value);
-    node.nodeValue = value.slice(0, startOffset) + translation + value.slice(endOffset);
+    if (typeof expectedText === 'string' && value.slice(startOffset, endOffset) !== expectedText) return false;
+    const previous = selectionNodeOriginals.get(node);
+    const original = previous && previous.replaced === value ? previous.original : value;
+    const replaced = value.slice(0, startOffset) + translation + value.slice(endOffset);
+    node.nodeValue = replaced;
+    selectionNodeOriginals.set(node, { original, replaced });
     return true;
 }
 
 function restoreReplacedTextNode(node) {
     if (!node || !selectionNodeOriginals.has(node)) return false;
-    const original = selectionNodeOriginals.get(node);
+    const previous = selectionNodeOriginals.get(node);
+    if (!node.isConnected || node.nodeValue !== previous.replaced) {
+        selectionNodeOriginals.delete(node);
+        return false;
+    }
     try {
-        if (node.isConnected) node.nodeValue = original;
+        node.nodeValue = previous.original;
     } catch (e) {
         return false;
     }
@@ -310,7 +319,7 @@ function requestSelectionBatch(batch) {
     });
 }
 
-async function runSelectionBlockReplace(blocks) {
+async function runSelectionBlockReplace(blocks, requestId = selectionRequestId) {
     const config = await new Promise(resolve => {
         try {
             chrome.storage.local.get(['targetLanguage', 'batchSize', 'maxToken', 'toggleBlueBackground'], resolve);
@@ -318,6 +327,7 @@ async function runSelectionBlockReplace(blocks) {
             resolve({});
         }
     });
+    if (requestId !== selectionRequestId) return { total: 0, applied: 0, failed: 0, failure: null };
     const lang = (config && config.targetLanguage) || 'en';
     useSessionMemoForLanguage(lang);
     try { applyStrings(lang); } catch (e) { }
@@ -351,7 +361,9 @@ async function runSelectionBlockReplace(blocks) {
     disconnectAllObservers();
     try {
         for (const batch of batches) {
+            if (requestId !== selectionRequestId) break;
             const result = await requestSelectionBatch(batch);
+            if (requestId !== selectionRequestId) break;
             if (result.error) {
                 if (!failure) failure = result;
                 continue;
@@ -361,6 +373,10 @@ async function runSelectionBlockReplace(blocks) {
                 if (!item || typeof item.translatedTemplate !== 'string') continue;
                 const tu = byId.get(item.id);
                 if (!tu || !tu.block || !tu.block.isConnected) continue;
+                const current = buildTU(tu.block);
+                if (!current || current.template !== tu.template ||
+                    current.placeholders.length !== tu.placeholders.length ||
+                    current.placeholders.some((entry, index) => entry.node !== tu.placeholders[index].node)) continue;
                 returned.add(item.id);
                 try { applyTranslation(tu, item.translatedTemplate, true); } catch (e) { }
             }
@@ -391,11 +407,17 @@ async function runSelectionBlockReplace(blocks) {
 function showSelectionTranslation(rawText, replaceIntent) {
     const text = typeof rawText === 'string' ? rawText.trim() : '';
     if (!text) return;
+    closeSelectionPopup();
     selectionReplaceIntent = replaceIntent === true;
     selectionReplacePlan = null;
     selectionUndoTarget = null;
     captureSelectionAnchor();
+    if (selectionAnchorRange && selectionAnchorRange.toString().trim() === text) {
+        selectionReplacePlan = classifySelectionForReplace(selectionAnchorRange);
+    }
+    const requestId = selectionRequestId;
     chrome.storage.local.get(['targetLanguage'], function (items) {
+        if (requestId !== selectionRequestId) return;
         const lang = (items && items.targetLanguage) || 'en';
         selectionStrings = (typeof getT === 'function') ? getT(lang) : null;
         selectionIsRtl = isRtlLang(lang);
@@ -451,7 +473,6 @@ function requestSelectionTranslation(text) {
 }
 
 function openSelectionPopup() {
-    closeSelectionPopup();
     const host = document.body || document.documentElement;
     if (!host) return;
     selectionContainer = document.createElement('div');
@@ -572,7 +593,6 @@ function renderSelectionResult(translation) {
     paragraph.textContent = translation;
     setSelectionBody(paragraph);
 
-    selectionReplacePlan = classifySelectionForReplace(selectionAnchorRange);
     const canReplace = selectionReplacePlan && (selectionReplacePlan.kind === 'node' || selectionReplacePlan.kind === 'blocks');
     if (!canReplace && selectionReplaceIntent) {
         appendSelectionNote(selectionLabel('selReplaceUnavailable', 'This selection cannot be replaced here'));
@@ -603,7 +623,7 @@ function onSelectionReplaceClick(translation) {
     const plan = selectionReplacePlan;
     if (!plan) return;
     if (plan.kind === 'node') {
-        if (replaceSingleTextNode(plan.node, plan.startOffset, plan.endOffset, translation)) {
+        if (replaceSingleTextNode(plan.node, plan.startOffset, plan.endOffset, translation, plan.expectedText)) {
             selectionUndoTarget = { kind: 'node', node: plan.node };
             renderSelectionReplaced(true);
         } else {
@@ -614,7 +634,7 @@ function onSelectionReplaceClick(translation) {
     if (plan.kind !== 'blocks') return;
     const requestId = ++selectionRequestId;
     renderSelectionLoading('selReplacing', 'Replacing…');
-    runSelectionBlockReplace(plan.blocks).then(result => {
+    runSelectionBlockReplace(plan.blocks, requestId).then(result => {
         if (requestId !== selectionRequestId) return;
         if (result && result.applied > 0) renderSelectionReplaced(false);
         else renderSelectionReplaceFailure(result ? result.failure : null);

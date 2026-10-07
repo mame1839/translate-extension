@@ -4,7 +4,7 @@
     "description": "Extension name (max 45 chars)"
   },
   "appDescription": {
-    "message": "AI API (Gemini, OpenAI, Anthropic) سے کسی بھی ویب پیج کا ترجمہ کریں۔ 20+ زبانوں میں معاونت۔",
+    "message": "Gemini، OpenAI، Anthropic، DeepSeek یا OpenAI سے ہم آہنگ API کے ذریعے ویب صفحات کا ترجمہ کریں۔ 22 زبانوں کی معاونت۔",
     "description": "Extension description (max 132 chars)"
   },
   "contextMenuToggle": {
