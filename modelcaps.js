@@ -2,12 +2,12 @@ const DEFAULTS = Object.freeze({
     apiProvider: 'gemini',
     geminiModel: 'gemini-3.5-flash-lite',
     openaiModel: 'gpt-6-luna',
-    anthropicModel: 'claude-haiku-4-5-20251001',
+    anthropicModel: 'claude-haiku-5-5',
     deepseekModel: 'deepseek-flash',
     compatibleModel: '',
     geminiReasoning: '',
     openaiReasoning: 'off',
-    anthropicReasoning: '',
+    anthropicReasoning: 'off',
     deepseekReasoning: 'off',
     compatibleReasoning: '',
     batchSize: 500,
@@ -51,12 +51,16 @@ function createModelCaps(fields) {
         levels: Array.isArray(fields.levels) ? fields.levels.slice() : [],
         defaultLevel: fields.defaultLevel || '',
         budgets: fields.budgets || null,
+        offThinkingType: fields.offThinkingType || null,
         maxOutputTokens: Number.isFinite(fields.maxOutputTokens) ? fields.maxOutputTokens : null
     };
 }
 
 function modelCapsForGemini(id) {
     if (GEMINI_NON_TEXT_MODEL_PATTERN.test(id)) return createModelCaps({ recognized: true, maxOutputTokens: 65536 });
+    if (id === 'gemini-4-argon') {
+        return createModelCaps({ recognized: true, mechanism: 'thinkingLevel', levels: ['low', 'medium', 'high'], defaultLevel: 'medium', maxOutputTokens: 65536 });
+    }
     const alias = GEMINI_LATEST_ALIAS_PATTERN.exec(id);
     const match = GEMINI_MODEL_ID_PATTERN.exec(id);
     if (!alias && !match) return createModelCaps({});
@@ -72,8 +76,9 @@ function modelCapsForGemini(id) {
         if (family === 'flash-lite') {
             return createModelCaps(Object.assign(byLevel, { levels: ['minimal', 'low', 'medium', 'high'], defaultLevel: alias ? '' : 'minimal' }));
         }
-        if (major === 3 && minor === 7) {
-            return createModelCaps(Object.assign(byLevel, { levels: ['low', 'medium', 'high'], defaultLevel: 'medium' }));
+        if (alias || major > 3 || minor >= 7) {
+            const knownDefault = !alias && major === 3 && (minor === 7 || minor === 8);
+            return createModelCaps(Object.assign(byLevel, { levels: ['low', 'medium', 'high'], defaultLevel: knownDefault ? 'medium' : '' }));
         }
         let defaultLevel = '';
         if (!alias && major === 3) {
@@ -139,17 +144,20 @@ function modelCapsForAnthropic(id) {
     const match = mythosPreview ? null : ANTHROPIC_MODEL_ID_PATTERN.exec(id);
     if (!match && !mythosPreview) return createModelCaps({});
     const family = mythosPreview ? 'mythos' : match[1];
-    const alwaysThinking = family === 'fable' || family === 'mythos';
     const generation = mythosPreview
         ? 50
         : parseInt(match[2], 10) * 10 + (match[3] === undefined ? 0 : parseInt(match[3], 10));
+    const fiveFiveOrLater = generation >= 55;
+    const alwaysThinking = family === 'fable' || family === 'mythos' || (family === 'opus' && fiveFiveOrLater);
     if (alwaysThinking || generation >= 47) {
         const levels = (alwaysThinking ? [] : ['off']).concat(['low', 'medium', 'high', 'xhigh', 'max']);
+        const mediumByDefault = fiveFiveOrLater && (family === 'opus' || family === 'haiku');
         return createModelCaps({
             recognized: true,
             mechanism: 'adaptiveEffort',
             levels,
-            defaultLevel: alwaysThinking || generation >= 50 ? 'high' : 'off',
+            defaultLevel: mediumByDefault ? 'medium' : alwaysThinking || generation >= 50 ? 'high' : 'off',
+            offThinkingType: family === 'sonnet' && fiveFiveOrLater ? 'between_tools' : null,
             maxOutputTokens: 128000
         });
     }
@@ -238,7 +246,7 @@ function buildReasoningFields(caps, level, maxTokens, streaming) {
         case 'passthrough':
             return { reasoning_effort: level === 'off' ? 'none' : level };
         case 'adaptiveEffort':
-            if (level === 'off') return { thinking: { type: 'disabled' } };
+            if (level === 'off') return { thinking: { type: caps.offThinkingType || 'disabled' } };
             return { thinking: { type: 'adaptive', display: streamThoughtSummaries ? 'summarized' : 'omitted' }, output_config: { effort: level } };
         case 'enabledBudget': {
             if (level === 'off') return { thinking: { type: 'disabled' } };
