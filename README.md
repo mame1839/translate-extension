@@ -44,7 +44,7 @@ Google Gemini・OpenAI・Anthropic・DeepSeek などの AI API を使ってウ�
 
 1. 設定ページで API キーとプロバイダーを登録します
 2. ツールバーの拡張機能アイコンをクリックします
-3. 「Translate」ボタンを押すと翻訳が始まります
+3. 「このページを翻訳」ボタンを押すと翻訳が始まります
 4. 右クリックメニューからも翻訳の切り替えができます
 
 ### 対応 AI プロバイダーとデフォルトモデル
@@ -116,9 +116,9 @@ Click **Add to Chrome** on the [Chrome Web Store page](https://chromewebstore.go
 
 ### How to Use
 
-1. Click the extension icon in the toolbar
-2. Press **Translate** to start
-3. Register your API key and provider in the Settings page
+1. Register your API key and provider in the Settings page
+2. Click the extension icon in the toolbar
+3. Press **Translate this page** to start
 4. You can also toggle translation from the right-click context menu
 
 ### Supported AI Providers and Default Models
@@ -190,9 +190,9 @@ Copyright (C) 2026 mame1839
 
 ### 使用方法
 
-1. 点击工具栏中的扩展程序图标
-2. 点击 **Translate** 按钮开始翻译
-3. 在设置页面中填写 API 密钥和提供商信息
+1. 在设置页面中填写 API 密钥和提供商信息
+2. 点击工具栏中的扩展程序图标
+3. 点击 **翻译此页面** 按钮开始翻译
 4. 也可以通过右键菜单切换翻译
 
 ### 支持的 AI 提供商及默认模型
@@ -264,9 +264,9 @@ Google Gemini, OpenAI, Anthropic, DeepSeek 또는 OpenAI 호환 엔드포인트 
 
 ### 사용 방법
 
-1. 툴바의 확장 프로그램 아이콘 클릭
-2. **Translate** 버튼을 눌러 번역 시작
-3. 설정 페이지에서 API 키와 공급자를 등록
+1. 설정 페이지에서 API 키와 공급자를 등록
+2. 툴바의 확장 프로그램 아이콘 클릭
+3. **이 페이지 번역** 버튼을 눌러 번역 시작
 4. 우클릭 컨텍스트 메뉴에서도 번역 전환 가능
 
 ### 지원 AI 공급자 및 기본 모델
@@ -338,9 +338,9 @@ Copyright (C) 2026 mame1839
 
 ### Как использовать
 
-1. Нажмите на иконку расширения на панели инструментов
-2. Нажмите кнопку **Translate** для начала перевода
-3. Введите API-ключ и выберите провайдера на странице настроек
+1. Введите API-ключ и выберите провайдера на странице настроек
+2. Нажмите на иконку расширения на панели инструментов
+3. Нажмите кнопку **Перевести эту страницу** для начала перевода
 4. Перевод также можно переключить через контекстное меню правой кнопкой мыши
 
 ### Поддерживаемые провайдеры AI и модели по умолчанию
