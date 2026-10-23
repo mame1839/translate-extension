@@ -174,6 +174,14 @@ const PROMPT_EXAMPLE_OUTPUTS = {
         nestedEmphasisAnchor: 'Consulta la <t0><a1>documentazione</a1> ufficiale</t0>.',
         disappearingArticle: 'Leggi <t0></t0><t1>la guida</t1>.',
         blockAndSkipPlaceholders: 'Panoramica <b0></b0> Vedi l\'icona <s1></s1>.'
+    },
+    th: {
+        anchorWithPreposition: 'เหตุยิงที่<t0><a1>ซิเวเรก</a1></t0>และ<t2><a3>โอนิกิชูบัต</a3></t2>ทำให้มีผู้เสียชีวิต 12 ราย',
+        anchorAtSentenceStart: 'คลิก<a0>ที่นี่</a0>เพื่อดู<t1>ผลิตภัณฑ์ของเรา</t1>',
+        inlineLinks: 'โปรดอ่าน<a0>ข้อกำหนด</a0>และ<a1>นโยบายความเป็นส่วนตัว</a1>ของเรา',
+        nestedEmphasisAnchor: 'ดู<t0><a1>เอกสารประกอบ</a1>ฉบับทางการ</t0>',
+        disappearingArticle: 'อ่าน<t0></t0><t1>คู่มือ</t1>',
+        blockAndSkipPlaceholders: 'ภาพรวม <b0></b0> ดูไอคอน <s1></s1>'
     }
 };
 

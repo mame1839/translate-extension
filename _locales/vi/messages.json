@@ -4,7 +4,7 @@
     "description": "Extension name (max 45 chars)"
   },
   "appDescription": {
-    "message": "Dịch trang web bằng Gemini, OpenAI, Anthropic, DeepSeek hoặc API tương thích OpenAI. Hỗ trợ 22 ngôn ngữ.",
+    "message": "Dịch trang web bằng Gemini, OpenAI, Anthropic, DeepSeek hoặc API tương thích OpenAI. Hỗ trợ 23 ngôn ngữ và ngôn ngữ khác tùy chọn.",
     "description": "Extension description (max 132 chars)"
   },
   "contextMenuToggle": {
