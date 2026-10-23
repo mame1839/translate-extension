@@ -67,7 +67,7 @@ Google Gemini・OpenAI・Anthropic・DeepSeek などの AI API を使ってウ�
 
 | 項目 | デフォルト | 説明 |
 |---|---|---|
-| 推論 | モデルの既定 | 回答の前にモデルが考える量 |
+| 推論 | オフ（Gemini・OpenAI 互換はモデルの既定） | 回答の前にモデルが考える量 |
 | 最大出力トークン | 自動 | 空欄ならモデルの上限まで出力します |
 | リクエスト間隔 | 10 秒 | リクエスト間のディレイ |
 | 並列数上限 | 10 | 同時リクエスト数 |
@@ -141,7 +141,7 @@ Any other language can be set with **Custom (enter a language name)**.
 
 | Setting | Default | Description |
 |---|---|---|
-| Reasoning | Model default | How much the model thinks before answering |
+| Reasoning | Off (Model default for Gemini and OpenAI Compatible) | How much the model thinks before answering |
 | Max output tokens | Auto | Leave empty to output up to the model's limit |
 | Delay between requests | 10 s | Pause between batch requests |
 | Concurrency limit | 10 | Maximum simultaneous requests |
@@ -215,7 +215,7 @@ Copyright (C) 2026 mame1839
 
 | 设置 | 默认值 | 说明 |
 |---|---|---|
-| 推理 | 模型默认 | 模型回答前的思考程度 |
+| 推理 | 关闭（Gemini 和 OpenAI 兼容为模型默认） | 模型回答前的思考程度 |
 | 最大输出 Token | 自动 | 留空则输出至模型的上限 |
 | 请求间隔 | 10 秒 | 批次请求之间的延迟 |
 | 并发上限 | 10 | 最大同时请求数 |
@@ -289,7 +289,7 @@ Google Gemini, OpenAI, Anthropic, DeepSeek 또는 OpenAI 호환 엔드포인트 
 
 | 설정 | 기본값 | 설명 |
 |---|---|---|
-| 추론 | 모델 기본값 | 답하기 전에 모델이 생각하는 정도 |
+| 추론 | 끔（Gemini·OpenAI 호환은 모델 기본값） | 답하기 전에 모델이 생각하는 정도 |
 | 최대 출력 토큰 | 자동 | 비워 두면 모델의 한도까지 출력합니다 |
 | 요청 간격 | 10 초 | 배치 요청 간 대기 시간 |
 | 동시 요청 상한 | 10 | 최대 동시 요청 수 |
@@ -363,7 +363,7 @@ Copyright (C) 2026 mame1839
 
 | Настройка | По умолчанию | Описание |
 |---|---|---|
-| Рассуждение | По умолчанию для модели | Сколько модель думает перед ответом |
+| Рассуждение | Выключено (Gemini и совместимые с OpenAI: по умолчанию для модели) | Сколько модель думает перед ответом |
 | Макс. токенов на выходе | Авто | Оставьте пустым, чтобы вывод доходил до лимита модели |
 | Задержка между запросами | 10 с | Пауза между пакетными запросами |
 | Лимит параллельных запросов | 10 | Максимальное число одновременных запросов |
