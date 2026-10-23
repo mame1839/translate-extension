@@ -12,12 +12,14 @@
 
 ### 概要
 
-Google Gemini・OpenAI・Anthropic・DeepSeek などの AI API を使ってウェブページをその場で翻訳する Chrome 拡張機能です。ページ構造やリンク・書式を保ったまま、22 言語に対応しています。
+Google Gemini・OpenAI・Anthropic・DeepSeek などの AI API を使ってウェブページをその場で翻訳する Chrome 拡張機能です。ページ構造やリンク・書式を保ったまま翻訳します。23 言語に対応し、一覧に無い言語も名前で指定できます。
 
 ### 主な機能
 
 - **5 つの AI プロバイダー対応** — Gemini・OpenAI・Anthropic・DeepSeek・OpenAI 互換エンドポイントに対応しています
-- **22 言語に翻訳可能** — 英語・日本語・中国語・韓国語・イタリア語・アラビア語・ロシア語などに翻訳できます
+- **23 言語に翻訳可能** — 英語・日本語・中国語・韓国語・イタリア語・アラビア語・ロシア語・タイ語などに翻訳できます
+- **カスタム言語** — 翻訳先言語で「カスタム (言語名を入力)」を選ぶと、一覧に無い言語も名前で指定できます
+- **画面の文言の翻訳** — カスタム言語では、設定画面やポップアップ、ページ上のパネルは英語で表示されます。設定画面の「画面の文言を翻訳」を押したときだけ、現在の AI プロバイダーでその言語に翻訳します
 - **ページ構造を保持** — リンク・太字・見出しなどの書式をそのまま維持します
 - **バッチ処理 & 並列リクエスト** — 大きなページも高速に翻訳します
 - **ページキャッシュ** — 翻訳結果を言語ごとに保存し、再訪時はポップアップから復元できます。ページ単位での削除も可能です
@@ -42,7 +44,7 @@ Google Gemini・OpenAI・Anthropic・DeepSeek などの AI API を使ってウ�
 
 1. 設定ページで API キーとプロバイダーを登録します
 2. ツールバーの拡張機能アイコンをクリックします
-3. 「Translate」ボタンを押すと翻訳が始まります
+3. 「このページを翻訳」ボタンを押すと翻訳が始まります
 4. 右クリックメニューからも翻訳の切り替えができます
 
 ### 対応 AI プロバイダーとデフォルトモデル
@@ -51,19 +53,21 @@ Google Gemini・OpenAI・Anthropic・DeepSeek などの AI API を使ってウ�
 |---|---|
 | Google Gemini | `gemini-3.5-flash-lite` |
 | OpenAI | `gpt-6-luna` |
-| Anthropic | `claude-haiku-4-5-20251001` |
+| Anthropic | `claude-haiku-5-5` |
 | DeepSeek | `deepseek-flash` |
 | OpenAI 互換 | 任意のモデル |
 
 ### 翻訳先対応言語
 
-英語 / 日本語 / 中国語（簡体・繁体）/ 韓国語 / スペイン語 / フランス語 / ドイツ語 / ポルトガル語 / ロシア語 / アラビア語 / ヒンディー語 / ベンガル語 / ウルドゥー語 / インドネシア語 / スワヒリ語 / マラーティー語 / テルグ語 / タミル語 / トルコ語 / ベトナム語 / イタリア語
+英語 / 日本語 / 中国語（簡体・繁体）/ 韓国語 / スペイン語 / フランス語 / ドイツ語 / ポルトガル語 / ロシア語 / アラビア語 / ヒンディー語 / ベンガル語 / ウルドゥー語 / インドネシア語 / スワヒリ語 / マラーティー語 / テルグ語 / タミル語 / トルコ語 / ベトナム語 / イタリア語 / タイ語
+
+一覧に無い言語は「カスタム (言語名を入力)」で指定できます。
 
 ### 主な設定項目
 
 | 項目 | デフォルト | 説明 |
 |---|---|---|
-| 推論 | モデルの既定 | 回答の前にモデルが考える量 |
+| 推論 | オフ（Gemini・OpenAI 互換はモデルの既定） | 回答の前にモデルが考える量 |
 | 最大出力トークン | 自動 | 空欄ならモデルの上限まで出力します |
 | リクエスト間隔 | 10 秒 | リクエスト間のディレイ |
 | 並列数上限 | 10 | 同時リクエスト数 |
@@ -82,12 +86,14 @@ Copyright (C) 2026 mame1839
 
 ### Overview
 
-A Chrome extension that translates web pages in place using AI APIs — Google Gemini, OpenAI, Anthropic, DeepSeek, or any OpenAI-compatible endpoint. Supports 22 languages while preserving page structure, links, and formatting.
+A Chrome extension that translates web pages in place using AI APIs — Google Gemini, OpenAI, Anthropic, DeepSeek, or any OpenAI-compatible endpoint. Supports 23 languages, plus any other language you enter by name, while preserving page structure, links, and formatting.
 
 ### Features
 
 - **5 AI providers** — Gemini, OpenAI, Anthropic, DeepSeek, and OpenAI-compatible endpoints
-- **22 target languages** — English, Japanese, Chinese, Korean, Italian, Arabic, Russian, and more
+- **23 target languages** — English, Japanese, Chinese, Korean, Italian, Arabic, Russian, Thai, and more
+- **Custom languages** — choose **Custom (enter a language name)** under Target language to translate into a language that is not in the list
+- **Interface text translation** — with a custom language, the settings page, popup, and on-page panels are shown in English. Pressing **Translate interface text** in the settings translates them into that language with the current AI provider; nothing is sent until you press it
 - **Structure-preserving** — keeps links, bold text, headings, and layout intact
 - **Batch processing & concurrency** — translates large pages quickly
 - **Page cache** — saves translations per language; restore from the popup on revisit, delete per page
@@ -110,9 +116,9 @@ Click **Add to Chrome** on the [Chrome Web Store page](https://chromewebstore.go
 
 ### How to Use
 
-1. Click the extension icon in the toolbar
-2. Press **Translate** to start
-3. Register your API key and provider in the Settings page
+1. Register your API key and provider in the Settings page
+2. Click the extension icon in the toolbar
+3. Press **Translate this page** to start
 4. You can also toggle translation from the right-click context menu
 
 ### Supported AI Providers and Default Models
@@ -121,19 +127,21 @@ Click **Add to Chrome** on the [Chrome Web Store page](https://chromewebstore.go
 |---|---|
 | Google Gemini | `gemini-3.5-flash-lite` |
 | OpenAI | `gpt-6-luna` |
-| Anthropic | `claude-haiku-4-5-20251001` |
+| Anthropic | `claude-haiku-5-5` |
 | DeepSeek | `deepseek-flash` |
 | OpenAI Compatible | Any model |
 
 ### Supported Target Languages
 
-English / Japanese / Chinese (Simplified & Traditional) / Korean / Spanish / French / German / Portuguese / Russian / Arabic / Hindi / Bengali / Urdu / Indonesian / Swahili / Marathi / Telugu / Tamil / Turkish / Vietnamese / Italian
+English / Japanese / Chinese (Simplified & Traditional) / Korean / Spanish / French / German / Portuguese / Russian / Arabic / Hindi / Bengali / Urdu / Indonesian / Swahili / Marathi / Telugu / Tamil / Turkish / Vietnamese / Italian / Thai
+
+Any other language can be set with **Custom (enter a language name)**.
 
 ### Key Settings
 
 | Setting | Default | Description |
 |---|---|---|
-| Reasoning | Model default | How much the model thinks before answering |
+| Reasoning | Off (Model default for Gemini and OpenAI Compatible) | How much the model thinks before answering |
 | Max output tokens | Auto | Leave empty to output up to the model's limit |
 | Delay between requests | 10 s | Pause between batch requests |
 | Concurrency limit | 10 | Maximum simultaneous requests |
@@ -152,12 +160,14 @@ Copyright (C) 2026 mame1839
 
 ### 概述
 
-一款使用 AI API（Google Gemini、OpenAI、Anthropic、DeepSeek 或兼容 OpenAI 的端点）直接在页面内翻译网页的 Chrome 扩展程序。支持 22 种语言，同时保留页面结构、链接和格式。
+一款使用 AI API（Google Gemini、OpenAI、Anthropic、DeepSeek 或兼容 OpenAI 的端点）直接在页面内翻译网页的 Chrome 扩展程序。支持 23 种语言，也可按名称指定其他语言，同时保留页面结构、链接和格式。
 
 ### 主要功能
 
 - **支持 5 种 AI 提供商** — Gemini、OpenAI、Anthropic、DeepSeek 及 OpenAI 兼容端点
-- **支持 22 种目标语言** — 英语、日语、中文、韩语、意大利语、阿拉伯语、俄语等
+- **支持 23 种目标语言** — 英语、日语、中文、韩语、意大利语、阿拉伯语、俄语、泰语等
+- **自定义语言** — 在目标语言中选择 **自定义（输入语言名称）**，即可按名称指定列表中没有的语言
+- **翻译界面文字** — 使用自定义语言时，设置页面、弹出窗口和页面上的面板以英文显示。只有在设置页面点击 **翻译界面文字** 时，才会使用当前的 AI 提供商将其翻译成该语言
 - **保留页面结构** — 保持链接、粗体、标题和布局不变
 - **批量处理 & 并发请求** — 快速翻译大型页面
 - **页面缓存** — 按语言保存翻译结果，再次访问时可从弹出窗口恢复，也可按页面删除
@@ -180,9 +190,9 @@ Copyright (C) 2026 mame1839
 
 ### 使用方法
 
-1. 点击工具栏中的扩展程序图标
-2. 点击 **Translate** 按钮开始翻译
-3. 在设置页面中填写 API 密钥和提供商信息
+1. 在设置页面中填写 API 密钥和提供商信息
+2. 点击工具栏中的扩展程序图标
+3. 点击 **翻译此页面** 按钮开始翻译
 4. 也可以通过右键菜单切换翻译
 
 ### 支持的 AI 提供商及默认模型
@@ -191,19 +201,21 @@ Copyright (C) 2026 mame1839
 |---|---|
 | Google Gemini | `gemini-3.5-flash-lite` |
 | OpenAI | `gpt-6-luna` |
-| Anthropic | `claude-haiku-4-5-20251001` |
+| Anthropic | `claude-haiku-5-5` |
 | DeepSeek | `deepseek-flash` |
 | OpenAI 兼容 | 任意模型 |
 
 ### 支持的目标语言
 
-英语 / 日语 / 中文（简体・繁体）/ 韩语 / 西班牙语 / 法语 / 德语 / 葡萄牙语 / 俄语 / 阿拉伯语 / 印地语 / 孟加拉语 / 乌尔都语 / 印度尼西亚语 / 斯瓦希里语 / 马拉地语 / 泰卢固语 / 泰米尔语 / 土耳其语 / 越南语 / 意大利语
+英语 / 日语 / 中文（简体・繁体）/ 韩语 / 西班牙语 / 法语 / 德语 / 葡萄牙语 / 俄语 / 阿拉伯语 / 印地语 / 孟加拉语 / 乌尔都语 / 印度尼西亚语 / 斯瓦希里语 / 马拉地语 / 泰卢固语 / 泰米尔语 / 土耳其语 / 越南语 / 意大利语 / 泰语
+
+列表中没有的语言，可以通过 **自定义（输入语言名称）** 指定。
 
 ### 主要设置项
 
 | 设置 | 默认值 | 说明 |
 |---|---|---|
-| 推理 | 模型默认 | 模型回答前的思考程度 |
+| 推理 | 关闭（Gemini 和 OpenAI 兼容为模型默认） | 模型回答前的思考程度 |
 | 最大输出 Token | 自动 | 留空则输出至模型的上限 |
 | 请求间隔 | 10 秒 | 批次请求之间的延迟 |
 | 并发上限 | 10 | 最大同时请求数 |
@@ -222,12 +234,14 @@ Copyright (C) 2026 mame1839
 
 ### 개요
 
-Google Gemini, OpenAI, Anthropic, DeepSeek 또는 OpenAI 호환 엔드포인트 등의 AI API를 사용하여 웹 페이지를 즉석에서 번역하는 Chrome 확장 프로그램입니다. 페이지 구조, 링크, 서식을 유지하면서 22개 언어를 지원합니다.
+Google Gemini, OpenAI, Anthropic, DeepSeek 또는 OpenAI 호환 엔드포인트 등의 AI API를 사용하여 웹 페이지를 즉석에서 번역하는 Chrome 확장 프로그램입니다. 페이지 구조, 링크, 서식을 유지하면서 23개 언어를 지원하며, 목록에 없는 언어도 이름으로 지정할 수 있습니다.
 
 ### 주요 기능
 
 - **5가지 AI 공급자 지원** — Gemini, OpenAI, Anthropic, DeepSeek, OpenAI 호환 엔드포인트
-- **22개 대상 언어** — 영어, 일본어, 중국어, 한국어, 이탈리아어, 아랍어, 러시아어 등
+- **23개 대상 언어** — 영어, 일본어, 중국어, 한국어, 이탈리아어, 아랍어, 러시아어, 태국어 등
+- **사용자 지정 언어** — 번역 대상 언어에서 **사용자 지정 (언어 이름 입력)** 항목을 선택해 목록에 없는 언어도 이름으로 지정 가능
+- **인터페이스 텍스트 번역** — 사용자 지정 언어에서는 설정 페이지, 팝업, 페이지 위 패널을 영어로 표시. 설정 페이지에서 **인터페이스 텍스트 번역** 버튼을 누를 때만 현재 AI 공급자로 그 언어로 번역
 - **페이지 구조 유지** — 링크, 굵은 글씨, 제목, 레이아웃 그대로 유지
 - **배치 처리 & 병렬 요청** — 대형 페이지도 빠르게 번역
 - **페이지 캐시** — 번역 결과를 언어별로 저장하고 재방문 시 팝업에서 복원. 페이지 단위 삭제도 가능
@@ -250,9 +264,9 @@ Google Gemini, OpenAI, Anthropic, DeepSeek 또는 OpenAI 호환 엔드포인트 
 
 ### 사용 방법
 
-1. 툴바의 확장 프로그램 아이콘 클릭
-2. **Translate** 버튼을 눌러 번역 시작
-3. 설정 페이지에서 API 키와 공급자를 등록
+1. 설정 페이지에서 API 키와 공급자를 등록
+2. 툴바의 확장 프로그램 아이콘 클릭
+3. **이 페이지 번역** 버튼을 눌러 번역 시작
 4. 우클릭 컨텍스트 메뉴에서도 번역 전환 가능
 
 ### 지원 AI 공급자 및 기본 모델
@@ -261,19 +275,21 @@ Google Gemini, OpenAI, Anthropic, DeepSeek 또는 OpenAI 호환 엔드포인트 
 |---|---|
 | Google Gemini | `gemini-3.5-flash-lite` |
 | OpenAI | `gpt-6-luna` |
-| Anthropic | `claude-haiku-4-5-20251001` |
+| Anthropic | `claude-haiku-5-5` |
 | DeepSeek | `deepseek-flash` |
 | OpenAI 호환 | 임의 모델 |
 
 ### 지원 대상 언어
 
-영어 / 일본어 / 중국어（간체·번체）/ 한국어 / 스페인어 / 프랑스어 / 독일어 / 포르투갈어 / 러시아어 / 아랍어 / 힌디어 / 벵골어 / 우르두어 / 인도네시아어 / 스와힐리어 / 마라티어 / 텔루구어 / 타밀어 / 터키어 / 베트남어 / 이탈리아어
+영어 / 일본어 / 중국어（간체·번체）/ 한국어 / 스페인어 / 프랑스어 / 독일어 / 포르투갈어 / 러시아어 / 아랍어 / 힌디어 / 벵골어 / 우르두어 / 인도네시아어 / 스와힐리어 / 마라티어 / 텔루구어 / 타밀어 / 터키어 / 베트남어 / 이탈리아어 / 태국어
+
+목록에 없는 언어는 **사용자 지정 (언어 이름 입력)** 항목에서 지정할 수 있습니다.
 
 ### 주요 설정 항목
 
 | 설정 | 기본값 | 설명 |
 |---|---|---|
-| 추론 | 모델 기본값 | 답하기 전에 모델이 생각하는 정도 |
+| 추론 | 끔（Gemini·OpenAI 호환은 모델 기본값） | 답하기 전에 모델이 생각하는 정도 |
 | 최대 출력 토큰 | 자동 | 비워 두면 모델의 한도까지 출력합니다 |
 | 요청 간격 | 10 초 | 배치 요청 간 대기 시간 |
 | 동시 요청 상한 | 10 | 최대 동시 요청 수 |
@@ -292,12 +308,14 @@ Copyright (C) 2026 mame1839
 
 ### Обзор
 
-Расширение для Chrome, которое переводит веб-страницы прямо на месте с помощью AI API — Google Gemini, OpenAI, Anthropic, DeepSeek или любого совместимого с OpenAI эндпоинта. Поддерживает 22 языка, сохраняя структуру страницы, ссылки и форматирование.
+Расширение для Chrome, которое переводит веб-страницы прямо на месте с помощью AI API — Google Gemini, OpenAI, Anthropic, DeepSeek или любого совместимого с OpenAI эндпоинта. Поддерживает 23 языка и любой другой язык, указанный по названию, сохраняя структуру страницы, ссылки и форматирование.
 
 ### Основные возможности
 
 - **5 провайдеров AI** — Gemini, OpenAI, Anthropic, DeepSeek и совместимые с OpenAI эндпоинты
-- **22 языка перевода** — английский, японский, китайский, корейский, итальянский, арабский, русский и другие
+- **23 языка перевода** — английский, японский, китайский, корейский, итальянский, арабский, русский, тайский и другие
+- **Свой язык** — выберите **Свой (введите название языка)** в поле «Целевой язык», чтобы указать язык, которого нет в списке
+- **Перевод интерфейса** — для своего языка страница настроек, всплывающее окно и панели на странице показываются на английском. Только после нажатия **Перевести тексты интерфейса** в настройках они переводятся на этот язык текущим провайдером AI
 - **Сохранение структуры** — ссылки, жирный текст, заголовки и разметка остаются нетронутыми
 - **Пакетная обработка и параллельные запросы** — быстрый перевод больших страниц
 - **Кэш страниц** — переводы сохраняются по языкам, восстанавливаются из всплывающего окна и удаляются постранично
@@ -320,9 +338,9 @@ Copyright (C) 2026 mame1839
 
 ### Как использовать
 
-1. Нажмите на иконку расширения на панели инструментов
-2. Нажмите кнопку **Translate** для начала перевода
-3. Введите API-ключ и выберите провайдера на странице настроек
+1. Введите API-ключ и выберите провайдера на странице настроек
+2. Нажмите на иконку расширения на панели инструментов
+3. Нажмите кнопку **Перевести эту страницу** для начала перевода
 4. Перевод также можно переключить через контекстное меню правой кнопкой мыши
 
 ### Поддерживаемые провайдеры AI и модели по умолчанию
@@ -331,19 +349,21 @@ Copyright (C) 2026 mame1839
 |---|---|
 | Google Gemini | `gemini-3.5-flash-lite` |
 | OpenAI | `gpt-6-luna` |
-| Anthropic | `claude-haiku-4-5-20251001` |
+| Anthropic | `claude-haiku-5-5` |
 | DeepSeek | `deepseek-flash` |
 | Совместимый с OpenAI | Любая модель |
 
 ### Поддерживаемые языки перевода
 
-Английский / Японский / Китайский (упрощённый и традиционный) / Корейский / Испанский / Французский / Немецкий / Португальский / Русский / Арабский / Хинди / Бенгальский / Урду / Индонезийский / Суахили / Маратхи / Телугу / Тамильский / Турецкий / Вьетнамский / Итальянский
+Английский / Японский / Китайский (упрощённый и традиционный) / Корейский / Испанский / Французский / Немецкий / Португальский / Русский / Арабский / Хинди / Бенгальский / Урду / Индонезийский / Суахили / Маратхи / Телугу / Тамильский / Турецкий / Вьетнамский / Итальянский / Тайский
+
+Любой другой язык можно указать через **Свой (введите название языка)**.
 
 ### Основные настройки
 
 | Настройка | По умолчанию | Описание |
 |---|---|---|
-| Рассуждение | По умолчанию для модели | Сколько модель думает перед ответом |
+| Рассуждение | Выключено (Gemini и совместимые с OpenAI: по умолчанию для модели) | Сколько модель думает перед ответом |
 | Макс. токенов на выходе | Авто | Оставьте пустым, чтобы вывод доходил до лимита модели |
 | Задержка между запросами | 10 с | Пауза между пакетными запросами |
 | Лимит параллельных запросов | 10 | Максимальное число одновременных запросов |

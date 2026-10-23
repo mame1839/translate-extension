@@ -203,7 +203,11 @@ function collectPopupPageState() {
 function respondPopupPageState(sendResponse) {
     const pageState = collectPopupPageState();
     try {
-        chrome.storage.local.get(['excludeList', 'alwaysTranslateList'], function (items) {
+        chrome.storage.local.get(['excludeList', 'alwaysTranslateList', ...TARGET_LANGUAGE_SETTING_KEYS], function (items) {
+            if (pageState.restorableChars > 0 && cacheRestoreLanguage !== resolveTargetLanguage(items).cacheKey) {
+                pageState.restorableChars = 0;
+                pageState.totalChars = 0;
+            }
             const currentUrl = window.location.href;
             pageState.excluded = siteListMatchesUrl(items.excludeList, currentUrl);
             pageState.alwaysTranslate = siteListMatchesUrl(items.alwaysTranslateList, currentUrl);

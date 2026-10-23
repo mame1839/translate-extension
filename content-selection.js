@@ -322,15 +322,16 @@ function requestSelectionBatch(batch) {
 async function runSelectionBlockReplace(blocks, requestId = selectionRequestId) {
     const config = await new Promise(resolve => {
         try {
-            chrome.storage.local.get(['targetLanguage', 'batchSize', 'maxToken', 'toggleBlueBackground'], resolve);
+            chrome.storage.local.get([...UI_LANGUAGE_SETTING_KEYS, 'batchSize', 'maxToken', 'toggleBlueBackground'], resolve);
         } catch (e) {
             resolve({});
         }
     });
     if (requestId !== selectionRequestId) return { total: 0, applied: 0, failed: 0, failure: null };
-    const lang = (config && config.targetLanguage) || 'en';
+    const target = resolveTargetLanguage(config);
+    const lang = target.cacheKey;
     useSessionMemoForLanguage(lang);
-    try { applyStrings(lang); } catch (e) { }
+    try { applyStrings(target); } catch (e) { }
     highlightTranslated = config.toggleBlueBackground === true;
     const maxBatchLength = Number.isFinite(config.maxToken) ? Math.min(Math.floor(config.maxToken * 3), DEFAULTS.maxBatchLength) : DEFAULTS.maxBatchLength;
 
@@ -416,11 +417,11 @@ function showSelectionTranslation(rawText, replaceIntent) {
         selectionReplacePlan = classifySelectionForReplace(selectionAnchorRange);
     }
     const requestId = selectionRequestId;
-    chrome.storage.local.get(['targetLanguage'], function (items) {
+    chrome.storage.local.get(UI_LANGUAGE_SETTING_KEYS, function (items) {
         if (requestId !== selectionRequestId) return;
-        const lang = (items && items.targetLanguage) || 'en';
-        selectionStrings = (typeof getT === 'function') ? getT(lang) : null;
-        selectionIsRtl = isRtlLang(lang);
+        const target = resolveTargetLanguage(items);
+        selectionStrings = target.strings;
+        selectionIsRtl = target.dir === 'rtl';
         openSelectionPopup();
         if (!selectionShadowRoot) return;
         if (text.length > SELECTION_MAX_CHARS) {
@@ -444,7 +445,7 @@ function captureSelectionAnchor() {
 }
 
 function selectionErrorText(code, rawMessage) {
-    const messageKey = ERROR_CODE_MESSAGE_KEYS[code];
+    const messageKey = ownValue(ERROR_CODE_MESSAGE_KEYS, code);
     if (messageKey) {
         const localized = selectionLabel(messageKey, '');
         if (localized) return localized;

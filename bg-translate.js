@@ -2,8 +2,11 @@ async function translateTextBatch(fragmentBatch, signal, streamContext = null) {
     if (signal?.aborted) throw createAbortError();
     if (!fragmentBatch || fragmentBatch.length === 0) return [];
 
-    const { maxRetries, apiProvider, targetLanguage } = await new Promise(resolve =>
-        chrome.storage.local.get(['maxRetries', 'apiProvider', 'targetLanguage'], resolve));
+    const settings = await new Promise(resolve =>
+        chrome.storage.local.get(['maxRetries', 'apiProvider', ...TARGET_LANGUAGE_SETTING_KEYS], resolve));
+    const { maxRetries, apiProvider } = settings;
+    const target = resolveTargetLanguage(settings);
+    if (!target.promptName) throw createTranslationError('targetLanguageNotSet');
 
     const payload = {};
     const idByKey = new Map();
@@ -16,13 +19,9 @@ async function translateTextBatch(fragmentBatch, signal, streamContext = null) {
 
     const provider = (apiProvider || DEFAULTS.apiProvider).trim();
     const retryLimit = maxRetries ?? DEFAULTS.maxRetries;
-    const langCode = (targetLanguage || 'en').trim();
-    const langEntry = LANGUAGES.find(l => l.code === langCode);
-    const langName = langEntry ? langEntry.name : 'English';
-
     const jsonText = JSON.stringify(payload, null, 2);
 
-    const translatedData = await translateWithProvider(provider, jsonText, retryLimit, signal, langName, langCode, streamContext);
+    const translatedData = await translateWithProvider(provider, jsonText, retryLimit, signal, target.promptName, target.code, streamContext);
 
     const translations = [];
     fragmentBatch.forEach((tu, index) => {

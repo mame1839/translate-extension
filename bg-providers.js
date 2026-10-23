@@ -119,7 +119,7 @@ function buildAnthropicRequest(settings, prompt, maxOutputTokens, options) {
         headers: {
             'Content-Type': 'application/json',
             'x-api-key': settings.anthropicApiKey,
-            'anthropic-version': '2023-06-01',
+            'anthropic-version': '2026-10-21',
             'anthropic-dangerous-direct-browser-access': 'true'
         },
         body: JSON.stringify(body),
@@ -273,12 +273,21 @@ function providerSpec(provider) {
     };
 }
 
-async function translateWithProvider(provider, text, retryLimit, signal, targetLanguage = 'English', targetLanguageCode, streamContext = null) {
+async function loadConfiguredProvider(provider) {
     const spec = providerSpec(provider);
     const settings = await new Promise(resolve => chrome.storage.local.get(spec.settingsKeys, resolve));
     spec.assertConfigured(settings);
-    const actualTimeout = settings.timeout || DEFAULTS.timeout;
+    return { spec, settings };
+}
+
+async function translateWithProvider(provider, text, retryLimit, signal, targetLanguage, targetLanguageCode, streamContext = null) {
+    const { spec, settings } = await loadConfiguredProvider(provider);
     const prompt = createTranslationPrompt(text, targetLanguage, targetLanguageCode, await getPromptCustomSections());
+    return requestProviderJson(spec, settings, prompt, retryLimit, signal, streamContext);
+}
+
+async function requestProviderJson(spec, settings, prompt, retryLimit, signal, streamContext = null) {
+    const actualTimeout = settings.timeout || DEFAULTS.timeout;
     const request = spec.buildRequest(settings, prompt, settings.maxToken || DEFAULTS.maxToken, { json: true, stream: !!streamContext });
     const onHttpError = (response, data) => spec.handleHttpError(response, data, request.reasoningSent);
     if (streamContext) {

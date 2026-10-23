@@ -4,14 +4,16 @@ let translateButtonText = { yes: 'Translate', no: 'No', never: 'Never show for t
 
 let st = TRANSLATIONS.en;
 
-let currentUiLang = 'en';
+let currentUiDir = 'ltr';
+
+let currentTargetDisplayName = 'English';
 
 let detectedPageLanguage = '';
 
-function applyStrings(lang) {
-    const hasLang = !!TRANSLATIONS[lang];
-    const t = TRANSLATIONS[hasLang ? lang : 'en'];
-    currentUiLang = hasLang ? lang : 'en';
+function applyStrings(target) {
+    const t = target.strings;
+    currentUiDir = target.dir;
+    currentTargetDisplayName = target.displayName;
     promptMessage = t.promptMessage;
     translateButtonText = { yes: t.promptYes, no: t.promptNo, never: t.promptNever };
     st = t;
@@ -150,6 +152,8 @@ let pendingAuthorizedRetranslation = false;
 let cacheRestoreMap = null;
 
 let cacheRestoreActive = false;
+
+let cacheRestoreLanguage = '';
 
 let cacheReadError = '';
 

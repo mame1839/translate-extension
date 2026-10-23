@@ -112,6 +112,27 @@
               <select id="targetLanguage"></select>
             </div>
           </div>
+          <div class="row stack" id="customLanguageGroup" hidden>
+            <div class="row-main">
+              <label class="row-label" for="customTargetLanguage" data-i18n="customLanguageLabel">Language name</label>
+              <div class="row-desc" data-i18n="optCustomLanguageDesc"></div>
+              <div class="row-desc warn-text" id="customLanguageEmpty" data-i18n="customLanguageEmpty" hidden></div>
+            </div>
+            <div class="row-control field-wide">
+              <input type="text" id="customTargetLanguage" maxlength="60" dir="auto" autocomplete="off" spellcheck="false">
+            </div>
+          </div>
+          <div class="row" id="uiStringsGroup" hidden>
+            <div class="row-main">
+              <div class="row-label" data-i18n="uiStringsLabel">Interface text</div>
+              <div class="row-desc" data-i18n="optUiStringsDesc"></div>
+              <div class="row-desc" id="uiStringsStatus" role="status" aria-live="polite"></div>
+              <div class="row-desc warn-text" id="uiStringsError" hidden></div>
+            </div>
+            <div class="row-control">
+              <button class="btn-tonal" type="button" id="uiStringsBtn"></button>
+            </div>
+          </div>
           <div class="row">
             <div class="row-main">
               <label class="row-label" for="toggleBlueBackground" data-i18n="showHighlightLabel">Show translation highlight</label>

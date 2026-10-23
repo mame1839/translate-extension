@@ -36,7 +36,7 @@ function handleExtensionInstalled(details) {
     }
     cleanupLegacyPageCache();
     chrome.storage.local.get(
-        ['apiProvider', 'targetLanguage', 'geminiModel', 'openaiModel', 'anthropicModel', 'deepseekModel', 'compatibleModel',
+        ['apiProvider', 'targetLanguage', ...contextMenuLanguageKeys(), 'geminiModel', 'openaiModel', 'anthropicModel', 'deepseekModel', 'compatibleModel',
          'batchSize', 'maxBatchLength', 'delayBetweenRequests', 'maxToken', 'concurrencyLimit', 'maxRetries', 'timeout', 'showContextMenu', 'autoRetranslateDomain'],
         function (items) {
             const toSet = {};
@@ -56,22 +56,23 @@ function handleExtensionInstalled(details) {
             if (items.showContextMenu === undefined) toSet.showContextMenu = DEFAULTS.showContextMenu;
             if (items.autoRetranslateDomain === undefined) toSet.autoRetranslateDomain = DEFAULTS.autoRetranslateDomain;
             if (Object.keys(toSet).length > 0) chrome.storage.local.set(toSet);
+            const target = contextMenuTarget(items);
             chrome.contextMenus.removeAll(() => {
                 chrome.contextMenus.create({
                     id: TOGGLE_MENU_ID,
-                    title: contextMenuTitle('selMenuToggle', items.targetLanguage),
+                    title: contextMenuTitle('selMenuToggle', target),
                     contexts: ["all"],
                     visible: items.showContextMenu !== false
                 });
                 chrome.contextMenus.create({
                     id: SELECTION_MENU_ID,
-                    title: contextMenuTitle('selMenuTranslate', items.targetLanguage),
+                    title: contextMenuTitle('selMenuTranslate', target),
                     contexts: ["selection"],
                     visible: items.showContextMenu !== false
                 });
                 chrome.contextMenus.create({
                     id: REPLACE_MENU_ID,
-                    title: contextMenuTitle('selMenuReplace', items.targetLanguage),
+                    title: contextMenuTitle('selMenuReplace', target),
                     contexts: ["selection"],
                     visible: items.showContextMenu !== false
                 });
@@ -92,14 +93,40 @@ const CONTEXT_MENU_TITLE_FALLBACKS = {
     selMenuReplace: 'Translate and replace selection'
 };
 
-function contextMenuTitle(key, langCode) {
+function contextMenuTitle(key, target) {
+    const title = target && target.strings ? target.strings[key] : '';
+    return (typeof title === 'string' && title) ? title : CONTEXT_MENU_TITLE_FALLBACKS[key];
+}
+
+function contextMenuLanguageKeys() {
     try {
-        if (typeof getT === 'function') {
-            const strings = getT((langCode || 'en').trim());
-            if (strings && strings[key]) return strings[key];
-        }
-    } catch (e) { }
-    return CONTEXT_MENU_TITLE_FALLBACKS[key];
+        return UI_LANGUAGE_SETTING_KEYS;
+    } catch (e) {
+        return [];
+    }
+}
+
+function contextMenuTarget(items) {
+    try {
+        return resolveTargetLanguage(items);
+    } catch (e) {
+        return null;
+    }
+}
+
+function readContextMenuTarget(callback) {
+    const keys = contextMenuLanguageKeys();
+    if (keys.length === 0) {
+        callback(null);
+        return;
+    }
+    try {
+        chrome.storage.local.get(keys, items => {
+            callback(chrome.runtime.lastError || !items ? null : contextMenuTarget(items));
+        });
+    } catch (e) {
+        callback(null);
+    }
 }
 
 function handleContextMenuSettingsChange(changes, areaName) {
@@ -108,9 +135,15 @@ function handleContextMenuSettingsChange(changes, areaName) {
     if (changes.showContextMenu !== undefined) {
         shared.visible = changes.showContextMenu.newValue !== false;
     }
-    const languageChanged = changes.targetLanguage !== undefined;
-    if (!languageChanged && Object.keys(shared).length === 0) return;
-    const newLanguage = languageChanged ? changes.targetLanguage.newValue : null;
+    const languageChanged = contextMenuLanguageKeys().some(key => changes[key] !== undefined);
+    if (!languageChanged) {
+        if (Object.keys(shared).length > 0) updateContextMenus(shared, null);
+        return;
+    }
+    readContextMenuTarget(target => updateContextMenus(shared, target));
+}
+
+function updateContextMenus(shared, target) {
     const menus = [
         { id: TOGGLE_MENU_ID, key: 'selMenuToggle' },
         { id: SELECTION_MENU_ID, key: 'selMenuTranslate' },
@@ -118,7 +151,8 @@ function handleContextMenuSettingsChange(changes, areaName) {
     ];
     for (const menu of menus) {
         const update = { ...shared };
-        if (languageChanged) update.title = contextMenuTitle(menu.key, newLanguage);
+        if (target) update.title = contextMenuTitle(menu.key, target);
+        if (Object.keys(update).length === 0) continue;
         try {
             const updating = chrome.contextMenus.update(menu.id, update);
             if (updating && typeof updating.catch === 'function') updating.catch(() => { });

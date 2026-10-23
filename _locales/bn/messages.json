@@ -4,7 +4,7 @@
     "description": "Extension name (max 45 chars)"
   },
   "appDescription": {
-    "message": "Gemini, OpenAI, Anthropic, DeepSeek বা OpenAI-সামঞ্জস্যপূর্ণ API দিয়ে ওয়েবপেজ অনুবাদ করুন। ২২টি ভাষা সমর্থিত।",
+    "message": "Gemini, OpenAI, Anthropic, DeepSeek বা OpenAI-সামঞ্জস্যপূর্ণ API দিয়ে ওয়েবপেজ অনুবাদ করুন। ২৩টি ভাষা ও পছন্দের অন্য ভাষা সমর্থিত।",
     "description": "Extension description (max 132 chars)"
   },
   "contextMenuToggle": {

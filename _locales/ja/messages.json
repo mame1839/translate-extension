@@ -4,7 +4,7 @@
     "description": "Extension name (max 45 chars)"
   },
   "appDescription": {
-    "message": "Gemini・OpenAI・Anthropic・DeepSeek・OpenAI 互換 API でウェブページを翻訳。22 言語に対応。",
+    "message": "Gemini・OpenAI・Anthropic・DeepSeek・OpenAI 互換 API でウェブページを翻訳。23 言語に対応。ほかの言語も名前で指定可能。",
     "description": "Extension description (max 132 chars)"
   },
   "contextMenuToggle": {

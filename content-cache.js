@@ -159,7 +159,14 @@ async function resolveCacheForLanguage(targetLanguage) {
     return withoutLanguage;
 }
 
+function discardCacheRestoreForOtherLanguage(targetLanguage) {
+    if (!cacheRestoreMap || cacheRestoreLanguage === targetLanguage) return;
+    cacheRestoreMap = null;
+    cacheRestoreActive = false;
+}
+
 async function tryRestoreFromCache(targetLanguage) {
+    discardCacheRestoreForOtherLanguage(targetLanguage);
     if (!cacheRestoreMap) {
         if (!targetLanguage) return false;
         const resolved = await resolveCacheForLanguage(targetLanguage);
@@ -176,6 +183,7 @@ async function tryRestoreFromCache(targetLanguage) {
         }
         if (map.size === 0) return false;
         cacheRestoreMap = map;
+        cacheRestoreLanguage = targetLanguage;
         cacheRestoreActive = true;
     }
     return cacheRestoreActive;
@@ -316,9 +324,9 @@ function measureCacheCoverage() {
 function getStoredTargetLanguage() {
     return new Promise(resolve => {
         try {
-            chrome.storage.local.get(['targetLanguage'], (items) => {
+            chrome.storage.local.get(TARGET_LANGUAGE_SETTING_KEYS, (items) => {
                 if (chrome.runtime.lastError) { resolve(null); return; }
-                resolve((items && items.targetLanguage) || 'en');
+                resolve(resolveTargetLanguage(items).cacheKey);
             });
         } catch (e) { resolve(null); }
     });
@@ -326,7 +334,7 @@ function getStoredTargetLanguage() {
 
 async function restoreFromCacheOnly() {
     const lang = await getStoredTargetLanguage();
-    if (!cacheRestoreMap) { try { await tryRestoreFromCache(lang); } catch (e) { } }
+    try { await tryRestoreFromCache(lang); } catch (e) { }
     if (cacheRestoreActive) {
         try { applyCacheRestore(); } catch (e) { }
     }
