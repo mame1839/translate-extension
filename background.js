@@ -63,6 +63,10 @@ try {
 } catch (e) { }
 
 try {
+    importScripts('bg-uistrings.js');
+} catch (e) { }
+
+try {
     chrome.alarms.create('translator-keepalive', { periodInMinutes: 0.5 });
     chrome.alarms.onAlarm.addListener(() => { });
 } catch (e) { }
@@ -299,6 +303,19 @@ function handleExtensionPageMessage(request, sender, sendResponse) {
         pageCacheList(request.offset, request.limit)
             .then(result => sendResponse(Object.assign({ version: workerVersion() }, result)))
             .catch(e => sendResponse({ pages: [], total: 0, offset: 0, error: describeStorageFailure(e), version: workerVersion() }));
+        return true;
+    }
+
+    if (request.action === "customUiStringsStatus") {
+        sendResponse(Object.assign({ version: workerVersion() }, customUiStringsStatus()));
+        return false;
+    }
+
+    if (request.action === "customUiStringsGenerate") {
+        if (!isOptionsPageSender(sender)) return false;
+        startCustomUiStringsGeneration(request.name, request.scope)
+            .then(result => sendResponse(Object.assign({ version: workerVersion() }, result)))
+            .catch(e => sendResponse({ version: workerVersion(), outcome: null, error: e?.message || '' }));
         return true;
     }
 

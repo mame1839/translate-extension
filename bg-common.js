@@ -2,6 +2,7 @@ const errorMessages = {
     apiKeyNotSet: 'API key is not set. Please configure it in the options page.',
     endpointNotSet: 'Endpoint URL is not set. Please configure it in the options page.',
     modelNotSet: 'Model ID is not set. Please configure it in the options page.',
+    targetLanguageNotSet: 'Custom target language name is not set. Please configure it in the options page.',
     jsonParseFailed: 'Failed to parse JSON response from AI.',
     jsonExtractFailed: 'Could not extract JSON from AI response.',
     apiLimitReached: 'API rate limit reached. Please wait and try again.',
@@ -26,6 +27,7 @@ const FATAL_TRANSLATION_ERRORS = [
     errorMessages.invalidApiKey,
     errorMessages.endpointNotSet,
     errorMessages.modelNotSet,
+    errorMessages.targetLanguageNotSet,
     errorMessages.insufficientQuota
 ];
 

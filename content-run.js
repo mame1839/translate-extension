@@ -41,19 +41,21 @@ async function startTranslation(userInitiated = false) {
     domUpdateQueue = [];
     streamingBatchRegistry.clear();
     streamingActive = false;
-    if (cacheRestoreActive) {
-        try { applyCacheRestore(); } catch (e) { }
-    }
     let lang = 'en';
     try {
         const config = await new Promise(resolve => {
-            chrome.storage.local.get(['targetLanguage', 'showProgressPopup', 'batchSize', 'maxToken', 'toggleBlueBackground', 'streamingTranslation'], resolve);
+            chrome.storage.local.get([...UI_LANGUAGE_SETTING_KEYS, 'showProgressPopup', 'batchSize', 'maxToken', 'toggleBlueBackground', 'streamingTranslation'], resolve);
         });
-        lang = config.targetLanguage || 'en';
+        const target = resolveTargetLanguage(config);
+        lang = target.cacheKey;
+        discardCacheRestoreForOtherLanguage(lang);
+        if (cacheRestoreActive) {
+            try { applyCacheRestore(); } catch (e) { }
+        }
         highlightTranslated = config.toggleBlueBackground === true;
         streamingEnabled = config.streamingTranslation === true;
         useSessionMemoForLanguage(lang);
-        applyStrings(lang);
+        applyStrings(target);
 
         if (userInitiated) clearFailedMarkersForRetry();
 

@@ -44,13 +44,14 @@ async function runSelectionTranslation(key, rawText, sendResponse) {
 
 async function translateSelectionText(text, signal) {
     if (signal?.aborted) throw createAbortError();
-    const { maxRetries, apiProvider, targetLanguage } = await new Promise(resolve =>
-        chrome.storage.local.get(['maxRetries', 'apiProvider', 'targetLanguage'], resolve));
+    const settings = await new Promise(resolve =>
+        chrome.storage.local.get(['maxRetries', 'apiProvider', ...TARGET_LANGUAGE_SETTING_KEYS], resolve));
+    const { maxRetries, apiProvider } = settings;
+    const target = resolveTargetLanguage(settings);
+    if (!target.promptName) throw createTranslationError('targetLanguageNotSet');
     const provider = (apiProvider || DEFAULTS.apiProvider).trim();
     const retryLimit = maxRetries ?? DEFAULTS.maxRetries;
-    const langCode = (targetLanguage || 'en').trim();
-    const langEntry = LANGUAGES.find(l => l.code === langCode);
-    const prompt = createSelectionPrompt(text, langEntry ? langEntry.name : 'English');
+    const prompt = createSelectionPrompt(text, target.promptName);
     if (provider === 'openai') return selectionRequestOpenAI(prompt, retryLimit, signal);
     if (provider === 'anthropic') return selectionRequestAnthropic(prompt, retryLimit, signal);
     if (provider === 'deepseek') return selectionRequestDeepSeek(prompt, retryLimit, signal);

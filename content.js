@@ -2,7 +2,7 @@ function initTranslation() {
     try {
         postFinishScanCount = 0;
         chrome.storage.local.get(
-            ['targetLanguage', 'realTimeTranslation', 'excludeList', 'alwaysTranslateList', 'hidePromptAllSites', 'autoRetranslateDomain', 'toggleBlueBackground', 'autoTranslateNewContent'],
+            [...UI_LANGUAGE_SETTING_KEYS, 'realTimeTranslation', 'excludeList', 'alwaysTranslateList', 'hidePromptAllSites', 'autoRetranslateDomain', 'toggleBlueBackground', 'autoTranslateNewContent'],
             async function (items) {
                 try { watchForNewContent(); } catch (e) { }
                 try { watchUserInteractions(); } catch (e) { }
@@ -11,8 +11,8 @@ function initTranslation() {
                 try { watchSettingChanges(); } catch (e) { }
 
                 const pageLang = getPageLanguage();
-                const chosenLang = items.targetLanguage || 'en';
-                applyStrings(chosenLang);
+                const target = resolveTargetLanguage(items);
+                applyStrings(target);
                 adoptSettingSnapshot(items);
 
                 const isReactSpa = isLikelyReactApp();
@@ -30,7 +30,7 @@ function initTranslation() {
                     return sessionDomainState;
                 }
                 if (!isReactSpa && !isExcluded) {
-                    const restored = await tryRestoreFromCache(chosenLang);
+                    const restored = await tryRestoreFromCache(target.cacheKey);
                     const optedIntoAutoTranslation = (restored || cacheRestoreActive) && (items.realTimeTranslation === true
                         || isAlwaysTranslate
                         || (items.autoRetranslateDomain !== false && (await getSessionDomainState()).known));
@@ -54,7 +54,7 @@ function initTranslation() {
                         }
                     }
                 }
-                const languageDecision = resolvePageLanguageDecision(await detectContentLanguage(), pageLang, chosenLang);
+                const languageDecision = resolvePageLanguageDecision(await detectContentLanguage(), pageLang, target.code);
                 detectedPageLanguage = languageDecision.detectedSourceLanguage;
 
                 const translationStarter = () => {

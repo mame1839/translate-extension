@@ -72,17 +72,41 @@ let cachePages = [];
 let cachePagesTotal = 0;
 let cachePagesUnreadable = false;
 let cachePagesLoaded = false;
+let storedCustomUiStrings = null;
+let currentTarget = resolveTargetLanguage({});
+let uiStringsJob = { running: false, done: 0, total: 0 };
+let uiStringsRequestPending = false;
+let uiStringsOutcome = null;
+let uiStringsPollTimer = null;
 
 function el(id) {
     return document.getElementById(id);
 }
 
-function getUiLang() {
+function selectedTargetLanguage() {
     return el('targetLanguage').value || 'en';
 }
 
+function refreshCurrentTarget() {
+    currentTarget = resolveTargetLanguage({
+        targetLanguage: selectedTargetLanguage(),
+        customTargetLanguage: el('customTargetLanguage').value,
+        customUiStrings: storedCustomUiStrings
+    });
+}
+
+function getUiLang() {
+    return currentTarget.locale;
+}
+
 function currentT() {
-    return getT(getUiLang());
+    return currentTarget.strings;
+}
+
+function applyTargetLanguage() {
+    refreshCurrentTarget();
+    applyDir();
+    applyI18n(currentT());
 }
 
 function applyI18n(t) {
@@ -110,11 +134,12 @@ function applyI18n(t) {
     renderCacheStats();
     renderCachePages();
     renderStaleBackgroundBanner();
+    renderCustomLanguageControls();
 }
 
-function applyDir(lang) {
-    document.documentElement.lang = lang;
-    document.documentElement.dir = isRtlLang(lang) ? 'rtl' : 'ltr';
+function applyDir() {
+    document.documentElement.lang = currentTarget.uiLang;
+    document.documentElement.dir = currentTarget.dir;
 }
 
 function populateLanguageSelect(selected) {
@@ -127,6 +152,12 @@ function populateLanguageSelect(selected) {
         if (lang.code === selected) opt.selected = true;
         sel.appendChild(opt);
     });
+    const custom = document.createElement('option');
+    custom.value = CUSTOM_TARGET_LANGUAGE;
+    custom.dataset.i18n = 'customLanguageOption';
+    custom.textContent = currentT().customLanguageOption;
+    if (selected === CUSTOM_TARGET_LANGUAGE) custom.selected = true;
+    sel.appendChild(custom);
 }
 
 function normalizeProvider(provider) {
@@ -493,11 +524,12 @@ async function saveNow() {
     const compatibleEndpointRaw = providerSettings['openai-compatible'].endpoint.trim();
     if (currentProvider === 'openai-compatible' && compatibleEndpointRaw && !isValidEndpoint(compatibleEndpointRaw)) {
         showSnackbar(t.optInvalidEndpoint, true);
-        return;
+        return false;
     }
 
     const saveData = {
-        targetLanguage: getUiLang(),
+        targetLanguage: selectedTargetLanguage(),
+        customTargetLanguage: normalizeCustomLanguageName(el('customTargetLanguage').value),
         apiProvider: currentProvider,
         geminiApiKey: providerSettings.gemini.apiKey,
         geminiModel: providerSettings.gemini.model.trim() || DEFAULTS.geminiModel,
@@ -539,8 +571,10 @@ async function saveNow() {
     try {
         await chrome.storage.local.set(saveData);
         showSnackbar(t.saved, false);
+        return true;
     } catch (e) {
         showSnackbar(t.saveError, true);
+        return false;
     }
 }
 
@@ -806,7 +840,7 @@ function renderCachePages() {
         meta.className = 'chip-meta';
         const parts = [];
         if (page.savedAt) parts.push(formatDate(page.savedAt, lang));
-        if (page.lang) parts.push(languageNativeName(page.lang));
+        if (page.lang) parts.push(targetLanguageLabelForCacheKey(page.lang));
         parts.push(t.dataCacheBlocksLabel.replace('{count}', formatNumber(page.blocks, lang)));
         parts.forEach((part, index) => {
             if (index > 0) meta.appendChild(document.createTextNode(' · '));
@@ -901,6 +935,130 @@ async function clearPageCache() {
     }
 }
 
+function describeUiStringsFailure(t, error) {
+    const detail = typeof error.detail === 'string' ? error.detail : '';
+    if (error.code === 'backgroundUnavailable') return detail ? t.bgUnavailable + ' (' + detail + ')' : t.bgUnavailable;
+    const messageKey = ownValue(ERROR_CODE_MESSAGE_KEYS, error.code);
+    const localized = messageKey ? ownValue(t, messageKey) : '';
+    if (!localized) return detail || t.errUnknown;
+    return detail ? localized + ' (' + detail + ')' : localized;
+}
+
+function uiStringsFailureText(t) {
+    const outcome = uiStringsOutcome;
+    if (uiStringsJob.running || !outcome || outcome.name !== currentTarget.promptName) return '';
+    if (outcome.stopped) return t.uiStringsStopped;
+    if (!outcome.error || typeof outcome.error !== 'object') return '';
+    const reason = describeUiStringsFailure(t, outcome.error);
+    return t.uiStringsFailed.replace('{reason}', () => reason);
+}
+
+function renderCustomLanguageControls() {
+    const customGroup = el('customLanguageGroup');
+    const stringsGroup = el('uiStringsGroup');
+    if (!customGroup || !stringsGroup) return;
+    const custom = currentTarget.custom;
+    customGroup.hidden = !custom;
+    stringsGroup.hidden = !custom;
+    if (!custom) return;
+    const t = currentT();
+    const lang = getUiLang();
+    const name = currentTarget.promptName;
+    const translated = currentTarget.uiStringsTranslated;
+    const total = currentTarget.uiStringsTotal;
+    el('customLanguageEmpty').hidden = !!name;
+    let status;
+    if (uiStringsJob.running) {
+        status = t.uiStringsWorking
+            .replace('{done}', formatNumber(uiStringsJob.done, lang))
+            .replace('{total}', formatNumber(uiStringsJob.total, lang));
+    } else if (translated >= total) {
+        status = t.uiStringsDone;
+    } else if (translated > 0) {
+        status = t.uiStringsPartial
+            .replace('{count}', formatNumber(total - translated, lang))
+            .replace('{total}', formatNumber(total, lang));
+    } else {
+        status = t.uiStringsNone;
+    }
+    el('uiStringsStatus').textContent = status;
+    const failure = uiStringsFailureText(t);
+    const errorNode = el('uiStringsError');
+    errorNode.hidden = !failure;
+    errorNode.textContent = failure;
+    const button = el('uiStringsBtn');
+    button.textContent = translated >= total ? t.retranslateButton : (translated > 0 ? t.translateRestButton : t.uiStringsGenerateBtn);
+    button.disabled = uiStringsJob.running || !name;
+}
+
+function startUiStringsPolling() {
+    stopUiStringsPolling();
+    uiStringsPollTimer = setInterval(pollUiStringsStatus, 1000);
+}
+
+function stopUiStringsPolling() {
+    clearInterval(uiStringsPollTimer);
+    uiStringsPollTimer = null;
+}
+
+async function pollUiStringsStatus() {
+    let status = null;
+    try {
+        status = await chrome.runtime.sendMessage({ action: 'customUiStringsStatus' });
+    } catch (e) {
+        status = null;
+    }
+    if (!status || typeof status.running !== 'boolean') {
+        if (uiStringsRequestPending) return;
+        stopUiStringsPolling();
+        uiStringsJob = { running: false, done: 0, total: 0 };
+    } else if (status.running) {
+        uiStringsJob = { running: true, done: status.done || 0, total: status.total || uiStringsJob.total };
+        if (!uiStringsPollTimer) startUiStringsPolling();
+    } else if (!uiStringsRequestPending) {
+        stopUiStringsPolling();
+        uiStringsJob = { running: false, done: 0, total: 0 };
+        uiStringsOutcome = status.outcome && typeof status.outcome === 'object' ? status.outcome : null;
+    }
+    renderCustomLanguageControls();
+}
+
+async function requestUiStringsTranslation() {
+    if (uiStringsJob.running || !currentTarget.custom || !currentTarget.promptName) return;
+    const name = currentTarget.promptName;
+    const translated = currentTarget.uiStringsTranslated;
+    const total = currentTarget.uiStringsTotal;
+    const scope = translated > 0 && translated < total ? 'missing' : 'all';
+    uiStringsJob = { running: true, done: 0, total: scope === 'missing' ? total - translated : total };
+    uiStringsOutcome = null;
+    renderCustomLanguageControls();
+    if (!(await saveNow())) {
+        uiStringsJob = { running: false, done: 0, total: 0 };
+        renderCustomLanguageControls();
+        return;
+    }
+    uiStringsRequestPending = true;
+    startUiStringsPolling();
+    let response = null;
+    let failure = '';
+    try {
+        response = await chrome.runtime.sendMessage({ action: 'customUiStringsGenerate', name, scope });
+    } catch (e) {
+        failure = describeBackgroundFailure(e);
+    }
+    uiStringsRequestPending = false;
+    if (response && response.busy === true) {
+        pollUiStringsStatus();
+        return;
+    }
+    stopUiStringsPolling();
+    uiStringsJob = { running: false, done: 0, total: 0 };
+    uiStringsOutcome = response && response.outcome && typeof response.outcome === 'object'
+        ? response.outcome
+        : { name, stopped: false, error: { code: 'backgroundUnavailable', detail: failure || describeResponseFailure(response) } };
+    renderCustomLanguageControls();
+}
+
 function activateSection(id) {
     const target = SECTION_IDS.includes(id) ? id : SECTION_IDS[0];
     document.querySelectorAll('.nav-item').forEach(btn => {
@@ -916,9 +1074,9 @@ function activateSection(id) {
 const resetHandlers = {
     general: () => {
         populateLanguageSelect('en');
-        applyDir('en');
-        applyI18n(getT('en'));
+        el('customTargetLanguage').value = '';
         el('toggleBlueBackground').checked = DEFAULTS.toggleBlueBackground;
+        applyTargetLanguage();
     },
     provider: () => {
         providerSettings.gemini = { apiKey: '', model: DEFAULTS.geminiModel, reasoning: DEFAULTS.geminiReasoning };
@@ -956,7 +1114,7 @@ const resetHandlers = {
 document.addEventListener('DOMContentLoaded', async () => {
     try {
         const items = await chrome.storage.local.get([
-            'targetLanguage', 'apiProvider',
+            ...UI_LANGUAGE_SETTING_KEYS, 'apiProvider',
             'geminiApiKey', 'geminiModel',
             'openaiApiKey', 'openaiModel',
             'anthropicApiKey', 'anthropicModel',
@@ -969,9 +1127,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             'translationStyle', 'customInstruction', 'glossaryText'
         ]);
 
-        const lang = items.targetLanguage || 'en';
-        populateLanguageSelect(lang);
-        applyDir(lang);
+        storedCustomUiStrings = items.customUiStrings ?? null;
+        populateLanguageSelect(items.targetLanguage || 'en');
+        el('customTargetLanguage').value = normalizeCustomLanguageName(items.customTargetLanguage);
+        refreshCurrentTarget();
+        applyDir();
 
         providerSettings.gemini.apiKey = items.geminiApiKey || '';
         providerSettings.gemini.model = items.geminiModel || DEFAULTS.geminiModel;
@@ -1015,12 +1175,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         excludeEntries = normalizeSiteList(items.excludeList);
         alwaysEntries = normalizeSiteList(items.alwaysTranslateList);
 
-        applyI18n(getT(lang));
+        applyI18n(currentT());
     } catch (e) {
         applyI18n(getT('en'));
     }
 
     checkBackgroundVersion();
+    pollUiStringsStatus();
 
     activateSection((location.hash || '').replace('#', ''));
 
@@ -1033,11 +1194,23 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     el('targetLanguage').addEventListener('change', () => {
-        const lang = getUiLang();
-        applyDir(lang);
-        applyI18n(getT(lang));
+        applyTargetLanguage();
+        scheduleSave();
+        if (currentTarget.custom && !currentTarget.promptName) el('customTargetLanguage').focus();
+    });
+
+    el('customTargetLanguage').addEventListener('input', () => {
+        applyTargetLanguage();
         scheduleSave();
     });
+
+    el('customTargetLanguage').addEventListener('change', () => {
+        const input = el('customTargetLanguage');
+        const normalized = normalizeCustomLanguageName(input.value);
+        if (input.value !== normalized) input.value = normalized;
+    });
+
+    el('uiStringsBtn').addEventListener('click', requestUiStringsTranslation);
 
     el('apiProvider').addEventListener('change', () => {
         saveCurrentProviderToMemory();
@@ -1132,6 +1305,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     try {
         chrome.storage.onChanged.addListener((changes, area) => {
             if (area !== 'local') return;
+            if (changes.customUiStrings) {
+                storedCustomUiStrings = changes.customUiStrings.newValue ?? null;
+                applyTargetLanguage();
+            }
             let changed = false;
             if (changes.excludeList) {
                 const incoming = normalizeSiteList(changes.excludeList.newValue);
