@@ -4,7 +4,7 @@
     "description": "Extension name (max 45 chars)"
   },
   "appDescription": {
-    "message": "Web sayfalarını Gemini, OpenAI, Anthropic, DeepSeek veya OpenAI uyumlu API'lerle çevirin. 22 dil desteklenir.",
+    "message": "Web sayfalarını Gemini, OpenAI, Anthropic, DeepSeek veya OpenAI uyumlu API'lerle çevirin. 23 dil ve dilediğiniz diller desteklenir.",
     "description": "Extension description (max 132 chars)"
   },
   "contextMenuToggle": {

@@ -1,0 +1,14 @@
+{
+  "appName": {
+    "message": "AI แปลเว็บไซต์",
+    "description": "Extension name (max 45 chars)"
+  },
+  "appDescription": {
+    "message": "แปลหน้าเว็บเป็น 23 ภาษาหรือภาษาอื่นที่คุณระบุ ด้วย Gemini, OpenAI, Anthropic, DeepSeek หรือ API ที่เข้ากันได้กับ OpenAI",
+    "description": "Extension description (max 132 chars)"
+  },
+  "contextMenuToggle": {
+    "message": "เปิด/ปิดการแปล",
+    "description": "Context menu item to toggle translation"
+  }
+}

@@ -4,7 +4,7 @@
     "description": "Extension name (max 45 chars)"
   },
   "appDescription": {
-    "message": "Tafsiri kurasa za wavuti kwa Gemini, OpenAI, Anthropic, DeepSeek au API zinazooana na OpenAI. Lugha 22 zinapatikana.",
+    "message": "Tafsiri kurasa za wavuti kwa Gemini, OpenAI, Anthropic, DeepSeek au API zinazooana na OpenAI. Lugha 23 na nyingine utakazochagua.",
     "description": "Extension description (max 132 chars)"
   },
   "contextMenuToggle": {
