@@ -356,7 +356,7 @@ const ICON_CHEVRON = [['path', { d: 'm9 18 6-6-6-6' }]];
 function createUiRoot() {
     const root = document.createElement('div');
     root.className = 'root';
-    root.dir = isRtlLang(currentUiLang) ? 'rtl' : 'ltr';
+    root.dir = currentUiDir;
     return root;
 }
 
@@ -413,9 +413,9 @@ function promptLanguagePairLabel() {
     const pageLang = detectedPageLanguage || getPageLanguage();
     if (!pageLang) return '';
     const source = languageNativeName(pageLang);
-    const target = languageNativeName(currentUiLang);
+    const target = currentTargetDisplayName;
     if (!source || !target || source === target) return '';
-    const arrow = isRtlLang(currentUiLang) ? ' ← ' : ' → ';
+    const arrow = currentUiDir === 'rtl' ? ' ← ' : ' → ';
     return isolateBidi(source) + arrow + isolateBidi(target);
 }
 
@@ -590,36 +590,12 @@ function showCacheRestoreNotice(titleText, offerRetranslate) {
     restoreNoticeTimer = setTimeout(removeCacheRestoreNotice, RESTORE_NOTICE_TIMEOUT_MS);
 }
 
-const ERROR_CODE_MESSAGE_KEYS = {
-    apiKeyNotSet: 'errApiKeyNotSet',
-    invalidApiKey: 'errInvalidApiKey',
-    endpointNotSet: 'errEndpointNotSet',
-    modelNotSet: 'errModelNotSet',
-    insufficientQuota: 'errInsufficientQuota',
-    modelNotFound: 'errModelNotFound',
-    apiLimitReached: 'errRateLimited',
-    requestTimeout: 'errTimeout',
-    serverError: 'errServerError',
-    fetchError: 'errNetwork',
-    maxTokensError: 'errMaxTokens',
-    jsonParseFailed: 'errBadResponse',
-    jsonExtractFailed: 'errBadResponse',
-    emptyResponse: 'errBadResponse',
-    invalidRequest: 'errInvalidRequest',
-    contentRefused: 'errContentRefused',
-    reasoningNotSupported: 'errReasoningNotSupported',
-    reasoningTimeout: 'errReasoningTimeout',
-    unknownError: 'errUnknown',
-    extensionReloaded: 'errExtensionReloaded',
-    sessionStateFailed: 'errSessionState',
-    originalRestoreFailed: 'errOriginalRestoreFailed'
-};
-
 const ERROR_CODE_ACTIONS = {
     apiKeyNotSet: 'settings',
     invalidApiKey: 'settings',
     endpointNotSet: 'settings',
     modelNotSet: 'settings',
+    targetLanguageNotSet: 'settings',
     insufficientQuota: 'settings',
     modelNotFound: 'settings',
     invalidRequest: 'settings',
@@ -641,11 +617,9 @@ const ERROR_CODE_ACTIONS = {
 };
 
 function localizedErrorCause(code) {
-    const messageKey = ERROR_CODE_MESSAGE_KEYS[code];
+    const messageKey = ownValue(ERROR_CODE_MESSAGE_KEYS, code);
     if (!messageKey) return '';
-    if (typeof TRANSLATIONS === 'undefined') return '';
-    const table = TRANSLATIONS[currentUiLang] || TRANSLATIONS['en'];
-    return (table && table[messageKey]) || '';
+    return ownValue(st, messageKey) || '';
 }
 
 function errorActionFor(code, errorMessage) {

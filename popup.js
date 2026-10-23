@@ -30,11 +30,10 @@ let pageStateRequestId = 0;
 document.addEventListener('DOMContentLoaded', initPopup);
 
 async function initPopup() {
-    const items = await chrome.storage.local.get(['targetLanguage']);
-    const lang = items.targetLanguage || 'en';
-    t = getT(lang);
-    document.documentElement.lang = lang;
-    document.documentElement.dir = isRtlLang(lang) ? 'rtl' : 'ltr';
+    const target = resolveTargetLanguage(await chrome.storage.local.get(UI_LANGUAGE_SETTING_KEYS));
+    t = target.strings;
+    document.documentElement.lang = target.uiLang;
+    document.documentElement.dir = target.dir;
 
     els = {
         appTitle: document.getElementById('appTitle'),
@@ -65,8 +64,7 @@ async function initPopup() {
     els.settingsBtn.setAttribute('aria-label', t.optionsBtn);
     els.alwaysRowLabel.textContent = t.alwaysTranslateBtn;
     els.excludeRowLabel.textContent = t.excludeBtn;
-    const langMeta = LANGUAGES.find(entry => entry.code === lang);
-    els.langChipLabel.textContent = langMeta ? langMeta.native : lang;
+    els.langChipLabel.textContent = target.displayName || t.customLanguageOption;
     try { els.versionLabel.textContent = 'v' + chrome.runtime.getManifest().version; } catch (e) { }
 
     els.settingsBtn.addEventListener('click', openOptions);
