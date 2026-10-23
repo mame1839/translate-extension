@@ -131,8 +131,9 @@ function acceptedUiStrings(keys, translated) {
 
 function saveGeneratedUiStrings(name, accepted) {
     const write = customUiStringsWriteChain.then(async () => {
-        const { customUiStrings } = await readUiStringsSettings(['customUiStrings']);
+        const { customUiStrings, customTargetLanguage } = await readUiStringsSettings(['customUiStrings', 'customTargetLanguage']);
         const sameName = ownValue(customUiStrings, 'name') === name;
+        if (!sameName && normalizeCustomLanguageName(customTargetLanguage) !== name) return false;
         const previousStrings = sameName ? ownValue(customUiStrings, 'strings') : null;
         const previousSources = sameName ? ownValue(customUiStrings, 'sources') : null;
         const strings = {};
@@ -147,6 +148,7 @@ function saveGeneratedUiStrings(name, accepted) {
             }
         }
         await chrome.storage.local.set({ customUiStrings: { name, strings, sources, savedAt: Date.now() } });
+        return true;
     });
     customUiStringsWriteChain = write.catch(() => { });
     return write;
@@ -197,9 +199,13 @@ async function generateCustomUiStrings(run, scope) {
             try {
                 const accepted = acceptedUiStrings(batch, await translateUiStringBatch(spec, settings, batch, name, customSections, retryLimit));
                 const count = Object.keys(accepted).length;
-                if (count > 0) await saveGeneratedUiStrings(name, accepted);
-                tally.translated += count;
-                tally.rejected += batch.length - count;
+                if (count > 0 && !(await saveGeneratedUiStrings(name, accepted))) {
+                    tally.stopped = true;
+                    wakeSleepingWorkersIfHalted();
+                } else {
+                    tally.translated += count;
+                    tally.rejected += batch.length - count;
+                }
             } catch (error) {
                 tally.rejected += batch.length;
                 if (error?.retryAfterMs && Number.isFinite(error.retryAfterMs)) {

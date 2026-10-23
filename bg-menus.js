@@ -36,7 +36,7 @@ function handleExtensionInstalled(details) {
     }
     cleanupLegacyPageCache();
     chrome.storage.local.get(
-        ['apiProvider', ...UI_LANGUAGE_SETTING_KEYS, 'geminiModel', 'openaiModel', 'anthropicModel', 'deepseekModel', 'compatibleModel',
+        ['apiProvider', 'targetLanguage', ...contextMenuLanguageKeys(), 'geminiModel', 'openaiModel', 'anthropicModel', 'deepseekModel', 'compatibleModel',
          'batchSize', 'maxBatchLength', 'delayBetweenRequests', 'maxToken', 'concurrencyLimit', 'maxRetries', 'timeout', 'showContextMenu', 'autoRetranslateDomain'],
         function (items) {
             const toSet = {};
@@ -56,7 +56,7 @@ function handleExtensionInstalled(details) {
             if (items.showContextMenu === undefined) toSet.showContextMenu = DEFAULTS.showContextMenu;
             if (items.autoRetranslateDomain === undefined) toSet.autoRetranslateDomain = DEFAULTS.autoRetranslateDomain;
             if (Object.keys(toSet).length > 0) chrome.storage.local.set(toSet);
-            const target = resolveTargetLanguage(items);
+            const target = contextMenuTarget(items);
             chrome.contextMenus.removeAll(() => {
                 chrome.contextMenus.create({
                     id: TOGGLE_MENU_ID,
@@ -98,25 +98,49 @@ function contextMenuTitle(key, target) {
     return (typeof title === 'string' && title) ? title : CONTEXT_MENU_TITLE_FALLBACKS[key];
 }
 
+function contextMenuLanguageKeys() {
+    try {
+        return UI_LANGUAGE_SETTING_KEYS;
+    } catch (e) {
+        return [];
+    }
+}
+
+function contextMenuTarget(items) {
+    try {
+        return resolveTargetLanguage(items);
+    } catch (e) {
+        return null;
+    }
+}
+
+function readContextMenuTarget(callback) {
+    const keys = contextMenuLanguageKeys();
+    if (keys.length === 0) {
+        callback(null);
+        return;
+    }
+    try {
+        chrome.storage.local.get(keys, items => {
+            callback(chrome.runtime.lastError || !items ? null : contextMenuTarget(items));
+        });
+    } catch (e) {
+        callback(null);
+    }
+}
+
 function handleContextMenuSettingsChange(changes, areaName) {
     if (areaName !== 'local') return;
     const shared = {};
     if (changes.showContextMenu !== undefined) {
         shared.visible = changes.showContextMenu.newValue !== false;
     }
-    const languageChanged = UI_LANGUAGE_SETTING_KEYS.some(key => changes[key] !== undefined);
+    const languageChanged = contextMenuLanguageKeys().some(key => changes[key] !== undefined);
     if (!languageChanged) {
         if (Object.keys(shared).length > 0) updateContextMenus(shared, null);
         return;
     }
-    try {
-        chrome.storage.local.get(UI_LANGUAGE_SETTING_KEYS, items => {
-            const readFailed = !!chrome.runtime.lastError || !items;
-            updateContextMenus(shared, readFailed ? null : resolveTargetLanguage(items));
-        });
-    } catch (e) {
-        if (Object.keys(shared).length > 0) updateContextMenus(shared, null);
-    }
+    readContextMenuTarget(target => updateContextMenus(shared, target));
 }
 
 function updateContextMenus(shared, target) {
